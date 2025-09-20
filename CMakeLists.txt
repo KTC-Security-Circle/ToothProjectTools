@@ -86,7 +86,15 @@ endif()
 # 変数名は紛らわしいので PROJECT_NAME と区別しやすいものに
 set(TARGET_NAME structured_light_decoder)
 
-add_executable(${TARGET_NAME} src/main.cpp)
+add_executable(${TARGET_NAME}
+  src/main.cpp
+  src/logger/logger_setup.cpp
+)
+
+target_include_directories(${TARGET_NAME}
+  PRIVATE
+  ${CMAKE_SOURCE_DIR}/include
+)
 
 target_link_libraries(${TARGET_NAME} PRIVATE spdlog::spdlog ${OpenCV_LIBS})
 if(OPENCV_STRUCTURED_LIGHT)
