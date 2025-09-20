@@ -1,0 +1,43 @@
+services:
+  structured-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: structured-container
+
+    # GUI（X11）
+    environment:
+      - DISPLAY=${DISPLAY}
+      - QT_X11_NO_MITSHM=1
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      # Xauthority を使う場合（推奨／ホストで `xhost +SI:localuser:${USER}` 等）
+      - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:ro
+
+      # ソースと ccache を永続化
+      - ./:/workspace
+      - ccache:/opt/ccache
+
+    # カメラ：番号固定なら個別、可変なら cgroup ルールの方が安全
+    # 明示的にデバイスを渡す場合（固定パスならこちら）
+    # devices:
+    #   - /dev/video4:/dev/video4
+    #   - /dev/video6:/dev/video6
+
+    # どの /dev/video* でも許可したい場合（V4L2 は major=81）
+    device_cgroup_rules:
+      - 'c 81:* rmw'   # V4L2 全般を許可（camera, vbi, subdev など）
+
+    # OpenGL（iGPU/mesa）を使うなら /dev/dri も渡す
+    devices:
+      - /dev/dri:/dev/dri
+
+    cap_add:
+      - SYS_PTRACE
+
+    tty: true
+    stdin_open: true
+    working_dir: /workspace
+
+volumes:
+  ccache:

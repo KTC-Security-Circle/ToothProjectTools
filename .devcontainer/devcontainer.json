@@ -1,0 +1,61 @@
+{
+  "name": "structured-container",
+  "dockerComposeFile": ["../docker-compose.yml"],
+  "service": "structured-service",
+  "workspaceFolder": "/workspace",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cmake-tools",
+        "twxs.cmake",
+        "xaver.clang-format",
+        "mhutchie.git-graph",
+        "eamodio.gitlens",
+        "github.vscode-pull-request-github",
+        "matepek.vscode-cppcheck"
+      ],
+      "settings": {
+        // CMake がコンフィグ情報を提供
+        "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+
+        "C_Cpp.codeAnalysis.runAutomatically": false,
+
+        "C_Cpp.intelliSenseEngine": "default",
+        "C_Cpp.default.cppStandard": "c++20",
+
+        "editor.formatOnSave": true,
+        "clang-format.style": "file",
+
+        "cmake.sourceDirectory": "${workspaceFolder}",
+        "cmake.configureOnOpen": true,
+        "cmake.generator": "Ninja",
+
+        "files.associations": {
+          "*.tcc": "cpp",
+          "*.ipp": "cpp"
+        }
+      }
+    }
+  },
+
+    // ✅ フック群（ログに色付き）
+    "initializeCommand": "echo '[\u001b[36m init \u001b[0m] docker build後に実行されます'", 
+    "onCreateCommand": "echo '[\u001b[35m onCreate \u001b[0m] コンテナ作成直後に1回だけ実行されます'",
+    "postCreateCommand": "echo '[\u001b[33m postCreate \u001b[0m] 拡張機能とfeature導入後に実行されます'",
+    "postStartCommand": "echo '[\u001b[32m start \u001b[0m] コンテナが起動しました'", 
+    "postAttachCommand": "echo '[\u001b[34m attach \u001b[0m] VSCodeが接続しました'",
+
+  "overrideCommand": false,
+
+  // SSH エージェント共有：標準の書き方
+  // 参考: devcontainers docs（localEnv 置換と mounts）/ Git 資格共有
+  "mounts": [
+    "type=bind,source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent"
+  ],
+  "remoteEnv": {
+    "TERM": "xterm-256color",
+    "SSH_AUTH_SOCK": "/ssh-agent"
+  }
+}
