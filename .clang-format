@@ -1,14 +1,24 @@
 # .clang-format
-BasedOnStyle: LLVM        # 公式プリセットを基に微調整（GoogleでもOK）
+
+# ===== ベーススタイル =====
+BasedOnStyle: LLVM        # 公式プリセットを基に調整
+ColumnLimit: 120          # 1行の文字数上限
+
+# ===== インデント =====
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
-ColumnLimit: 120
+
+# ===== 括弧・関数定義 =====
 BreakBeforeBraces: Allman
 AllowShortFunctionsOnASingleLine: Empty
+Cpp11BracedListStyle: true
+
+# ===== ポインタ・スペース =====
 PointerAlignment: Left
+DerivePointerAlignment: false
 SpaceBeforeParens: ControlStatements
+
+# ===== インクルード整理 =====
 SortIncludes: true
 IncludeBlocks: Regroup
-Cpp11BracedListStyle: true
-DerivePointerAlignment: false

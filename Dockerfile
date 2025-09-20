@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ninja-build \
     pkg-config \
     clang \
+    clang-format \
     mold \
     ccache \
     git \
