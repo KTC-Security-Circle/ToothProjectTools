@@ -18,19 +18,10 @@ services:
       - ./:/workspace
       - ccache:/opt/ccache
 
-    # カメラ：番号固定なら個別、可変なら cgroup ルールの方が安全
-    # 明示的にデバイスを渡す場合（固定パスならこちら）
-    # devices:
-    #   - /dev/video4:/dev/video4
-    #   - /dev/video6:/dev/video6
-
-    # どの /dev/video* でも許可したい場合（V4L2 は major=81）
-    device_cgroup_rules:
-      - 'c 81:* rmw'   # V4L2 全般を許可（camera, vbi, subdev など）
-
-    # OpenGL（iGPU/mesa）を使うなら /dev/dri も渡す
+    # 明示的にデバイスを渡す
     devices:
-      - /dev/dri:/dev/dri
+      - /dev/video4:/dev/video4
+      - /dev/video6:/dev/video6
 
     cap_add:
       - SYS_PTRACE
