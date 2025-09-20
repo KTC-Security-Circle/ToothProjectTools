@@ -1,0 +1,5 @@
+# cppcheck.supp
+
+# build/_deps 以下はすべての警告を無視
+*:.*/_deps/.*
+

@@ -27,6 +27,7 @@
 
         "editor.formatOnSave": true,
         "clang-format.style": "file",
+        "C_Cpp.formatting": "clangFormat",
 
         "cmake.sourceDirectory": "${workspaceFolder}",
         "cmake.configureOnOpen": true,
