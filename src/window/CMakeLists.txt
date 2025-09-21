@@ -12,6 +12,7 @@ target_include_directories(window
 target_link_libraries(window
   PUBLIC
     project_wiring
+    logger
 )
 
 # --- X11 / Xrandr を検出してリンク ---
