@@ -1,8 +1,12 @@
 // src/main.cpp
 #include "window/window.hpp"
+#include "logger/logger_setup.hpp"
+#include "logger/logger_macros.hpp"
 #include <opencv2/imgproc.hpp>
 
 int main() {
+  public_logger::init("logs/app.log");
+  LOG_INFO("hello to both console and file");
   // ウィンドウ生成
   win::Window window{"Preview", {800, 600}, {100, 100}};
   window.create();

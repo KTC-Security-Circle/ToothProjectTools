@@ -90,6 +90,7 @@ void init(const std::string& logfile,
 
     SPDLOG_INFO("logger initialized: console_level={}, file_rotate={} bytes, keep {} files",
                 spdlog::level::to_string_view(console_level), rotate_bytes, rotate_files);
+    spdlog::flush_on(spdlog::level::info);
 }
 
 } // namespace public_logger
