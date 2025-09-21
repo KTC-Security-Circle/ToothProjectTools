@@ -3,7 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: structured-container
+
+    user: "vscode"
 
     # GUI（X11）
     environment:
