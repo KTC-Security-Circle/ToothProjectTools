@@ -24,6 +24,7 @@ WORKDIR /workspace
 
 # 推奨: リンカ高速化 ＆ ccache を既定に
 ENV CC=clang CXX=clang++ \
-    CCACHE_DIR=/opt/ccache
+    CCACHE_DIR=/workspace/.ccache \
+    CCACHE_TEMPDIR=/workspace/.ccache/tmp
 
 RUN git config --global --add safe.directory /workspace
