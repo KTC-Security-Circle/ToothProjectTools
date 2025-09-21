@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopencv-dev \
     libspdlog-dev \
     libgtest-dev \
+    libx11-dev \
+    libxrandr-dev \
+    x11-xserver-utils \
     cppcheck \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
