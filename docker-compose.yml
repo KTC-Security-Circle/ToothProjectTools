@@ -23,6 +23,7 @@ services:
     devices:
       - /dev/video4:/dev/video4
       - /dev/video6:/dev/video6
+      - /dev/dri:/dev/dri
 
     cap_add:
       - SYS_PTRACE
