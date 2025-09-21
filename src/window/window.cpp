@@ -50,7 +50,7 @@ Window::Window(std::string window_name,
     fullscreen_(is_fullscreen),
     z_index_(z_index),
     refresh_rate_hz_(refresh_rate_hz) {
-  LOG_DEBUG("Window constructed: id={}, name='{}', size={}x{}, pos=({}, {}), monitor={}, layout={}, visible={}, fullscreen={}, z={}, hz={}",
+  LOG_DEBUG("ウィンドウ構築: id={}, name='{}', サイズ={}x{}, 位置=({}, {}), モニタ={}, レイアウト={}, 可視={}, 全画面={}, Z={}, リフレッシュレート={}Hz",
             id_, name_, size_.width, size_.height, pos_.x, pos_.y, monitor_index_, static_cast<int>(layout_),
             visible_, fullscreen_, z_index_, refresh_rate_hz_);
 }
@@ -69,7 +69,7 @@ Window::Window(std::string window_name,
  */
 void Window::create(int create_flags) {
   if (created_) {
-    LOG_DEBUG("create() skipped: already created (name='{}')", name_);
+    LOG_DEBUG("create() は既に生成済みのためスキップ: name='{}'", name_);
     return;
   }
 
@@ -80,14 +80,14 @@ void Window::create(int create_flags) {
   // 1) 実ウィンドウ作成
   cv::namedWindow(name_, create_flags);
   created_ = true;
-  LOG_INFO("Window created: name='{}', flags={}", name_, create_flags);
+  LOG_INFO("ウィンドウを作成しました: name='{}', flags={}", name_, create_flags);
 
   // 2) 初期サイズ／位置（AUTOSIZE では resizeWindow は無効）
   if (create_flags == cv::WINDOW_NORMAL) {
     cv::resizeWindow(name_, size_.width, size_.height);
   }
   cv::moveWindow(name_, pos_.x, pos_.y);
-  LOG_DEBUG("Window initialized: resize to {}x{}, move to ({}, {})",
+  LOG_DEBUG("ウィンドウ初期化: リサイズ {}x{}・移動 ({}, {})",
             size_.width, size_.height, pos_.x, pos_.y);
 
   // 3) 可視／フルスクリーン（HighGUIは明示的な非表示APIがない）
@@ -104,7 +104,7 @@ void Window::destroy() noexcept {
   if (!created_) return;
   cv::destroyWindow(name_);
   created_ = false;
-  LOG_INFO("Window destroyed: name='{}'", name_);
+  LOG_INFO("ウィンドウを破棄しました: name='{}'", name_);
 }
 
 // =============================================================================
@@ -120,12 +120,12 @@ void Window::destroy() noexcept {
  */
 void Window::present(const cv::Mat& frame) {
   if (!created_) {
-    LOG_WARN("present() called before create(); creating window: '{}'", name_);
+    LOG_WARN("present() が create() より先に呼ばれたため、ウィンドウを作成します: '{}'", name_);
     create(cv::WINDOW_NORMAL);
   }
   cv::imshow(name_, frame);
   last_presented_ = std::chrono::steady_clock::now();
-  SPDLOG_TRACE("presented a frame: name='{}'", name_);
+  SPDLOG_TRACE("フレームを描画しました: name='{}'", name_);
 }
 
 // =============================================================================
@@ -136,7 +136,7 @@ void Window::present(const cv::Mat& frame) {
  */
 void Window::setVisible(bool is_on) noexcept {
   visible_ = is_on;
-  SPDLOG_DEBUG("setVisible: name='{}', visible={}", name_, visible_);
+  SPDLOG_DEBUG("可視状態を設定: name='{}', 可視={}", name_, visible_);
 }
 
 /** @brief Properties: setFullscreen
@@ -150,7 +150,7 @@ void Window::setFullscreen(bool is_on) {
       name_,
       cv::WND_PROP_FULLSCREEN,
       is_on ? cv::WINDOW_FULLSCREEN : cv::WINDOW_NORMAL);
-  LOG_INFO("setFullscreen: name='{}', fullscreen={}", name_, fullscreen_);
+  LOG_INFO("フルスクリーンを設定: name='{}', 全画面={}", name_, fullscreen_);
 }
 
 /** @brief Properties: move
@@ -162,7 +162,7 @@ void Window::move(Point new_position) {
   pos_ = new_position;
   if (created_) {
     cv::moveWindow(name_, pos_.x, pos_.y);
-    SPDLOG_DEBUG("move: name='{}' -> pos=({}, {})", name_, pos_.x, pos_.y);
+    SPDLOG_DEBUG("ウィンドウ移動: name='{}' -> 座標({}, {})", name_, pos_.x, pos_.y);
   }
 }
 
@@ -175,7 +175,7 @@ void Window::resize(Size new_size) {
   size_ = new_size;
   if (created_) {
     cv::resizeWindow(name_, size_.width, size_.height);
-    SPDLOG_DEBUG("resize: name='{}' -> {}x{}", name_, size_.width, size_.height);
+    SPDLOG_DEBUG("ウィンドウサイズ変更: name='{}' -> {}x{}", name_, size_.width, size_.height);
   }
 }
 
@@ -193,7 +193,7 @@ void Window::setMonitorIndex(int new_index) {
   auto monitors = enumerate_monitors_x11();
 
   if (monitors.empty()) {
-    LOG_WARN("No monitors enumerated by XRandR; fallback to index=1 at (0,0)");
+    LOG_WARN("XRandR でモニタを列挙できませんでした。index=1・座標(0,0) にフォールバックします");
     monitor_index_ = 1;
     pos_ = {0, 0};
   } else {
@@ -205,7 +205,7 @@ void Window::setMonitorIndex(int new_index) {
     monitor_index_ = clamped_index1;
     pos_ = {monitors[index0_based].x, monitors[index0_based].y};
 
-    LOG_INFO("setMonitorIndex: name='{}', monitor={} -> pos=({}, {}) size={}x{}",
+    LOG_INFO("モニタ切替: name='{}', monitor={} -> 位置({}, {}) サイズ={}x{}",
              name_, monitor_index_, pos_.x, pos_.y,
              monitors[index0_based].width, monitors[index0_based].height);
   }
@@ -228,7 +228,7 @@ void Window::setMonitorIndex(int new_index) {
  */
 int Window::pollEvents(int delay_ms) {
   const int key = cv::waitKey(delay_ms);
-  SPDLOG_TRACE("pollEvents: name='{}', delay={}ms -> key={}", name_, delay_ms, key);
+  SPDLOG_TRACE("pollEvents: name='{}', 待機={}ms -> key={}", name_, delay_ms, key);
   return key;
 }
 
