@@ -14,7 +14,7 @@ target_link_libraries(input
     window
   PRIVATE
     logger
-    cmd_api
+    cmd
 )
 
 target_compile_features(input PUBLIC cxx_std_20)

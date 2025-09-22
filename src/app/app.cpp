@@ -1,6 +1,5 @@
 #include "app/app.hpp"
 #include "input/bindings_default.hpp"
-#include "cmd/keycodes.hpp"
 #include "logger/logger_macros.hpp"
 
 #include <type_traits>

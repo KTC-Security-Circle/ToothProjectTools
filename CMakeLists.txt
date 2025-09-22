@@ -103,5 +103,6 @@ endif()
 # =============================================================================
 add_subdirectory(src/logger)  # ライブラリ（公開ヘッダ・依存はここで宣言）
 add_subdirectory(src/window)
+add_subdirectory(src/cmd)
 add_subdirectory(src/input)
 add_subdirectory(src/app)     # 実行ファイル（logger + project_wiring に依存）
