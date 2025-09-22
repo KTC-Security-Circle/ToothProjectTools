@@ -1,8 +1,9 @@
 #pragma once
+#include <deque>
+#include <opencv2/core/mat.hpp> 
 #include "window/window.hpp"
 #include "input/input_handler.hpp"
-#include "input/bindings_default.hpp"
-#include <opencv2/core/mat.hpp> 
+#include "input/commands.hpp"
 
 class App {
 public:
@@ -16,12 +17,14 @@ private:
 
 private:
   win::Window window_;
-
-  PendingOps pending_;
+  std::deque<Command> cmd_que_;
   bool running_{true};
   bool skip_render_once_{false};
-
   InputHandler input_;
-  // 表示用の一枚絵（例）
   cv::Mat image_;
+
+  // 小さな処理関数に分割（見通し◎）
+  void doToggleFullscreen();
+  void doMoveToMonitor(int index);
+  void doQuit();
 };

@@ -23,7 +23,7 @@ App::App()
               {200, 200, 255},
               3);
 
-  install_default_bindings(input_, pending_);
+  install_default_bindings(input_, cmd_que_);
 }
 
 void App::run() {
@@ -47,35 +47,31 @@ void App::processInput() {
 
 void App::update() {
   bool operated = false;
+  while (!cmd_que_.empty()) {
+    const Command& c = cmd_que_.front();
+    std::visit([&](auto&& cmd){
+      using T = std::decay_t<decltype(cmd)>;
+      if constexpr (std::is_same_v<T, CmdToggleFullscreen>) {
+        LOG_INFO("フルスクリーン切替");
+        doToggleFullscreen(); operated = true;
+      } else if constexpr (std::is_same_v<T, CmdMoveToMonitor>) {
+        LOG_INFO("モニタ移動: {}", cmd.index);
+        doMoveToMonitor(cmd.index); operated = true;
+      } else if constexpr (std::is_same_v<T, CmdQuit>) {
+        LOG_INFO("終了へ移行");
+        doQuit();
+      }
+    }, c);
+    cmd_que_.pop_front();
+    if (!running_) break; // Quit発行後は抜ける
+  }
 
-  if (pending_.toggle_fullscreen) {
-    pending_.toggle_fullscreen = false;
-    LOG_INFO("フルスクリーン切替");
-    window_.setFullscreen(!window_.fullscreen());
-    operated = true;
-  }
-  if (pending_.move_to_monitor_1) {
-    pending_.move_to_monitor_1 = false;
-    window_.setMonitorIndex(1);
-    operated = true;
-  }
-  if (pending_.move_to_monitor_2) {
-    pending_.move_to_monitor_2 = false;
-    window_.setMonitorIndex(2);
-    operated = true;
-  }
-  if (pending_.quit) {
-    pending_.quit = false;
-    // このフレームでは描画しないで終了に向かう
+  if (!running_) {        // 終了時は今フレームの描画スキップ
     skip_render_once_ = true;
-    running_ = false;               // ← ループを抜ける
     return;
   }
-
   if (operated) {
-    // HighGUIの仕様：ウィンドウ操作直後はイベントを1tick流すと安定
-    cv::waitKey(1);
-    // 操作したフレームの描画はスキップ（プロパティ反映の揺れを避ける）
+    cv::waitKey(1);       // HighGUI: プロパティ変更直後はイベント1tick
     skip_render_once_ = true;
   }
 }
@@ -84,3 +80,8 @@ void App::render() {
   if (skip_render_once_) { skip_render_once_ = false; return; }
   window_.present(image_);
 }
+
+// 小さな処理
+void App::doToggleFullscreen() { window_.setFullscreen(!window_.fullscreen()); }
+void App::doMoveToMonitor(int index) { window_.setMonitorIndex(index); }
+void App::doQuit() { running_ = false; }
