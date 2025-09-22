@@ -2,9 +2,9 @@
 #include "input_handler.hpp"
 #include "window/window.hpp"
 #include <deque>
-#include "input/commands.hpp"
+#include "input/dispatch_cmd.hpp"
 
 void install_default_bindings(
   InputHandler& handler,
-  std::deque<Command>& cmd_que
+  std::deque<DispatchCmd>& cmd_que
 );

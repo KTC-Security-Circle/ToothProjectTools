@@ -1,36 +1,60 @@
 #include "input/bindings_default.hpp"
 #include "input/keycodes.hpp"
 #include "logger/logger_macros.hpp"
+#include "input/commands.hpp"
+#include "input/target.hpp"
+#include "input/dispatch_cmd.hpp"
 
-// ここでは「フラグを立てるだけ」。実操作は update() に任せる。
+// ここでは「コマンドを積むだけ」。実操作は dispatch/update 側に任せる。
 void install_default_bindings(
   InputHandler& handler,
-  std::deque<Command>& cmd_que
+  std::deque<DispatchCmd>& cmd_que   // ★ ここを DispatchCmd に
 ) {
-  // 終了（ESC / q / Q）
+  // 終了（ESC / q / Q）: アプリ全体に対する終了要求
   auto request_quit = [&]{
     LOG_INFO("終了要求");
-    cmd_que.push_back(CmdQuit{});
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetAll{}},        // 宛先: 全ウィンドウ（アプリ全体）
+      Command{CmdQuit{}}
+    });
   };
-  handler.bind(KEY_ESC,     request_quit);
-  handler.bind('q',         request_quit);
-  handler.bind('Q',         request_quit);
+  handler.bind(KEY_ESC, request_quit);
+  handler.bind(KEY_Q,     request_quit);
+  handler.bind(KEY_Q_UPPER,     request_quit);
 
-  // フルスクリーン切替
-  handler.bind('f', [&]{
+  // フルスクリーン切替: フォーカス中のウィンドウ
+  handler.bind(KEY_F, [&]{
     LOG_INFO("フルスクリーン切替を予約");
-    cmd_que.push_back(CmdToggleFullscreen{});
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetFocused{}},
+      Command{CmdToggleFullscreen{}}
+    });
   });
 
-  // モニタ1へ移動
+  // モニタ1へ移動: フォーカス中のウィンドウ
   handler.bind('1', [&]{
     LOG_INFO("モニタ1への移動を予約");
-    cmd_que.push_back(CmdMoveToMonitor{1});
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetFocused{}},
+      Command{CmdMoveToMonitor{1}}
+    });
   });
 
-  // モニタ2へ移動
+  // モニタ2へ移動: フォーカス中のウィンドウ
   handler.bind('2', [&]{
-    LOG_INFO("モニタ2への移動を予約");
-    cmd_que.push_back(CmdMoveToMonitor{2});
+    LOG_INFO("フォーカス移動を予約");
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetFocused{}},
+      Command{CmdMoveToMonitor{2}}
+    });
   });
+
+  handler.bind(KEY_TAB, [&]{
+    LOG_INFO("モニタ2への移動を予約");
+    cmd_que.push_back(DispatchCmd{
+     Target{TargetFocused{}},
+    Command{CmdFocusNext{}}
+    });
+  });
+
 }

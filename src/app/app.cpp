@@ -3,18 +3,29 @@
 #include "input/keycodes.hpp"
 #include "logger/logger_macros.hpp"
 
+#include <type_traits>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 
+static inline bool existsAndVisible(const win::Window& w_ptr) {
+  // WND_PROP_VISIBLE >= 0 なら「存在・可視」：存在確認に使える
+  return cv::getWindowProperty(
+    w_ptr.name().c_str(),
+    cv::WND_PROP_VISIBLE
+  ) >= 0;
+}
+
 App::App()
-  : window_("Preview", {800, 600}, {100, 100}) {
+{
+  // 最初のウィンドウを生成してリストに登録
+  windows_.emplace_back("Preview", win::Size{800, 600}, win::Point{100, 100});
+  win::Window& initial_window = windows_.back();
+  initial_window.create();
+  initial_window.setMonitorIndex(1);
+  focused_id_ = initial_window.id();  // フォーカスをこのウィンドウに設定
 
-  window_.create();
-  window_.setMonitorIndex(1);
-
-  // 画像を一度作る（例）
-  image_ = cv::Mat(window_.size().height, window_.size().width,
-                   CV_8UC3, cv::Scalar(30, 30, 30));
+  image_ = cv::Mat(initial_window.size().height, initial_window.size().width,
+                    CV_8UC3, cv::Scalar(30, 30, 30));
   cv::putText(image_,
               "Hello HighGUI",
               {40, 300},
@@ -46,42 +57,130 @@ void App::processInput() {
 }
 
 void App::update() {
-  bool operated = false;
-  while (!cmd_que_.empty()) {
-    const Command& c = cmd_que_.front();
-    std::visit([&](auto&& cmd){
-      using T = std::decay_t<decltype(cmd)>;
-      if constexpr (std::is_same_v<T, CmdToggleFullscreen>) {
-        LOG_INFO("フルスクリーン切替");
-        doToggleFullscreen(); operated = true;
-      } else if constexpr (std::is_same_v<T, CmdMoveToMonitor>) {
-        LOG_INFO("モニタ移動: {}", cmd.index);
-        doMoveToMonitor(cmd.index); operated = true;
-      } else if constexpr (std::is_same_v<T, CmdQuit>) {
-        LOG_INFO("終了へ移行");
-        doQuit();
-      }
-    }, c);
+  while (!cmd_que_.empty()) {                // ← std::deque<DispatchCmd>
+    const DispatchCmd& next = cmd_que_.front();
+    dispatch(next);                                 // 宛先解決＋コマンド適用
     cmd_que_.pop_front();
-    if (!running_) break; // Quit発行後は抜ける
-  }
 
-  if (!running_) {        // 終了時は今フレームの描画スキップ
-    skip_render_once_ = true;
-    return;
-  }
-  if (operated) {
-    cv::waitKey(1);       // HighGUI: プロパティ変更直後はイベント1tick
-    skip_render_once_ = true;
+    if (!running_) break;                           // Quit でループ離脱
   }
 }
+
 
 void App::render() {
   if (skip_render_once_) { skip_render_once_ = false; return; }
-  window_.present(image_);
+  if (auto* focused_window = findWindowById(focused_id_)) {
+    if (existsAndVisible(*focused_window)) {
+      focused_window->present(image_);
+    }
+  }
 }
 
-// 小さな処理
-void App::doToggleFullscreen() { window_.setFullscreen(!window_.fullscreen()); }
-void App::doMoveToMonitor(int index) { window_.setMonitorIndex(index); }
+
+void App::dispatch(const DispatchCmd& dispatch_command) {
+  // --- アプリ全体に作用するコマンドを先に処理（宛先解決不要） ---
+  {
+    bool handled_as_app_level = false;
+    std::visit([&](auto&& concrete_command) {
+      using ConcreteCommandType = std::decay_t<decltype(concrete_command)>;
+      if constexpr (std::is_same_v<ConcreteCommandType, CmdFocusNext>) {
+        LOG_INFO("コマンド: フォーカス移動（次）");
+        doFocusNext();                         // ★ ここで実行
+        handled_as_app_level = true;
+      }
+    }, dispatch_command.cmd);
+    if (handled_as_app_level) {
+      cv::waitKey(1);           // イベントポンプ（唯一の経路）
+      skip_render_once_ = true; // 同フレームの描画を避ける
+      return;                   // 宛先解決は不要なのでここで完了
+    }
+  }
+
+  // 実際にコマンドをウィンドウに適用するラムダ
+  auto apply_command_to_window = [&](win::Window& target_window, const Command& command_variant) {
+    std::visit([&](auto&& concrete_command) {
+      using ConcreteCommandType = std::decay_t<decltype(concrete_command)>;
+      if constexpr (std::is_same_v<ConcreteCommandType, CmdToggleFullscreen>) {
+        LOG_INFO("コマンド: フルスクリーン切替 -> Window id={}, name='{}'",
+                 target_window.id(), target_window.name());
+        target_window.setFullscreen(!target_window.fullscreen());
+      } else if constexpr (std::is_same_v<ConcreteCommandType, CmdMoveToMonitor>) {
+        LOG_INFO("コマンド: モニタ移動 index={} -> Window id={}, name='{}'",
+                 concrete_command.index, target_window.id(), target_window.name());
+        target_window.setMonitorIndex(concrete_command.index);
+      } else if constexpr (std::is_same_v<ConcreteCommandType, CmdQuit>) {
+        LOG_INFO("コマンド: 終了要求 -> アプリ全体に適用");
+        // 全体終了系は1回だけで十分
+        // （必要なら「対象ウィンドウを閉じる」実装に差し替えも可）
+        running_ = false;
+      }
+    }, command_variant);
+  };
+
+  // 宛先を解決して apply する
+  std::visit([&](auto&& target_variant) {
+    using TargetType = std::decay_t<decltype(target_variant)>;
+
+    if constexpr (std::is_same_v<TargetType, TargetAll>) {
+      LOG_INFO("宛先: 全ウィンドウ");
+      for (auto& window_instance : windows_) {
+        if (existsAndVisible(window_instance)) {
+          LOG_INFO("  適用対象: Window id={}, name='{}'", 
+                   window_instance.id(), window_instance.name());
+          apply_command_to_window(window_instance, dispatch_command.cmd);
+        }
+      }
+    } else if constexpr (std::is_same_v<TargetType, TargetFocused>) {
+      LOG_INFO("宛先: フォーカス中のウィンドウ id={}", focused_id_);
+      if (auto* focused_window = findWindowById(focused_id_)) {
+        if (existsAndVisible(*focused_window)) {
+          LOG_INFO("  適用対象: Window id={}, name='{}'", 
+                   focused_window->id(), focused_window->name());
+          apply_command_to_window(*focused_window, dispatch_command.cmd);
+        } else {
+          LOG_INFO("  フォーカス中のウィンドウは不可視または存在しません");
+        }
+      } else {
+        LOG_INFO("  フォーカス中のウィンドウは見つかりませんでした");
+      }
+    } else if constexpr (std::is_same_v<TargetType, TargetById>) {
+      LOG_INFO("宛先: 指定IDのウィンドウ id={}", target_variant.id);
+      if (auto* target_window = findWindowById(target_variant.id)) {
+        if (existsAndVisible(*target_window)) {
+          LOG_INFO("  適用対象: Window id={}, name='{}'", 
+                   target_window->id(), target_window->name());
+          apply_command_to_window(*target_window, dispatch_command.cmd);
+        } else {
+          LOG_INFO("  指定IDのウィンドウは不可視または存在しません");
+        }
+      } else {
+        LOG_INFO("  指定IDのウィンドウは見つかりませんでした");
+      }
+    }
+  }, dispatch_command.target);
+
+  // HighGUI の仕様：プロパティ変更直後はイベントを1tick流すと安定
+  cv::waitKey(1);           // イベントポンプ（唯一の経路）
+  skip_render_once_ = true; // 同フレームの描画を避ける
+}
+
+void App::doFocusNext() {
+  if (windows_.empty()) return;
+  // 現在の位置を探して次へ
+  size_t i = 0;
+  for (; i < windows_.size(); ++i) if (windows_[i].id() == focused_id_) break;
+  focused_id_ = windows_[(i + 1) % windows_.size()].id();
+}
+
+void App::doToggleFullscreen() {
+  if (auto* focused_window = findWindowById(focused_id_)) {
+    focused_window->setFullscreen(!focused_window->fullscreen());
+  }
+}
+
+void App::doMoveToMonitor(int index) {
+  if (auto* focused_window = findWindowById(focused_id_)) {
+    focused_window->setMonitorIndex(index);
+  }
+}
 void App::doQuit() { running_ = false; }
