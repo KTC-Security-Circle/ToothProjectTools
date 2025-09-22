@@ -1,9 +1,9 @@
 #include "input/bindings_default.hpp"
 #include "input/keycodes.hpp"
 #include "logger/logger_macros.hpp"
-#include "input/commands.hpp"
-#include "input/target.hpp"
-#include "input/dispatch_cmd.hpp"
+#include "cmd/commands.hpp"
+#include "cmd/target.hpp"
+#include "cmd/dispatch_cmd.hpp"
 
 // ここでは「コマンドを積むだけ」。実操作は dispatch/update 側に任せる。
 void install_default_bindings(

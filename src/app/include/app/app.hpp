@@ -3,7 +3,7 @@
 #include <opencv2/core/mat.hpp> 
 #include "window/window.hpp"
 #include "input/input_handler.hpp"
-#include "input/dispatch_cmd.hpp"
+#include "cmd/dispatch_cmd.hpp"
 
 class App;
 
