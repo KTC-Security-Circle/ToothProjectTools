@@ -12,9 +12,9 @@ target_include_directories(input
 target_link_libraries(input
   PUBLIC
     window
+    cmd
   PRIVATE
     logger
-    cmd
 )
 
 target_compile_features(input PUBLIC cxx_std_20)

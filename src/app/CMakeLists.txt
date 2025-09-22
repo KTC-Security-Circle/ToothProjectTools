@@ -14,7 +14,7 @@ target_link_libraries(structured_light_decoder
         window
         input
         cv_lib
+        cmd
     PRIVATE
         logger
-        cmd
 )
