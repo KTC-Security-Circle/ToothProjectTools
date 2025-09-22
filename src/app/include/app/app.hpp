@@ -32,6 +32,13 @@ private:
 
   //--- ディスパッチ ---------------------------------------------------------
   void dispatch(const DispatchCmd& d); // 宛先解決＋適用
+  bool handleAppLevelCommand_(const Command& cmd);      // trueなら処理完了
+  void applyCommandToWindow_(win::Window& w, const Command& cmd);
+  void dispatchToAll_(const DispatchCmd& d);
+  void dispatchToFocused_(const DispatchCmd& d);
+  void dispatchToId_(const DispatchCmd& d, WindowId id);
+  void finalizeDispatch_(); // 共通後処理（waitKey + 描画スキップ）
+
 
   //--- ハンドラ実体（小さな処理に分割） ------------------------------------
   void doToggleFullscreen();

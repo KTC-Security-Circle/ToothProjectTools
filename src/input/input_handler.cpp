@@ -1,5 +1,5 @@
 #include "input/input_handler.hpp"
-#include "logger/logger.hpp" // LOG_INFO, LOG_WARN, LOG_DEBUG, LOG_TRACE などを定義したヘッダを想定
+#include "logger/logger_macros.hpp" // LOG_INFO, LOG_WARN, LOG_DEBUG, LOG_TRACE などを定義したヘッダを想定
 
 /**
  * @brief キー入力と対応するアクションをバインドする。
