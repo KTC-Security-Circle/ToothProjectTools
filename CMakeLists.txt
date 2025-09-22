@@ -63,10 +63,15 @@ FetchContent_MakeAvailable(spdlog)  # spdlog::spdlog / spdlog::spdlog_header_onl
 # =============================================================================
 # Wiring (共通依存を束ねて伝播させる INTERFACE ターゲット)
 # =============================================================================
-add_library(project_wiring INTERFACE)
-target_link_libraries(project_wiring
+add_library(spd_lib INTERFACE)
+target_link_libraries(spd_lib
   INTERFACE
     spdlog::spdlog_header_only
+)
+
+add_library(cv_lib INTERFACE)
+target_link_libraries(cv_lib
+  INTERFACE
     ${OpenCV_LIBS}
     $<$<BOOL:${OPENCV_STRUCTURED_LIGHT}>:${OPENCV_STRUCTURED_LIGHT}>
     $<$<BOOL:${OPENCV_PHASE_UNWRAPPING}>:${OPENCV_PHASE_UNWRAPPING}>
@@ -98,4 +103,5 @@ endif()
 # =============================================================================
 add_subdirectory(src/logger)  # ライブラリ（公開ヘッダ・依存はここで宣言）
 add_subdirectory(src/window)
+add_subdirectory(src/input)
 add_subdirectory(src/app)     # 実行ファイル（logger + project_wiring に依存）

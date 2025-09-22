@@ -11,7 +11,8 @@ target_include_directories(window
 # OpenCV 依存は Usage Requirements として公開
 target_link_libraries(window
   PUBLIC
-    project_wiring
+    cv_lib
+  PRIVATE
     logger
 )
 

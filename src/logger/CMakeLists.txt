@@ -10,7 +10,8 @@ target_include_directories(logger
 
 # ここで root の“配線ターゲット”を PUBLIC で受け取る
 target_link_libraries(logger
-  PUBLIC project_wiring
+  PUBLIC
+    spd_lib
 )
 
 target_compile_features(logger PUBLIC cxx_std_20)
