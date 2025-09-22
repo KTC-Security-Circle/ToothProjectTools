@@ -1,0 +1,27 @@
+#pragma once
+#include "window/window.hpp"
+#include "input/input_handler.hpp"
+#include "input/bindings_default.hpp"
+#include <opencv2/core/mat.hpp> 
+
+class App {
+public:
+  App();
+  void run();
+
+private:
+  void processInput(); // waitKey/pollKey をここに隔離（HighGUIの仕様）
+  void update();       // 状態更新（必要になったら実装）
+  void render();       // 描画
+
+private:
+  win::Window window_;
+
+  PendingOps pending_;
+  bool running_{true};
+  bool skip_render_once_{false};
+
+  InputHandler input_;
+  // 表示用の一枚絵（例）
+  cv::Mat image_;
+};
