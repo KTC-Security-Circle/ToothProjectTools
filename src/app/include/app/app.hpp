@@ -31,12 +31,12 @@ private:
   void render();         // 描画
 
   //--- ディスパッチ ---------------------------------------------------------
-  void dispatch(const DispatchCmd& d); // 宛先解決＋適用
-  bool handleAppLevelCommand_(const Command& cmd);      // trueなら処理完了
-  void applyCommandToWindow_(win::Window& w, const Command& cmd);
-  void dispatchToAll_(const DispatchCmd& d);
-  void dispatchToFocused_(const DispatchCmd& d);
-  void dispatchToId_(const DispatchCmd& d, WindowId id);
+  void dispatch(const DispatchCmd& dispatch_command); 
+  bool handleAppLevelCommand_(const Command& command);      
+  void applyCommandToWindow_(win::Window& target_window, const Command& command);
+  void dispatchToAll_(const DispatchCmd& dispatch_command);
+  void dispatchToFocused_(const DispatchCmd& dispatch_command);
+  void dispatchToId_(const DispatchCmd& dispatch_command, WindowId target_window_id);
   void finalizeDispatch_(); // 共通後処理（waitKey + 描画スキップ）
 
 
