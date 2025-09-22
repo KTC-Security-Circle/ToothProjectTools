@@ -1,5 +1,5 @@
 #pragma once
-#include "input_handler.hpp"
+#include "input/input_handler.hpp"
 #include "window/window.hpp"
 #include <deque>
 #include "cmd/dispatch_cmd.hpp"

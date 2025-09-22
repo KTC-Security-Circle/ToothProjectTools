@@ -1,7 +1,7 @@
 #include "input/bindings_default.hpp"
-#include "input/keycodes.hpp"
 #include "logger/logger_macros.hpp"
 #include "cmd/dispatch_cmd.hpp"
+#include "cmd/keycodes.hpp"
 
 /// @brief アプリ既定のキー→コマンド・バインディングを登録する。
 /// @details
