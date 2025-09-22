@@ -17,15 +17,16 @@ static inline bool existsAndVisible(const win::Window& w_ptr) {
 
 App::App()
 {
-  // 最初のウィンドウを生成してリストに登録
+  // --- 1枚目 ---
   windows_.emplace_back("Preview", win::Size{800, 600}, win::Point{100, 100});
-  win::Window& initial_window = windows_.back();
-  initial_window.create();
-  initial_window.setMonitorIndex(1);
-  focused_id_ = initial_window.id();  // フォーカスをこのウィンドウに設定
+  win::Window& first_window = windows_.back();
+  first_window.create();
+  first_window.setMonitorIndex(1);
+  focused_id_ = first_window.id();  // フォーカスをこのウィンドウに設定
 
-  image_ = cv::Mat(initial_window.size().height, initial_window.size().width,
-                    CV_8UC3, cv::Scalar(30, 30, 30));
+  // 1枚目の画像
+  image_ = cv::Mat(first_window.size().height, first_window.size().width,
+                   CV_8UC3, cv::Scalar(30, 30, 30));
   cv::putText(image_,
               "Hello HighGUI",
               {40, 300},
@@ -34,8 +35,31 @@ App::App()
               {200, 200, 255},
               3);
 
+  // --- 2枚目 ---
+  windows_.emplace_back("Second", win::Size{640, 480}, win::Point{900, 200});
+  win::Window& second_window = windows_.back();
+  second_window.create();
+  second_window.setMonitorIndex(2);
+
+  // マウスコールバックの登録
+  mouse_callback_contexts_.reserve(windows_.size());
+  for (auto& window_instance : windows_) {
+    mouse_callback_contexts_.push_back(MouseCallbackContext{
+      this,                   // App* を渡す
+      window_instance.id()    // このコールバックが紐付く Window の ID
+    });
+    MouseCallbackContext* context_ptr = &mouse_callback_contexts_.back();
+
+    cv::setMouseCallback(
+      window_instance.name().c_str(),
+      &App::onMouseCallback,        // キャプチャなしの関数ポインタ
+      static_cast<void*>(context_ptr)
+    );
+  }
+
   install_default_bindings(input_, cmd_que_);
 }
+
 
 void App::run() {
   while (running_) {
@@ -162,6 +186,31 @@ void App::dispatch(const DispatchCmd& dispatch_command) {
   // HighGUI の仕様：プロパティ変更直後はイベントを1tick流すと安定
   cv::waitKey(1);           // イベントポンプ（唯一の経路）
   skip_render_once_ = true; // 同フレームの描画を避ける
+}
+
+void App::onMouseCallback(int event, int x, int y, int flags, void* userdata) {
+  (void)x;
+  (void)y;
+  (void)flags;
+
+  MouseCallbackContext* context_ptr = static_cast<MouseCallbackContext*>(userdata);
+  if (!context_ptr) return;
+
+  if (event == cv::EVENT_LBUTTONDOWN) {
+    App* app_ptr = context_ptr->app_ptr;
+    win::Window::Id clicked_id = context_ptr->window_id;
+
+    app_ptr->focused_id_ = clicked_id;
+
+    // ログ（変数名は省略しない）
+    if (auto* focused_window_ptr = app_ptr->findWindowById(clicked_id)) {
+      LOG_INFO("マウスクリックでフォーカス変更: id={}, name='{}'",
+               focused_window_ptr->id(), focused_window_ptr->name());
+    } else {
+      LOG_WARN("マウスクリックで取得した id={} に対応するウィンドウが見つかりませんでした",
+               static_cast<std::uint64_t>(clicked_id));
+    }
+  }
 }
 
 void App::doFocusNext() {

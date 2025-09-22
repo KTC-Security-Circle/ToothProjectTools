@@ -5,6 +5,13 @@
 #include "input/input_handler.hpp"
 #include "input/dispatch_cmd.hpp"
 
+class App;
+
+struct MouseCallbackContext {
+  App* app_ptr;
+  win::Window::Id window_id;
+};
+
 class App {
 public:
   App();
@@ -19,6 +26,9 @@ private:
   std::vector<win::Window> windows_;
   WindowId focused_id_{0};
   std::deque<DispatchCmd> cmd_que_;
+  std::vector<MouseCallbackContext> mouse_callback_contexts_;
+
+  static void onMouseCallback(int event, int x, int y, int flags, void* userdata);
 
   win::Window* findWindowById(WindowId id) {
     for (auto& w_ptr : windows_)       // windows_ 内の全要素を順番に見る
