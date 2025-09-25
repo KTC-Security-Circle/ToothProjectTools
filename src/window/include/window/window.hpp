@@ -7,6 +7,7 @@
 #include <cstdint>                 // std::uint64_t
 #include <chrono>                  // timestamps
 #include <string>                  // std::string
+#include <opencv2/core/mat.hpp>
 
 // OpenCV は .cpp に寄せる：ここでは cv::Mat のみ前方宣言にする
 // → ヘッダ依存の縮小（再コンパイル抑制）
@@ -53,6 +54,8 @@ public:
   // 描画
   // ---------------------------------------------------------------------------
   void present(const cv::Mat& frame); // 描画時に timestamp 更新
+  // 追加: 直前に設定/表示したバッファを再表示するためのオーバーロード
+  void present();
 
   // ---------------------------------------------------------------------------
   // 変更（プロパティ・操作）
@@ -66,7 +69,8 @@ public:
   void setRefreshRate(int hz) noexcept { refresh_rate_hz_ = hz; }
   // モニタ切り替え（指定 index が無効なら 1 にフォールバック）
   void setMonitorIndex(int new_index);
-
+  void setImage(const cv::Mat& img);
+  void setImage(cv::Mat&& img);
 
   // ---------------------------------------------------------------------------
   // 取得（状態）
@@ -104,6 +108,7 @@ private:
   bool  fullscreen_{false};
   int   z_index_{0};
   int   refresh_rate_hz_{60};
+  cv::Mat current_image_;
 
   std::chrono::steady_clock::time_point last_presented_{};
   bool created_{false};

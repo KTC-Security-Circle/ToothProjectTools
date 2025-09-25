@@ -118,15 +118,43 @@ void Window::destroy() noexcept {
  * @note HighGUI のイベント処理は `waitKey` / `pollKey` に依存するため、
  *       別途 `pollEvents()` を周期的に呼ぶこと。描画更新もイベントループに依存する。
  */
-void Window::present(const cv::Mat& frame) {
-  if (!created_) {
+ void Window::present(const cv::Mat& frame) {
+   if (!created_) {
     LOG_WARN("present() が create() より先に呼ばれたため、ウィンドウを作成します: '{}'", name_);
     create(cv::WINDOW_NORMAL);
   }
-  cv::imshow(name_, frame);
+  // 与えられたフレームが非空なら、ウィンドウ側で所有コピーして保持
+  if (!frame.empty()) {
+    // Mat は参照カウントで別バッファを共有するため、寿命・改変の影響を避けるなら clone() が安全。
+    // ここでは「Window が描画に使う最新フレーム」を安定保持したいので clone() します。
+    current_image_ = frame.clone();
+  }
+
+  if (current_image_.empty()) {
+    LOG_WARN("present(): 表示可能な画像がありません（current_image_ が空）: name='{}'", name_);
+    return;
+  }
+
+  cv::imshow(name_, current_image_);
+   last_presented_ = std::chrono::steady_clock::now();
+   SPDLOG_TRACE("フレームを描画しました: name='{}'", name_);
+ }
+ 
+// 追加: 直近の current_image_ を再表示
+void Window::present() {
+  if (!created_) {
+    LOG_WARN("present()（引数なし）が先に呼ばれたため、ウィンドウを作成します: '{}'", name_);
+    create(cv::WINDOW_NORMAL);
+  }
+  if (current_image_.empty()) {
+    LOG_WARN("present()（引数なし）: 表示可能な画像がありません（current_image_ が空）: name='{}'", name_);
+    return;
+  }
+  cv::imshow(name_, current_image_);
   last_presented_ = std::chrono::steady_clock::now();
-  SPDLOG_TRACE("フレームを描画しました: name='{}'", name_);
+  SPDLOG_TRACE("フレームを再描画しました: name='{}'", name_);
 }
+
 
 // =============================================================================
 /** @brief Properties: setVisible
@@ -151,6 +179,14 @@ void Window::setFullscreen(bool is_on) {
       cv::WND_PROP_FULLSCREEN,
       is_on ? cv::WINDOW_FULLSCREEN : cv::WINDOW_NORMAL);
   LOG_INFO("フルスクリーンを設定: name='{}', 全画面={}", name_, fullscreen_);
+}
+
+void Window::setImage(const cv::Mat& img) {
+  current_image_ = img.clone(); // コピー or 共有
+}
+
+void Window::setImage(cv::Mat&& img) {
+  current_image_ = std::move(img);
 }
 
 /** @brief Properties: move

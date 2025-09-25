@@ -11,7 +11,7 @@ static inline bool existsAndVisible(const win::Window& w_ptr) {
   return cv::getWindowProperty(
     w_ptr.name().c_str(),
     cv::WND_PROP_VISIBLE
-  ) >= 0;
+  ) > 0;
 }
 
 App::App()
@@ -24,21 +24,37 @@ App::App()
   focused_id_ = first_window.id();  // フォーカスをこのウィンドウに設定
 
   // 1枚目の画像
-  image_ = cv::Mat(first_window.size().height, first_window.size().width,
+  cv::Mat image1 = cv::Mat(first_window.size().height, first_window.size().width,
                    CV_8UC3, cv::Scalar(30, 30, 30));
-  cv::putText(image_,
-              "Hello HighGUI",
+  cv::putText(image1,
+              "Hello HighGUI Preview",
+              {40, 300},
+              cv::FONT_HERSHEY_SIMPLEX,
+              2.0,
+              {200, 200, 255},
+              3);
+  // 初期フレームをウィンドウに保持させる
+  first_window.setImage(std::move(image1));
+
+  // --- 2枚目 ---
+  windows_.emplace_back("Second", win::Size{800, 600}, win::Point{900, 200});
+  win::Window& second_window = windows_.back();
+  second_window.create();
+  second_window.setMonitorIndex(1);
+
+  // 2枚目の画像
+  cv::Mat image2 = cv::Mat(second_window.size().height, second_window.size().width,
+                   CV_8UC3, cv::Scalar(30, 30, 30));
+  cv::putText(image2,
+              "Hello HighGUI Second",
               {40, 300},
               cv::FONT_HERSHEY_SIMPLEX,
               2.0,
               {200, 200, 255},
               3);
 
-  // --- 2枚目 ---
-  windows_.emplace_back("Second", win::Size{640, 480}, win::Point{900, 200});
-  win::Window& second_window = windows_.back();
-  second_window.create();
-  second_window.setMonitorIndex(2);
+  // 2枚目も同じ初期フレームを保持（必要なら別画像に差し替え可）
+  second_window.setImage(std::move(image2));
 
   // マウスコールバックの登録
   mouse_callback_contexts_.reserve(windows_.size());
@@ -92,11 +108,11 @@ void App::update() {
 
 void App::render() {
   if (skip_render_once_) { skip_render_once_ = false; return; }
-  if (auto* focused_window = findWindowById(focused_id_)) {
-    if (existsAndVisible(*focused_window)) {
-      focused_window->present(image_);
-    }
-  }
+  for (auto& win : windows_) {
+   if (existsAndVisible(win)) {
+     win.present();              // current_image_ を再描画
+   }
+ }
 }
 
 
@@ -179,7 +195,6 @@ void App::dispatchToId_(const DispatchCmd& dispatch_command, WindowId target_win
 
 // === 共通の後処理（HighGUIイベントポンプ＋描画スキップ） ============
 void App::finalizeDispatch_() {
-  cv::waitKey(1);        // HighGUIのイベント処理は waitKey/pollKey が唯一の経路
   skip_render_once_ = true;
 }
 

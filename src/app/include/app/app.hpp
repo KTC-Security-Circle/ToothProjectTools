@@ -3,7 +3,6 @@
 //=== 外部依存 ===============================================================
 #include <deque>
 #include <vector>
-#include <opencv2/core/mat.hpp>
 
 #include "window/window.hpp"
 #include "input/input_handler.hpp"
@@ -69,7 +68,6 @@ private:
 
   //--- 入力・描画バッファ ---------------------------------------------------
   InputHandler input_;
-  cv::Mat image_;
 
   //--- ループ制御フラグ -----------------------------------------------------
   bool running_{true};
