@@ -7,6 +7,7 @@
 #include <cstdint>                 // std::uint64_t
 #include <chrono>                  // timestamps
 #include <string>                  // std::string
+#include <atomic>
 #include <opencv2/core/mat.hpp>
 
 // OpenCV は .cpp に寄せる：ここでは cv::Mat のみ前方宣言にする
@@ -27,6 +28,13 @@ public:
   // 型・生成
   // ---------------------------------------------------------------------------
   using Id = std::uint64_t;  // 論理ID（アプリ内一意）
+
+  // 明示：コピー禁止・ムーブ可
+  Window() = delete; // ← これで「空名前の既定個体」を防ぐ
+  Window(const Window&) = delete;
+  Window& operator=(const Window&) = delete;
+  Window(Window&&) noexcept;
+  Window& operator=(Window&&) noexcept;
 
   explicit Window(std::string name,
                   Size size = {},
@@ -109,6 +117,11 @@ private:
   int   z_index_{0};
   int   refresh_rate_hz_{60};
   cv::Mat current_image_;
+
+  // === 二重バッファ ===
+  cv::Mat front_;                 // present() が読む（表示用）
+  cv::Mat back_;                  // setImage() が書く（アップロード用）
+  std::atomic<bool> dirty_{false}; // back_ に新フレームがある合図
 
   std::chrono::steady_clock::time_point last_presented_{};
   bool created_{false};

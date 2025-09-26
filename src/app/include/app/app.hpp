@@ -7,6 +7,7 @@
 #include "window/window.hpp"
 #include "input/input_handler.hpp"
 #include "cmd/dispatch_cmd.hpp"
+#include "app/camera.hpp"
 
 //=== 前方宣言・コンテキスト ================================================
 class App;
@@ -62,6 +63,8 @@ private:
   std::vector<win::Window> windows_;
   WindowId focused_id_{0};
   std::vector<MouseCallbackContext> mouse_callback_contexts_;
+  std::vector<Camera> cameras_;
+  std::unordered_map<Camera::Id, win::Window::Id> cam_to_win_;
 
   //--- コマンドキュー -------------------------------------------------------
   std::deque<DispatchCmd> cmd_que_;

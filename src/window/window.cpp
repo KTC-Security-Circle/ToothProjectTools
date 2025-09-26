@@ -55,6 +55,50 @@ Window::Window(std::string window_name,
             visible_, fullscreen_, z_index_, refresh_rate_hz_);
 }
 
+Window::Window(Window&& o) noexcept
+  : id_(o.id_),
+    name_(std::move(o.name_)),
+    size_(o.size_),
+    pos_(o.pos_),
+    monitor_index_(o.monitor_index_),
+    layout_(o.layout_),
+    visible_(o.visible_),
+    fullscreen_(o.fullscreen_),
+    z_index_(o.z_index_),
+    refresh_rate_hz_(o.refresh_rate_hz_),
+    created_(o.created_),
+    last_presented_(o.last_presented_),
+    front_(std::move(o.front_)),
+    back_(std::move(o.back_)),
+    dirty_(o.dirty_.exchange(false, std::memory_order_acq_rel))
+{
+  // OSリソース所有権の扱いを明確化：move 後、元オブジェクトは生成済みフラグを落とす
+  o.created_ = false;
+}
+
+Window& Window::operator=(Window&& o) noexcept {
+  if (this == &o) return *this;
+  // すでに生成済みならここで destroy() する設計も可
+  id_ = o.id_;
+  name_ = std::move(o.name_);
+  size_ = o.size_;
+  pos_  = o.pos_;
+  monitor_index_ = o.monitor_index_;
+  layout_ = o.layout_;
+  visible_ = o.visible_;
+  fullscreen_ = o.fullscreen_;
+  z_index_ = o.z_index_;
+  refresh_rate_hz_ = o.refresh_rate_hz_;
+  created_ = o.created_;
+  last_presented_ = o.last_presented_;
+  front_ = std::move(o.front_);
+  back_  = std::move(o.back_);
+  dirty_.store(o.dirty_.exchange(false, std::memory_order_acq_rel), std::memory_order_release);
+  o.created_ = false;
+  return *this;
+}
+
+
 // =============================================================================
 /** @brief Lifecycle: create
  *
@@ -68,6 +112,10 @@ Window::Window(std::string window_name,
  * @note `WINDOW_AUTOSIZE` を付けると `resizeWindow` は効かない点に注意。
  */
 void Window::create(int create_flags) {
+  if (name_.empty()) {
+    LOG_ERROR("create() で name_ が空");
+    return;
+  }
   if (created_) {
     LOG_DEBUG("create() は既に生成済みのためスキップ: name='{}'", name_);
     return;
@@ -120,6 +168,10 @@ void Window::destroy() noexcept {
  */
  void Window::present(const cv::Mat& frame) {
    if (!created_) {
+    if (name_.empty()) {
+      LOG_ERROR("present() で name_ が空のため create を実施できません");
+      return;
+    }
     LOG_WARN("present() が create() より先に呼ばれたため、ウィンドウを作成します: '{}'", name_);
     create(cv::WINDOW_NORMAL);
   }
@@ -140,21 +192,28 @@ void Window::destroy() noexcept {
    SPDLOG_TRACE("フレームを描画しました: name='{}'", name_);
  }
  
-// 追加: 直近の current_image_ を再表示
 void Window::present() {
   if (!created_) {
-    LOG_WARN("present()（引数なし）が先に呼ばれたため、ウィンドウを作成します: '{}'", name_);
+    LOG_WARN("present() 前に create() が必要だったため自動作成します: '{}'", name_);
     create(cv::WINDOW_NORMAL);
   }
-  if (current_image_.empty()) {
-    LOG_WARN("present()（引数なし）: 表示可能な画像がありません（current_image_ が空）: name='{}'", name_);
+
+  // 新フレームがあれば front/back を入替（最新勝ち）
+  if (dirty_.load(std::memory_order_acquire)) {
+    // std::lock_guard<std::mutex> lk(img_mtx_);
+    using std::swap;
+    swap(front_, back_);
+    dirty_.store(false, std::memory_order_release);
+  }
+
+  if (front_.empty()) {
+    // まだ画像が来ていない/破棄済み
     return;
   }
-  cv::imshow(name_, current_image_);
-  last_presented_ = std::chrono::steady_clock::now();
-  SPDLOG_TRACE("フレームを再描画しました: name='{}'", name_);
-}
 
+  cv::imshow(name_, front_);
+  last_presented_ = std::chrono::steady_clock::now();
+}
 
 // =============================================================================
 /** @brief Properties: setVisible
@@ -182,11 +241,15 @@ void Window::setFullscreen(bool is_on) {
 }
 
 void Window::setImage(const cv::Mat& img) {
-  current_image_ = img.clone(); // コピー or 共有
+  // std::lock_guard<std::mutex> lk(img_mtx_); // ロック版にするなら有効化
+  back_ = img.clone();                // 所有コピー（安全）
+  dirty_.store(true, std::memory_order_release);
 }
 
 void Window::setImage(cv::Mat&& img) {
-  current_image_ = std::move(img);
+  // std::lock_guard<std::mutex> lk(img_mtx_);
+  back_ = std::move(img);             // 無駄なコピー回避（呼び出し側が所有権移譲）
+  dirty_.store(true, std::memory_order_release);
 }
 
 /** @brief Properties: move

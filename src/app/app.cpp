@@ -1,4 +1,5 @@
 #include "app/app.hpp"
+#include "app/camera.hpp"
 #include "input/bindings_default.hpp"
 #include "logger/logger_macros.hpp"
 
@@ -36,6 +37,13 @@ App::App()
   // 初期フレームをウィンドウに保持させる
   first_window.setImage(std::move(image1));
 
+  // Camera( index=0, id=1 )
+  cameras_.emplace_back(/*index*/0, /*id*/1, "Cam0");
+  if (!cameras_.back().open()) {
+    LOG_ERROR("Camera open failed: index=0 (接続されていない可能性)");
+  }
+  cam_to_win_[1] = first_window.id();
+
   // --- 2枚目 ---
   windows_.emplace_back("Second", win::Size{800, 600}, win::Point{900, 200});
   win::Window& second_window = windows_.back();
@@ -55,6 +63,22 @@ App::App()
 
   // 2枚目も同じ初期フレームを保持（必要なら別画像に差し替え可）
   second_window.setImage(std::move(image2));
+
+  cameras_.emplace_back(/*index*/4, /*id*/2, "Cam1");
+  if (!cameras_.back().open()) {
+    LOG_ERROR("Camera open failed: index=4 (接続されていない可能性)");
+  } else {
+    cam_to_win_[2] = second_window.id();
+  }
+
+  // 初回表示を確定（HighGUIはwaitKey/pollKey経由で更新されるため）
+  first_window.present();
+  second_window.present();
+  #if CV_VERSION_MAJOR >= 4 && defined(HAVE_OPENCV_HIGHGUI)
+    cv::pollKey();
+  #else
+    cv::waitKey(1);
+  #endif
 
   // マウスコールバックの登録
   mouse_callback_contexts_.reserve(windows_.size());
@@ -96,6 +120,21 @@ void App::processInput() {
 }
 
 void App::update() {
+  // 先にカメラ更新
+  for (auto& cam : cameras_) {
+    if (!cam.isOpened()) continue;
+    cv::Mat frame = cam.getFrame();           // 空なら前回据え置き
+    if (frame.empty()) continue;
+
+    // 対応する Window に setImage
+    auto it = cam_to_win_.find(cam.id());
+    if (it != cam_to_win_.end()) {
+      if (auto* w = findWindowById(it->second)) {
+        w->setImage(std::move(frame));        // 二重バッファの back_ に書く
+      }
+    }
+  }
+
   while (!cmd_que_.empty()) {                // ← std::deque<DispatchCmd>
     const DispatchCmd& next = cmd_que_.front();
     dispatch(next);                                 // 宛先解決＋コマンド適用
@@ -108,10 +147,14 @@ void App::update() {
 
 void App::render() {
   if (skip_render_once_) { skip_render_once_ = false; return; }
+  const auto now = std::chrono::steady_clock::now();
   for (auto& win : windows_) {
-   if (existsAndVisible(win)) {
-     win.present();              // current_image_ を再描画
-   }
+    if (!existsAndVisible(win)) continue;
+    const int refresh_hz = win.refreshRate();
+    const auto min_dt = std::chrono::nanoseconds(1'000'000'000LL / std::max(1, refresh_hz));
+    if (now - win.lastPresented() >= min_dt) {
+      win.present(); // dirtyならswap→imshow
+    }
  }
 }
 
