@@ -1,5 +1,8 @@
 add_library(window STATIC
-  window.cpp
+  window_core.cpp
+  window_render.cpp
+  window_props.cpp
+  window_monitor.cpp
   monitor_x11.cpp
 )
 
