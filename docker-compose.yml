@@ -5,6 +5,8 @@ services:
       dockerfile: Dockerfile
 
     user: "vscode"
+    group_add: 
+      - "${VIDEO_GID}"
 
     # GUI（X11）
     environment:
@@ -21,8 +23,10 @@ services:
 
     # 明示的にデバイスを渡す
     devices:
+      - /dev/video0:/dev/video0
+      # - /dev/video2:/dev/video2
       - /dev/video4:/dev/video4
-      - /dev/video6:/dev/video6
+      # - /dev/video6:/dev/video6
       - /dev/dri:/dev/dri
 
     cap_add:
