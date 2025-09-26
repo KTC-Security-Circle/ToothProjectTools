@@ -185,12 +185,7 @@ void App::applyCommandToWindow_(win::Window& target_window, const Command& comma
       LOG_INFO("コマンド: モニタ移動 index={} -> Window id={}, name='{}'",
                concrete_command.index, target_window.id(), target_window.name());
 
-      bool was_fullscreen = target_window.fullscreen();
-      win::Size was_size = target_window.size();
-      if (was_fullscreen) target_window.setFullscreen(false);
       target_window.setMonitorIndex(concrete_command.index);
-      if (was_fullscreen) target_window.resize(was_size);
-      if (was_fullscreen) target_window.setFullscreen(true);
       
     } else if constexpr (std::is_same_v<ConcreteCommandType, CmdQuit>) {
       LOG_INFO("コマンド: 終了要求 -> アプリ全体に適用");
