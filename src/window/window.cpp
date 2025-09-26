@@ -155,43 +155,6 @@ void Window::destroy() noexcept {
   LOG_INFO("ウィンドウを破棄しました: name='{}'", name_);
 }
 
-// =============================================================================
-/** @brief Rendering: present
- *
- * 画像フレームを現在のウィンドウへ描画し、描画時刻を更新する。
- * 必要に応じて自動で `create()` を呼び、ウィンドウを確保する。
- *
- * @param frame 描画する `cv::Mat`（型・色空間は HighGUI の既定表示に準拠）
- *
- * @note HighGUI のイベント処理は `waitKey` / `pollKey` に依存するため、
- *       別途 `pollEvents()` を周期的に呼ぶこと。描画更新もイベントループに依存する。
- */
- void Window::present(const cv::Mat& frame) {
-   if (!created_) {
-    if (name_.empty()) {
-      LOG_ERROR("present() で name_ が空のため create を実施できません");
-      return;
-    }
-    LOG_WARN("present() が create() より先に呼ばれたため、ウィンドウを作成します: '{}'", name_);
-    create(cv::WINDOW_NORMAL);
-  }
-  // 与えられたフレームが非空なら、ウィンドウ側で所有コピーして保持
-  if (!frame.empty()) {
-    // Mat は参照カウントで別バッファを共有するため、寿命・改変の影響を避けるなら clone() が安全。
-    // ここでは「Window が描画に使う最新フレーム」を安定保持したいので clone() します。
-    current_image_ = frame.clone();
-  }
-
-  if (current_image_.empty()) {
-    LOG_WARN("present(): 表示可能な画像がありません（current_image_ が空）: name='{}'", name_);
-    return;
-  }
-
-  cv::imshow(name_, current_image_);
-   last_presented_ = std::chrono::steady_clock::now();
-   SPDLOG_TRACE("フレームを描画しました: name='{}'", name_);
- }
- 
 void Window::present() {
   if (!created_) {
     LOG_WARN("present() 前に create() が必要だったため自動作成します: '{}'", name_);
