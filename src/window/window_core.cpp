@@ -66,11 +66,11 @@ Window::Window(Window&& o) noexcept
     fullscreen_(o.fullscreen_),
     z_index_(o.z_index_),
     refresh_rate_hz_(o.refresh_rate_hz_),
-    created_(o.created_),
-    last_presented_(o.last_presented_),
     front_(std::move(o.front_)),
     back_(std::move(o.back_)),
-    dirty_(o.dirty_.exchange(false, std::memory_order_acq_rel)) {
+    dirty_(o.dirty_.exchange(false, std::memory_order_acq_rel)),
+    last_presented_(o.last_presented_),
+    created_(o.created_) {
   o.created_ = false;
 }
 
