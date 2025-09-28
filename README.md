@@ -145,4 +145,4 @@ src/
 ---
 
 ## 🧩 ライセンス
-[MIT LISENCE](./LISENCE)
+[MIT LICENSE](./LICENSE)
