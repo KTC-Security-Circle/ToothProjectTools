@@ -54,32 +54,49 @@ make clean
 
 ```text
 .
-├── Appパッケージ設計メモ.md       # app/ の設計意図とゲームループ構造
-├── cmdパッケージ設計メモ.md       # cmd/ のエンベロープ方式
-├── inputパッケージ設計メモ.md     # input/ の入力処理と既定バインディング
+├── CMakeLists.txt
+├── Dockerfile
+├── Makefile
 ├── README.md
-├── Makefile                      # make build / make clean
-├── docker-compose.yml / Dockerfile
-├── src
-│   ├── app/      # アプリ本体（ループ・dispatch・マウス処理）
-│   ├── cmd/      # Command / Target / DispatchCmd 定義
-│   ├── input/    # InputHandler, デフォルトバインディング
-│   ├── logger/   # spdlog セットアップ
-│   ├── video/    # Camera 入力
-│   └── window/   # Window 抽象化, Monitor情報, X11対応
+├── cppcheck.supp
+├── docker-compose.yml
 └── docs
-    └── architecture.md           # パッケージ横断の統合ドキュメント
+    ├── architecture
+    │   ├── architecture.md         # パッケージ横断の統合ドキュメント（PlantUML）
+    │   └── sequence.png            # シーケンス図などの画像出力
+    ├── appパッケージ設計メモ.md       # app/ の設計意図とゲームループ/ディスパッチ構造
+    ├── cmdパッケージ設計メモ.md       # cmd/ のエンベロープ方式（Target + Command）
+    ├── inputパッケージ設計メモ.md     # 入力→コマンド変換と既定バインディング
+    ├── loggerパッケージ設計メモ.md    # spdlog ベースのロギング（source_loc マクロ等）
+    ├── videoパッケージ設計メモ.md     # カメラ抽象化/二重バッファ/近似同期(Δt)
+    └── windowパッケージ設計メモ.md    # ウィンドウ抽象/レイアウト/FS化/モニタ移動
+
+src/
+├── app/      # アプリ本体（ループ・dispatch・マウス処理）
+├── cmd/      # Command / Target / DispatchCmd 定義（INTERFACE想定）
+├── input/    # InputHandler, デフォルトバインディング
+├── logger/   # spdlog セットアップ（マクロ/初期化）
+├── video/    # Camera 入力
+└── window/   # Window 抽象化, Monitor情報, X11対応
 ```
 
 ---
 
 ## 📖 設計ドキュメント
 
-* [docs/architecture.md](./docs/architecture.md) — 全体の設計概要とPlantUML図
-* [Appパッケージ設計メモ](./Appパッケージ設計メモ.md) — ゲームループ構造とコマンドディスパッチ
-* [cmdパッケージ設計メモ](./cmdパッケージ設計メモ.md) — エンベロープ方式とCommand/Targetの分離
-* [inputパッケージ設計メモ](./inputパッケージ設計メモ.md) — 入力→コマンド変換, 既定バインディング
+* **全体設計（Architecture）**
 
+  * [`docs/architecture/architecture.md`](./docs/architecture/architecture.md) — 全体の設計概要と PlantUML 図（`sequence.png` も同フォルダ）
+* **パッケージ別メモ**
+
+  * [`docs/appパッケージ設計メモ.md`](./docs/appパッケージ設計メモ.md) — ゲームループ/ディスパッチ/フォーカス管理
+  * [`docs/cmdパッケージ設計メモ.md`](./docs/cmdパッケージ設計メモ.md) — エンベロープ方式（`Target + Command`）
+  * [`docs/inputパッケージ設計メモ.md`](./docs/inputパッケージ設計メモ.md) — 入力→コマンド変換/既定バインディング
+  * [`docs/windowパッケージ設計メモ.md`](./docs/windowパッケージ設計メモ.md) — レイアウト/FS/モニタ移動/テスト項目
+  * [`docs/loggerパッケージ設計メモ.md`](./docs/loggerパッケージ設計メモ.md) — source_loc マクロ/ENV レベル切替/ローテーション
+  * [`docs/videoパッケージ設計メモ.md`](./docs/videoパッケージ設計メモ.md) — 二重バッファ/近似同期/露光固定
+
+---
 ---
 
 ## 🎯 今後の想定
