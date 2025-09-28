@@ -4,7 +4,7 @@
 // =============================================================================
 
 #include "app/app.hpp"
-#include "app/camera.hpp"
+#include "video/camera.hpp"
 #include "input/bindings_default.hpp"
 #include "logger/logger_macros.hpp"
 

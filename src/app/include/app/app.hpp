@@ -7,7 +7,7 @@
 #include "window/window.hpp"
 #include "input/input_handler.hpp"
 #include "cmd/dispatch_cmd.hpp"
-#include "app/camera.hpp"
+#include "video/camera.hpp"
 
 //=== 前方宣言・コンテキスト ================================================
 class App;
