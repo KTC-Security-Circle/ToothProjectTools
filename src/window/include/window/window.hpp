@@ -77,6 +77,7 @@ public:
   void setMonitorIndex(int new_index);
   void setImage(const cv::Mat& img);
   void setImage(cv::Mat&& img);
+  void setCameraId(int id) noexcept { camera_id = id; }
 
   // ---------------------------------------------------------------------------
   // 取得（状態）
@@ -89,6 +90,7 @@ public:
   [[nodiscard]] LayoutMode  layout()      const noexcept { return layout_; }
   [[nodiscard]] int         zIndex()      const noexcept { return z_index_; }
   [[nodiscard]] int         refreshRate() const noexcept { return refresh_rate_hz_; }
+  [[nodiscard]] int  cameraId() const noexcept { return camera_id; }
   [[nodiscard]] std::chrono::steady_clock::time_point
                            lastPresented() const noexcept { return last_presented_; }
 
@@ -110,7 +112,8 @@ private:
   Point pos_{};
   int   monitor_index_{0};
   LayoutMode layout_{LayoutMode::Free};
-  bool  visible_{true};
+  bool   visible_{true};
+  int    camera_id{-1};   // ★ このウィンドウに紐づくカメラ（-1: 未割当）
   bool  fullscreen_{false};
   int   z_index_{0};
   int   refresh_rate_hz_{60};

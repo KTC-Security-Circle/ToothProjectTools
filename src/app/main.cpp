@@ -5,9 +5,11 @@
 
 int main() {
   public_logger::init("logs/app.log");
+  App app = App();
   LOG_INFO("起動");
+  
 
-  App app;
+  // App app;
   app.run();
 
   LOG_INFO("終了");

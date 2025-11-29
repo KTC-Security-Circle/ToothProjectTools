@@ -16,97 +16,95 @@
 #include <chrono>
 #include <utility>
 
-// -----------------------------------------------------------------------------
-/** @brief コンストラクタ
- *
- * - ウィンドウを2枚作成し、それぞれに初期画像を流し込みます。
- * - カメラを2台（例）作成し、ウィンドウとの対応付けを登録します。
- * - HighGUI の初回表示を確定させるため、最初に present と waitKey 相当を1度だけ呼びます。
- * - マウスコールバックを全ウィンドウに設定します。
- * - 既定のキーバインドをインストールします。
- */
 App::App()
 {
-  // --- 1枚目 ---
+  // ---------------------------------------------------------
+  // 1. メモリ確保 (重要)
+  // ---------------------------------------------------------
+  // emplace_back による再確保で参照が無効になるのを防ぐため、
+  // 事前に必要なサイズを予約します。
+  windows_.reserve(2);
+  cameras_.reserve(2);
+
+  // ---------------------------------------------------------
+  // 2. ウィンドウの生成 (UIの構築)
+  // ---------------------------------------------------------
+  
+  // --- Window 1 (Preview) ---
   windows_.emplace_back("Preview", win::Size{800, 600}, win::Point{100, 100});
-  win::Window& first_window = windows_.back();
-  first_window.create();
-  first_window.setMonitorIndex(1);
-  focused_id_ = first_window.id();  // フォーカスをこのウィンドウに設定
+  win::Window& win1 = windows_[0]; // vector[0] への参照
+  win1.create();
+  win1.setMonitorIndex(1);
+  win1.setCameraId(1); // ここでセットしたIDが消えないよう reserve が必須
+  focused_id_ = win1.id();
 
-  // 1枚目の初期画像
-  cv::Mat initial_image_preview = cv::Mat(
-      first_window.size().height, first_window.size().width,
-      CV_8UC3, cv::Scalar(30, 30, 30));
-  cv::putText(initial_image_preview,
-              "Hello HighGUI Preview",
-              {40, 300},
-              cv::FONT_HERSHEY_SIMPLEX,
-              2.0,
-              {200, 200, 255},
-              3);
-  first_window.setImage(std::move(initial_image_preview));
+  // --- Window 2 (Second) ---
+  windows_.emplace_back("Second", win::Size{800, 600}, win::Point{900, 200});
+  win::Window& win2 = windows_[1]; // vector[1] への参照
+  win2.create();
+  win2.setMonitorIndex(2);
+  win2.setCameraId(2);
 
-  // Camera( index=0, id=1 )
+  // ---------------------------------------------------------
+  // 3. 初期画像の適用
+  // ---------------------------------------------------------
+  {
+    cv::Mat img1 = cv::Mat(win1.size().height, win1.size().width, CV_8UC3, cv::Scalar(30, 30, 30));
+    cv::putText(img1, "Hello HighGUI Preview", {40, 300}, cv::FONT_HERSHEY_SIMPLEX, 2.0, {200, 200, 255}, 3);
+    win1.setImage(std::move(img1));
+
+    cv::Mat img2 = cv::Mat(win2.size().height, win2.size().width, CV_8UC3, cv::Scalar(30, 30, 30));
+    cv::putText(img2, "Hello HighGUI Second", {40, 300}, cv::FONT_HERSHEY_SIMPLEX, 2.0, {200, 200, 255}, 3);
+    win2.setImage(std::move(img2));
+  }
+
+  // ---------------------------------------------------------
+  // 4. カメラの初期化 (Hardware Setup)
+  // ---------------------------------------------------------
+
+  // --- Camera 1 (Index=0, ID=1) ---
   cameras_.emplace_back(/*index*/0, /*id*/1, "Cam0");
   if (!cameras_.back().open()) {
-    LOG_ERROR("Camera open failed: index=0 (接続されていない可能性)");
+    LOG_ERROR("Camera 1 open failed: index=0 (接続確認: /dev/video0)");
   }
-  cam_to_win_[1] = first_window.id();
+  cam_to_win_[1] = win1.id(); // IDマップ登録
 
-  // --- 2枚目 ---
-  windows_.emplace_back("Second", win::Size{800, 600}, win::Point{900, 200});
-  win::Window& second_window = windows_.back();
-  second_window.create();
-  second_window.setMonitorIndex(1);
-
-  // 2枚目の初期画像
-  cv::Mat initial_image_second = cv::Mat(
-      second_window.size().height, second_window.size().width,
-      CV_8UC3, cv::Scalar(30, 30, 30));
-  cv::putText(initial_image_second,
-              "Hello HighGUI Second",
-              {40, 300},
-              cv::FONT_HERSHEY_SIMPLEX,
-              2.0,
-              {200, 200, 255},
-              3);
-  second_window.setImage(std::move(initial_image_second));
-
-  // 2台目カメラ（例：index=4 に仮でぶら下げる）
-  cameras_.emplace_back(/*index*/4, /*id*/2, "Cam1");
+  // --- Camera 2 (Index=1, ID=2) ---
+  // ※ログで index=0 のオープンエラーが出ているため、ここは 1 に変更すべきです
+  cameras_.emplace_back(/*index*/2, /*id*/2, "Cam1"); 
   if (!cameras_.back().open()) {
-    LOG_ERROR("Camera open failed: index=4 (接続されていない可能性)");
+    LOG_ERROR("Camera 2 open failed: index=1 (接続確認: /dev/video1)");
   } else {
-    cam_to_win_[2] = second_window.id();
+    cam_to_win_[2] = win2.id(); // 成功時のみマップ登録する場合
   }
 
-  // 初回表示を確定（HighGUIはwaitKey/pollKey経由で更新される）
-  first_window.present();
-  second_window.present();
-#if CV_VERSION_MAJOR >= 4 && defined(HAVE_OPENCV_HIGHGUI)
-  cv::pollKey();
-#else
-  cv::waitKey(1);
-#endif
+  // ---------------------------------------------------------
+  // 5. 表示確定と入力バインド
+  // ---------------------------------------------------------
+  
+  // 初回表示
+  win1.present();
+  win2.present();
 
-  // マウスコールバックの登録
+  #if CV_VERSION_MAJOR >= 4 && defined(HAVE_OPENCV_HIGHGUI)
+    cv::pollKey();
+  #else
+    cv::waitKey(1);
+  #endif
+
+  // マウスコールバック
   mouse_callback_contexts_.reserve(windows_.size());
-  for (auto& window_instance : windows_) {
-    mouse_callback_contexts_.push_back(MouseCallbackContext{
-      this,                   // App* を渡す
-      window_instance.id()    // このコールバックが紐付く Window の ID
-    });
-    MouseCallbackContext* context_ptr = &mouse_callback_contexts_.back();
-
+  for (auto& w : windows_) {
+    mouse_callback_contexts_.push_back(MouseCallbackContext{this, w.id()});
+    
     cv::setMouseCallback(
-      window_instance.name().c_str(),
-      &App::onMouseCallback,  // キャプチャなしの関数ポインタ
-      static_cast<void*>(context_ptr)
+      w.name().c_str(),
+      &App::onMouseCallback,
+      static_cast<void*>(&mouse_callback_contexts_.back())
     );
   }
 
-  // 既定のキーバインド
+  // キーバインド
   install_default_bindings(input_, cmd_que_);
 }
 

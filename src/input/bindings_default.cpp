@@ -1,6 +1,7 @@
 #include "input/bindings_default.hpp"
 #include "logger/logger_macros.hpp"
 #include "cmd/dispatch_cmd.hpp"
+#include "cmd/commands.hpp" 
 #include "cmd/keycodes.hpp"
 
 /// @brief アプリ既定のキー→コマンド・バインディングを登録する。
@@ -11,8 +12,7 @@
 /// @param cmd_que  コマンド配送用のキュー（先入れ先出し）
 ///
 /// @note GUIループ側で未入力は負数（例: waitKey/pollKey が -1）を返しうる点に注意。
-///       （未入力の仕様はOpenCV HighGUIのwaitKey系に準ずる）
-///       詳細: 「押されたキーコード、または未入力なら -1 を返す」。:contentReference[oaicite:0]{index=0}
+///       （未入力の仕様は OpenCV HighGUI の waitKey 系に準ずる）
 void install_default_bindings(
   InputHandler& handler,
   std::deque<DispatchCmd>& cmd_que
@@ -69,6 +69,31 @@ void install_default_bindings(
     cmd_que.push_back(DispatchCmd{
       Target{TargetFocused{}},
       Command{CmdFocusNext{}}
+    });
+  });
+
+  //======================================================================
+  // 5) カメラ: プッシュ撮影（フォーカスのみ）: 宛先 = フォーカス中
+  //======================================================================
+  handler.bind('c', [&]{
+    LOG_INFO("プッシュ撮影（フォーカスのみ）を予約します");
+    CmdCapturePush cap{CaptureScope::FocusedOnly, std::nullopt, {}};
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetFocused{}},
+      Command{cap}
+    });
+  });
+
+  //======================================================================
+  // 6) カメラ: プッシュ撮影（camera_id グループ）:
+  //    宛先 = フォーカス中ウィンドウの camera_id に紐づく全ウィンドウ
+  //======================================================================
+  handler.bind('z', [&]{
+    LOG_INFO("プッシュ撮影（camera_idグループ）を予約します");
+    CmdCapturePush cap{CaptureScope::CameraGroup, std::nullopt, {}};
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetAll{}},
+      Command{cap}
     });
   });
 }

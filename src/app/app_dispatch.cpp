@@ -5,129 +5,156 @@
 
 #include "app/app.hpp"
 #include "logger/logger_macros.hpp"
-
 #include "app/app_locals.hpp"
 
 #include <type_traits>
+#include <variant>
+#include <vector>
+#include <functional>
+#include <algorithm> // ← find_if 用
+#include <opencv2/imgcodecs.hpp> // cv::imwrite に必要
+#include <filesystem>            // ディレクトリ作成用 (C++17)
+#include <iomanip>               // 時刻フォーマット用
+#include <sstream>               // 文字列構築用
+
+namespace fs = std::filesystem;
 
 // -----------------------------------------------------------------------------
-/** @brief アプリ全体に直接作用するコマンドの処理
- *
- * ここではアプリケーションに対する操作（例：フォーカス移動など）を処理します。
- * 対象ウィンドウが不要なコマンドはここで完結させます。
- */
+/** @brief アプリ全体に直接作用するコマンドの処理 */
 bool App::handleAppLevelCommand_(const Command& command) {
   bool is_handled = false;
+
+  // App のメンバ関数内ラムダ（this 捕捉）なので private に合法アクセス可
   std::visit([&](auto&& concrete_command){
-    using ConcreteCommandType = std::decay_t<decltype(concrete_command)>;
-    if constexpr (std::is_same_v<ConcreteCommandType, CmdFocusNext>) {
+    using T = std::decay_t<decltype(concrete_command)>;
+    if constexpr (std::is_same_v<T, CmdFocusNext>) {
       LOG_INFO("コマンド: フォーカス移動（次）");
-      doFocusNext();
+      this->doFocusNext();
       is_handled = true;
     }
+    // それ以外は no-op
   }, command);
+
   return is_handled;
 }
 
 // -----------------------------------------------------------------------------
-/** @brief 1ウィンドウへのコマンド適用
- *
- * フルスクリーン切替、モニタ移動、終了など、対象ウィンドウが明確な
- * コマンドの実行本体です。
- */
+/** @brief 単一ウィンドウへのコマンド適用 */
 void App::applyCommandToWindow_(win::Window& target_window, const Command& command) {
   std::visit([&](auto&& concrete_command){
-    using ConcreteCommandType = std::decay_t<decltype(concrete_command)>;
-    if constexpr (std::is_same_v<ConcreteCommandType, CmdToggleFullscreen>) {
+    using T = std::decay_t<decltype(concrete_command)>;
+
+    if constexpr (std::is_same_v<T, CmdToggleFullscreen>) {
       LOG_INFO("コマンド: フルスクリーン切替 -> Window id={}, name='{}'",
                target_window.id(), target_window.name());
       target_window.setFullscreen(!target_window.fullscreen());
-    } else if constexpr (std::is_same_v<ConcreteCommandType, CmdMoveToMonitor>) {
+
+    } else if constexpr (std::is_same_v<T, CmdMoveToMonitor>) {
       LOG_INFO("コマンド: モニタ移動 index={} -> Window id={}, name='{}'",
                concrete_command.index, target_window.id(), target_window.name());
       target_window.setMonitorIndex(concrete_command.index);
-    } else if constexpr (std::is_same_v<ConcreteCommandType, CmdQuit>) {
+
+    } else if constexpr (std::is_same_v<T, CmdQuit>) {
       LOG_INFO("コマンド: 終了要求 -> アプリ全体に適用");
-      running_ = false;
+      this->running_ = false;
+
+    } else if constexpr (std::is_same_v<T, CmdCapturePush>) {
+      const auto& cap = concrete_command;
+      using CamId = Camera::Id;
+
+      // 1. カメラIDの特定
+      const CamId cam_id = cap.camera_id
+                           ? static_cast<CamId>(*cap.camera_id)
+                           : static_cast<CamId>(target_window.cameraId());
+
+      if (static_cast<long>(cam_id) < 0) {
+        LOG_WARN("保存スキップ: Camera ID未割り当て (win={})", target_window.id());
+        return;
+      }
+
+      // 2. カメラの特定とフレーム取得
+      auto it = std::find_if(this->cameras_.begin(), this->cameras_.end(),
+                             [cam_id](const auto& c) { return c.id() == cam_id; });
+
+      if (it == this->cameras_.end()) {
+        LOG_ERROR("保存エラー: カメラデバイスが見つかりません (id={})", static_cast<unsigned long>(cam_id));
+        return;
+      }
+
+      Camera& camera = *it;
+
+      // カメラが開いていなければ一時的に開く
+      bool needed_open = !camera.isOpened();
+      if (needed_open) {
+        if (!camera.open()) {
+            LOG_ERROR("保存エラー: カメラオープン失敗 (id={})", static_cast<unsigned long>(cam_id));
+            return;
+        }
+      }
+
+      // フレーム取得
+      cv::Mat frame = camera.getFrame();
+
+      // 一時的に開いた場合は閉じる（運用によりますが、ここでは開けっ放しにせず戻す場合）
+      // if (needed_open) camera.close(); 
+
+      if (frame.empty()) {
+        LOG_WARN("保存エラー: 取得フレームが空でした (id={})", static_cast<unsigned long>(cam_id));
+        return;
+      }
+
+      // 3. ファイル名の生成 (例: captures/cam1_20251129_123456.png)
+      // 保存先ディレクトリ
+      const std::string save_dir = "captures";
+      try {
+          if (!fs::exists(save_dir)) {
+              fs::create_directories(save_dir);
+          }
+      } catch (const std::exception& e) {
+          LOG_ERROR("ディレクトリ作成失敗: {}", e.what());
+          return;
+      }
+
+      // タイムスタンプ生成 (ミリ秒対応版)
+      auto now = std::chrono::system_clock::now();
+      std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+      std::tm tm_now = *std::localtime(&now_time);
+
+      // 現在時刻のミリ秒部分を計算 (0-999)
+      auto duration = now.time_since_epoch();
+      auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() % 1000;
+
+      std::stringstream ss;
+      ss << save_dir << "/cam" << static_cast<unsigned long>(cam_id) << "_"
+         << std::put_time(&tm_now, "%Y%m%d_%H%M%S")
+         << "_" << std::setfill('0') << std::setw(3) << millis // ここに _000 ～ _999 を追加
+         << ".png";
+      
+      std::string filepath = ss.str();
+
+      // 4. 画像の保存 (cv::imwrite)
+      // 圧縮パラメータ（PNG圧縮レベル3など）を指定する場合
+      // std::vector<int> params = {cv::IMWRITE_PNG_COMPRESSION, 3};
+      bool success = cv::imwrite(filepath, frame);
+
+      if (success) {
+        LOG_INFO("画像保存完了: {}", filepath);
+      } else {
+        LOG_ERROR("画像保存失敗: {}", filepath);
+      }
     }
+    // それ以外は no-op
   }, command);
 }
 
 // -----------------------------------------------------------------------------
-/** @brief 宛先: 全ウィンドウ
- *
- * 全てのウィンドウに対して applyCommandToWindow_ を適用します。
- * 不可視・未存在のウィンドウはスキップします。
- */
-void App::dispatchToAll_(const DispatchCmd& dispatch_command) {
-  LOG_INFO("宛先: 全ウィンドウ");
-  for (auto& window_instance : windows_) {
-    if (existsAndVisible(window_instance)) {
-      LOG_INFO("  適用対象: Window id={}, name='{}'",
-               window_instance.id(), window_instance.name());
-      applyCommandToWindow_(window_instance, dispatch_command.cmd);
-    }
-  }
-}
-
-// -----------------------------------------------------------------------------
-/** @brief 宛先: フォーカス中
- *
- * 現在フォーカスしているウィンドウに対してコマンドを適用します。
- */
-void App::dispatchToFocused_(const DispatchCmd& dispatch_command) {
-  LOG_INFO("宛先: フォーカス中のウィンドウ id={}", focused_id_);
-  if (auto* focused_window_ptr = findWindowById(focused_id_)) {
-    if (existsAndVisible(*focused_window_ptr)) {
-      LOG_INFO("  適用対象: Window id={}, name='{}'",
-               focused_window_ptr->id(), focused_window_ptr->name());
-      applyCommandToWindow_(*focused_window_ptr, dispatch_command.cmd);
-    } else {
-      LOG_INFO("  フォーカス中のウィンドウは不可視または存在しません");
-    }
-  } else {
-    LOG_INFO("  フォーカス中のウィンドウは見つかりませんでした");
-  }
-}
-
-// -----------------------------------------------------------------------------
-/** @brief 宛先: 指定ID
- *
- * 指定IDのウィンドウが存在し、かつ可視ならコマンドを適用します。
- */
-void App::dispatchToId_(const DispatchCmd& dispatch_command, WindowId target_window_id) {
-  LOG_INFO("宛先: 指定IDのウィンドウ id={}", target_window_id);
-  if (auto* target_window_ptr = findWindowById(target_window_id)) {
-    if (existsAndVisible(*target_window_ptr)) {
-      LOG_INFO("  適用対象: Window id={}, name='{}'",
-               target_window_ptr->id(), target_window_ptr->name());
-      applyCommandToWindow_(*target_window_ptr, dispatch_command.cmd);
-    } else {
-      LOG_INFO("  指定IDのウィンドウは不可視または存在しません");
-    }
-  } else {
-    LOG_INFO("  指定IDのウィンドウは見つかりませんでした");
-  }
-}
-
-// -----------------------------------------------------------------------------
-/** @brief コマンド適用後の共通後処理
- *
- * 現状では 1 フレームだけ描画をスキップして処理を安定させます。
- * HighGUI の描画は waitKey/pollKey に依存しているため、ループ側で
- * 適切に processInput() が回る前提です。
- */
+/** @brief コマンド適用後の共通後処理 */
 void App::finalizeDispatch_() {
   skip_render_once_ = true;
 }
 
 // -----------------------------------------------------------------------------
-/** @brief コマンドの実行（メインハブ）
- *
- * - まずアプリ全体のコマンドを処理し、処理済みなら終了します。
- * - 次に宛先種別（全体／フォーカス／ID）に応じて適用します。
- * - 最後に共通の後処理を行います。
- */
+/** @brief コマンドの実行（メインハブ） */
 void App::dispatch(const DispatchCmd& dispatch_command) {
   // 1) 先にアプリ全体に直接作用するものを処理
   if (handleAppLevelCommand_(dispatch_command.cmd)) {
@@ -137,13 +164,43 @@ void App::dispatch(const DispatchCmd& dispatch_command) {
 
   // 2) 宛先に応じてルーティング
   std::visit([&](auto&& target_variant){
-    using TargetType = std::decay_t<decltype(target_variant)>;
-    if constexpr (std::is_same_v<TargetType, TargetAll>) {
-      dispatchToAll_(dispatch_command);
-    } else if constexpr (std::is_same_v<TargetType, TargetFocused>) {
-      dispatchToFocused_(dispatch_command);
-    } else if constexpr (std::is_same_v<TargetType, TargetById>) {
-      dispatchToId_(dispatch_command, target_variant.id);
+    using Target = std::decay_t<decltype(target_variant)>;
+
+    if constexpr (std::is_same_v<Target, TargetAll>) {
+      LOG_INFO("宛先: 全ウィンドウ");
+      for (auto& w : this->windows_) {
+        // existsAndVisible が無い前提：visible() で代替
+        if (w.visible()) {
+          LOG_INFO("  適用対象: Window id={}, name='{}'", w.id(), w.name());
+          this->applyCommandToWindow_(w, dispatch_command.cmd);
+        }
+      }
+
+    } else if constexpr (std::is_same_v<Target, TargetFocused>) {
+      LOG_INFO("宛先: フォーカス中のウィンドウ id={}", this->focused_id_);
+      if (auto* fw = this->findWindowById(this->focused_id_)) {
+        if (fw->visible()) {
+          LOG_INFO("  適用対象: Window id={}, name='{}'", fw->id(), fw->name());
+          this->applyCommandToWindow_(*fw, dispatch_command.cmd);
+        } else {
+          LOG_INFO("  フォーカス中のウィンドウは不可視または存在しません");
+        }
+      } else {
+        LOG_INFO("  フォーカス中のウィンドウは見つかりませんでした");
+      }
+
+    } else if constexpr (std::is_same_v<Target, TargetById>) {
+      LOG_INFO("宛先: 指定IDのウィンドウ id={}", target_variant.id);
+      if (auto* tw = this->findWindowById(target_variant.id)) {
+        if (tw->visible()) {
+          LOG_INFO("  適用対象: Window id={}, name='{}'", tw->id(), tw->name());
+          this->applyCommandToWindow_(*tw, dispatch_command.cmd);
+        } else {
+          LOG_INFO("  指定IDのウィンドウは不可視または存在しません");
+        }
+      } else {
+        LOG_INFO("  指定IDのウィンドウは見つかりませんでした");
+      }
     }
   }, dispatch_command.target);
 
