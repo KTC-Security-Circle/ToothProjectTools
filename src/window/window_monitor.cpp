@@ -50,4 +50,33 @@ void Window::setMonitorIndex(int new_index) {
   }
 }
 
+Size Window::getMonitorSize() const {
+  // モニタ情報を列挙
+  auto monitors = enumerate_monitors_x11();
+  
+  if (monitors.empty()) {
+    LOG_ERROR("getMonitorSize: モニタ列挙に失敗しました");
+    return Size{0, 0};
+  }
+
+  // monitor_index_ は 1-based なので 0-based に変換
+  // ※ monitor_index_ が未設定(0)の場合はデフォルトで1(index 0)を返すと安全です
+  int target_index = (monitor_index_ > 0) ? monitor_index_ : 1;
+  int vec_index = target_index - 1;
+
+  if (vec_index >= 0 && vec_index < static_cast<int>(monitors.size())) {
+    const auto& m = monitors[vec_index];
+    // Monitor構造体の width/height を返す
+    return Size{m.width, m.height};
+  } else {
+    LOG_WARN("getMonitorSize: monitor_index_={} は範囲外です (検出数={})", 
+             monitor_index_, monitors.size());
+    // フォールバックとしてプライマリモニタ(0)を返すか、エラーを返す
+    if (!monitors.empty()) {
+        return Size{monitors[0].width, monitors[0].height};
+    }
+    return Size{0, 0};
+  }
+}
+
 } // namespace win

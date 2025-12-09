@@ -93,6 +93,7 @@ public:
   [[nodiscard]] int  cameraId() const noexcept { return camera_id; }
   [[nodiscard]] std::chrono::steady_clock::time_point
                            lastPresented() const noexcept { return last_presented_; }
+  [[nodiscard]] Size getMonitorSize() const;
 
   // ---------------------------------------------------------------------------
   // イベント（HighGUI は waitKey のみ）
