@@ -7,6 +7,7 @@
 #include "video/camera.hpp"
 #include "input/bindings_default.hpp"
 #include "logger/logger_macros.hpp"
+#include "structured_light/structured_light.hpp"
 
 #include "app/app_locals.hpp"              // 内部ヘルパ（existsAndVisible）
 
@@ -23,7 +24,7 @@ App::App()
   // ---------------------------------------------------------
   // emplace_back による再確保で参照が無効になるのを防ぐため、
   // 事前に必要なサイズを予約します。
-  windows_.reserve(2);
+  windows_.reserve(3);
   cameras_.reserve(2);
 
   // ---------------------------------------------------------
@@ -45,6 +46,34 @@ App::App()
   win2.setMonitorIndex(2);
   win2.setCameraId(2);
 
+  // --- Window 3: Projector ---
+  // とりあえずサイズ0で初期化し、create後にモニタ情報を確定させる
+  windows_.emplace_back("Projector", win::Size{0, 0}, win::Point{0, 0});
+  win::Window& win_projector = windows_[2];
+  win_projector.create();
+  win_projector.setMonitorIndex(2); // ここでモニタ2へ移動
+
+  //  Windowクラス経由でモニタの実際の解像度を取得
+  win::Size proj_size = win_projector.getMonitorSize();
+  
+  // 取得できなかった場合のフォールバック (例: 1920x1080)
+  if (proj_size.width == 0 || proj_size.height == 0) {
+      LOG_WARN("プロジェクタサイズ取得失敗。デフォルト値(1920x1080)を使用します");
+      proj_size = {1920, 1080};
+  }
+
+  // ウィンドウ自体のサイズもモニタに合わせる（フルスクリーン準備）
+  win_projector.resize(proj_size); 
+
+  // ---------------------------------------------------------
+  // 3. StructuredLight の初期化 & パターン生成
+  // ---------------------------------------------------------
+  LOG_INFO("StructuredLight初期化: Projector Resolution={}x{}", proj_size.width, proj_size.height);
+
+  // 取得したサイズで初期化
+  sl_system_ = std::make_unique<sl::StructuredLight>(proj_size.width, proj_size.height);
+  sl_system_->generatePatterns();
+
   // ---------------------------------------------------------
   // 3. 初期画像の適用
   // ---------------------------------------------------------
@@ -56,6 +85,10 @@ App::App()
     cv::Mat img2 = cv::Mat(win2.size().height, win2.size().width, CV_8UC3, cv::Scalar(30, 30, 30));
     cv::putText(img2, "Hello HighGUI Second", {40, 300}, cv::FONT_HERSHEY_SIMPLEX, 2.0, {200, 200, 255}, 3);
     win2.setImage(std::move(img2));
+
+    cv::Mat img_projector = cv::Mat(win_projector.size().height, win_projector.size().width, CV_8UC3, cv::Scalar(30, 30, 30));
+    cv::putText(img_projector, "Hello HighGUI Second", {40, 300}, cv::FONT_HERSHEY_SIMPLEX, 2.0, {200, 200, 255}, 3);
+    win_projector.setImage(std::move(img_projector));
   }
 
   // ---------------------------------------------------------
@@ -85,6 +118,7 @@ App::App()
   // 初回表示
   win1.present();
   win2.present();
+  win_projector.present();
 
   #if CV_VERSION_MAJOR >= 4 && defined(HAVE_OPENCV_HIGHGUI)
     cv::pollKey();

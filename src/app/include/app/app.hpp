@@ -8,6 +8,7 @@
 #include "input/input_handler.hpp"
 #include "cmd/dispatch_cmd.hpp"
 #include "video/camera.hpp"
+#include "structured_light/structured_light.hpp"
 
 //=== 前方宣言・コンテキスト ================================================
 class App;
@@ -75,4 +76,6 @@ private:
   //--- ループ制御フラグ -----------------------------------------------------
   bool running_{true};
   bool skip_render_once_{false};
+
+  std::unique_ptr<sl::StructuredLight> sl_system_;
 };
