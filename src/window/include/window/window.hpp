@@ -36,15 +36,7 @@ public:
   Window(Window&&) noexcept;
   Window& operator=(Window&&) noexcept;
 
-  explicit Window(std::string name,
-                  Size size = {},
-                  Point pos = {},
-                  int monitor_index = 0,
-                  LayoutMode layout = LayoutMode::Free,
-                  bool visible = true,
-                  bool fullscreen = false,
-                  int z_index = 0,
-                  int refresh_hz = 60);
+  explicit Window(const WindowProps& props);
 
   // ---------------------------------------------------------------------------
   // 識別子・メタ

@@ -5,7 +5,7 @@
 
 #include "window/window.hpp"
 #include "window/monitor.hpp"
-#include "logger/logger_macros.hpp"  // LOG_INFO/LOG_WARN/LOG_ERROR など
+#include "logger/logger_macros.hpp"
 
 #include <opencv2/highgui.hpp>
 #include <chrono>
@@ -15,7 +15,7 @@
 namespace win {
 
 // -----------------------------------------------------------------------------
-// ID 発行（スレッド安全）
+// ID 発行（スレッド安全） - PropsでID指定がない場合のフォールバック
 // -----------------------------------------------------------------------------
 namespace {
   std::atomic<Window::Id> g_next_id{0};
@@ -23,27 +23,21 @@ namespace {
 Window::Id Window::nextId() { return ++g_next_id; }
 
 // -----------------------------------------------------------------------------
-// コンストラクタ
+// コンストラクタ (WindowProps 受け取り)
 // -----------------------------------------------------------------------------
-Window::Window(std::string window_name,
-               Size window_size,
-               Point window_position,
-               int monitor_index,
-               LayoutMode layout_mode,
-               bool is_visible,
-               bool is_fullscreen,
-               int z_index,
-               int refresh_rate_hz)
-  : id_(nextId()),
-    name_(std::move(window_name)),
-    size_(window_size),
-    pos_(window_position),
-    monitor_index_(monitor_index),
-    layout_(layout_mode),
-    visible_(is_visible),
-    fullscreen_(is_fullscreen),
-    z_index_(z_index),
-    refresh_rate_hz_(refresh_rate_hz) {
+Window::Window(const WindowProps& props)
+  : id_(props.id != kInvalidWindowId ? props.id : nextId()), // ID指定があれば採用
+    name_(props.name),
+    // ★修正: () -> {} に変更（構造体初期化対応）
+    size_{props.width, props.height},
+    pos_{props.x, props.y},
+    monitor_index_(props.monitor_index),
+    layout_(props.layout),
+    visible_(props.visible),
+    fullscreen_(props.fullscreen),
+    z_index_(props.z_index),
+    refresh_rate_hz_(props.refresh_hz) 
+{
   LOG_DEBUG("ウィンドウ構築: id={}, name='{}', サイズ={}x{}, 位置=({}, {}), モニタ={}, "
             "レイアウト={}, 可視={}, 全画面={}, Z={}, リフレッシュレート={}Hz",
             id_, name_, size_.width, size_.height,
@@ -79,6 +73,10 @@ Window::Window(Window&& o) noexcept
 // -----------------------------------------------------------------------------
 Window& Window::operator=(Window&& o) noexcept {
   if (this == &o) return *this;
+  
+  // 破棄処理
+  destroy();
+
   id_ = o.id_;
   name_ = std::move(o.name_);
   size_ = o.size_;
@@ -89,12 +87,14 @@ Window& Window::operator=(Window&& o) noexcept {
   fullscreen_ = o.fullscreen_;
   z_index_ = o.z_index_;
   refresh_rate_hz_ = o.refresh_rate_hz_;
+  
   created_ = o.created_;
   last_presented_ = o.last_presented_;
   front_ = std::move(o.front_);
   back_  = std::move(o.back_);
   dirty_.store(o.dirty_.exchange(false, std::memory_order_acq_rel),
                std::memory_order_release);
+  
   o.created_ = false;
   return *this;
 }
@@ -104,7 +104,7 @@ Window& Window::operator=(Window&& o) noexcept {
 // -----------------------------------------------------------------------------
 void Window::create(int create_flags) {
   if (name_.empty()) {
-    LOG_ERROR("create() で name_ が空");
+    LOG_ERROR("create() で name_ が空です (id={})", id_);
     return;
   }
   if (created_) {
@@ -115,15 +115,18 @@ void Window::create(int create_flags) {
 
   cv::namedWindow(name_, create_flags);
   created_ = true;
-  LOG_INFO("ウィンドウを作成しました: name='{}', flags={}", name_, create_flags);
+  LOG_INFO("ウィンドウを作成しました: id={}, name='{}', flags={}", id_, name_, create_flags);
 
   if (create_flags == cv::WINDOW_NORMAL) {
     cv::resizeWindow(name_, size_.width, size_.height);
   }
   cv::moveWindow(name_, pos_.x, pos_.y);
 
-  setVisible(visible_);
-  setFullscreen(fullscreen_);
+  // 初期プロパティの適用
+  if (fullscreen_) {
+      setFullscreen(true);
+  }
+  // 可視性制御が必要な場合はここに追加
 }
 
 // -----------------------------------------------------------------------------
@@ -133,7 +136,7 @@ void Window::destroy() noexcept {
   if (!created_) return;
   cv::destroyWindow(name_);
   created_ = false;
-  LOG_INFO("ウィンドウを破棄しました: name='{}'", name_);
+  LOG_INFO("ウィンドウを破棄しました: id={}, name='{}'", id_, name_);
 }
 
 // -----------------------------------------------------------------------------
@@ -141,7 +144,6 @@ void Window::destroy() noexcept {
 // -----------------------------------------------------------------------------
 int Window::pollEvents(int delay_ms) {
   const int key = cv::waitKey(delay_ms);
-  LOG_TRACE("pollEvents: name='{}', 待機={}ms -> key={}", name_, delay_ms, key);
   return key;
 }
 

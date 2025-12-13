@@ -4,6 +4,7 @@ add_library(window STATIC
   window_props.cpp
   window_monitor.cpp
   monitor_x11.cpp
+  window_manager.cpp
 )
 
 target_include_directories(window
