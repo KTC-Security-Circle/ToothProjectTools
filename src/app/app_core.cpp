@@ -9,7 +9,7 @@
 #include "logger/logger_macros.hpp"
 #include "structured_light/structured_light.hpp"
 
-#include "app/app_locals.hpp"              // 内部ヘルパ（existsAndVisible）
+#include "app/app_locals.hpp"
 
 #include <type_traits>
 #include <opencv2/highgui.hpp>
@@ -17,108 +17,123 @@
 #include <chrono>
 #include <utility>
 
-App::App()
-{
-  // ---------------------------------------------------------
-  // 1. メモリ確保 (重要)
-  // ---------------------------------------------------------
-  // emplace_back による再確保で参照が無効になるのを防ぐため、
-  // 事前に必要なサイズを予約します。
-  windows_.reserve(3);
-  cameras_.reserve(2);
+// -----------------------------------------------------------------------------
+// コンストラクタ (軽量化)
+// -----------------------------------------------------------------------------
+App::App() {
+  // 基本的なメンバ変数の初期化のみ行い、
+  // ウィンドウ作成などの重い処理は init() へ委譲します。
+}
 
-  // ---------------------------------------------------------
-  // 2. ウィンドウの生成 (UIの構築)
-  // ---------------------------------------------------------
-  
-  // --- Window 1 (Preview) ---
-  windows_.emplace_back("Preview", win::Size{800, 600}, win::Point{100, 100});
-  win::Window& win1 = windows_[0]; // vector[0] への参照
-  win1.create();
-  win1.setMonitorIndex(1);
-  win1.setCameraId(1); // ここでセットしたIDが消えないよう reserve が必須
-  focused_id_ = win1.id();
+// -----------------------------------------------------------------------------
+// 実行エントリポイント
+// -----------------------------------------------------------------------------
+void App::run() {
+  init(); // 初期化・構築
+  loop(); // メインループ開始
+}
 
-  // --- Window 2 (Second) ---
-  windows_.emplace_back("Second", win::Size{800, 600}, win::Point{900, 200});
-  win::Window& win2 = windows_[1]; // vector[1] への参照
-  win2.create();
-  win2.setMonitorIndex(2);
-  win2.setCameraId(2);
+// -----------------------------------------------------------------------------
+// 初期化 (構築ロジック)
+// -----------------------------------------------------------------------------
+void App::init() {
+  LOG_INFO("App: 初期化を開始します");
+
+  // =========================================================
+  // 1. ウィンドウの生成 (Manager経由)
+  // =========================================================
+
+  // --- Window 1: Preview ---
+  id_preview_ = win_mgr_.createWindow("Preview", {800, 600}, {100, 100});
+  if (auto* w = win_mgr_.get(id_preview_)) {
+    w->setMonitorIndex(1);
+    focused_id_ = id_preview_;
+  }
+
+  // --- Window 2: Second ---
+  id_second_ = win_mgr_.createWindow("Second", {800, 600}, {900, 200});
+  if (auto* w = win_mgr_.get(id_second_)) {
+    w->setMonitorIndex(2);
+  }
 
   // --- Window 3: Projector ---
-  // とりあえずサイズ0で初期化し、create後にモニタ情報を確定させる
-  windows_.emplace_back("Projector", win::Size{0, 0}, win::Point{0, 0});
-  win::Window& win_projector = windows_[2];
-  win_projector.create();
-  win_projector.setMonitorIndex(2); // ここでモニタ2へ移動
-
-  //  Windowクラス経由でモニタの実際の解像度を取得
-  win::Size proj_size = win_projector.getMonitorSize();
+  id_projector_ = win_mgr_.createWindow("Projector", {0, 0}, {0, 0});
   
-  // 取得できなかった場合のフォールバック (例: 1920x1080)
-  if (proj_size.width == 0 || proj_size.height == 0) {
-      LOG_WARN("プロジェクタサイズ取得失敗。デフォルト値(1920x1080)を使用します");
-      proj_size = {1920, 1080};
+  int proj_w = 1920;
+  int proj_h = 1080;
+
+  if (auto* w = win_mgr_.get(id_projector_)) {
+    w->setMonitorIndex(2); // モニタ2へ移動
+
+    win::Size size = w->getMonitorSize();
+    if (size.width > 0 && size.height > 0) {
+      proj_w = size.width;
+      proj_h = size.height;
+    } else {
+      LOG_WARN("Projectorサイズ取得失敗。デフォルト(1920x1080)を使用");
+    }
+    
+    w->resize({proj_w, proj_h});
   }
 
-  // ウィンドウ自体のサイズもモニタに合わせる（フルスクリーン準備）
-  win_projector.resize(proj_size); 
-
-  // ---------------------------------------------------------
-  // 3. StructuredLight の初期化 & パターン生成
-  // ---------------------------------------------------------
-  LOG_INFO("StructuredLight初期化: Projector Resolution={}x{}", proj_size.width, proj_size.height);
-
-  // 取得したサイズで初期化
-  sl_system_ = std::make_unique<sl::StructuredLight>(proj_size.width, proj_size.height);
+  // =========================================================
+  // 2. StructuredLight の初期化
+  // =========================================================
+  LOG_INFO("StructuredLight初期化: Projector Resolution={}x{}", proj_w, proj_h);
+  
+  sl_system_ = std::make_unique<sl::StructuredLight>(proj_w, proj_h);
   sl_system_->generatePatterns();
 
-  // ---------------------------------------------------------
+  // =========================================================
   // 3. 初期画像の適用
-  // ---------------------------------------------------------
-  {
-    cv::Mat img1 = cv::Mat(win1.size().height, win1.size().width, CV_8UC3, cv::Scalar(30, 30, 30));
-    cv::putText(img1, "Hello HighGUI Preview", {40, 300}, cv::FONT_HERSHEY_SIMPLEX, 2.0, {200, 200, 255}, 3);
-    win1.setImage(std::move(img1));
-
-    cv::Mat img2 = cv::Mat(win2.size().height, win2.size().width, CV_8UC3, cv::Scalar(30, 30, 30));
-    cv::putText(img2, "Hello HighGUI Second", {40, 300}, cv::FONT_HERSHEY_SIMPLEX, 2.0, {200, 200, 255}, 3);
-    win2.setImage(std::move(img2));
-
-    cv::Mat img_projector = cv::Mat(win_projector.size().height, win_projector.size().width, CV_8UC3, cv::Scalar(30, 30, 30));
-    cv::putText(img_projector, "Hello HighGUI Second", {40, 300}, cv::FONT_HERSHEY_SIMPLEX, 2.0, {200, 200, 255}, 3);
-    win_projector.setImage(std::move(img_projector));
+  // =========================================================
+  if (auto* w = win_mgr_.get(id_preview_)) {
+    cv::Mat img = cv::Mat(w->size().height, w->size().width, CV_8UC3, cv::Scalar(30, 30, 30));
+    cv::putText(img, "Hello Preview", {40, 300}, cv::FONT_HERSHEY_SIMPLEX, 2.0, {200, 200, 255}, 3);
+    w->setImage(std::move(img));
   }
 
-  // ---------------------------------------------------------
-  // 4. カメラの初期化 (Hardware Setup)
-  // ---------------------------------------------------------
-
-  // --- Camera 1 (Index=0, ID=1) ---
-  cameras_.emplace_back(/*index*/0, /*id*/1, "Cam0");
-  if (!cameras_.back().open()) {
-    LOG_ERROR("Camera 1 open failed: index=0 (接続確認: /dev/video0)");
-  }
-  cam_to_win_[1] = win1.id(); // IDマップ登録
-
-  // --- Camera 2 (Index=1, ID=2) ---
-  // ※ログで index=0 のオープンエラーが出ているため、ここは 1 に変更すべきです
-  cameras_.emplace_back(/*index*/2, /*id*/2, "Cam1"); 
-  if (!cameras_.back().open()) {
-    LOG_ERROR("Camera 2 open failed: index=1 (接続確認: /dev/video1)");
-  } else {
-    cam_to_win_[2] = win2.id(); // 成功時のみマップ登録する場合
+  if (auto* w = win_mgr_.get(id_second_)) {
+    cv::Mat img = cv::Mat(w->size().height, w->size().width, CV_8UC3, cv::Scalar(30, 30, 30));
+    cv::putText(img, "Hello Second", {40, 300}, cv::FONT_HERSHEY_SIMPLEX, 2.0, {200, 200, 255}, 3);
+    w->setImage(std::move(img));
   }
 
-  // ---------------------------------------------------------
-  // 5. 表示確定と入力バインド
-  // ---------------------------------------------------------
+  if (auto* w = win_mgr_.get(id_projector_)) {
+    cv::Mat img = cv::Mat(proj_h, proj_w, CV_8UC3, cv::Scalar(0, 0, 0));
+    cv::putText(img, "Projector Ready", {100, proj_h/2}, cv::FONT_HERSHEY_SIMPLEX, 2.0, {255, 255, 255}, 3);
+    w->setImage(std::move(img));
+  }
+
+  // =========================================================
+  // 4. カメラの初期化 (Manager経由)
+  // =========================================================
   
-  // 初回表示
-  win1.present();
-  win2.present();
-  win_projector.present();
+  // --- Camera 1 ---
+  video::CameraOptions opt1;
+  opt1.device_index = 4;
+  id_cam1_ = cam_mgr_.createCamera(opt1, "Cam0");
+  
+  if (id_cam1_ != video::kInvalidCameraId) {
+    cam_to_win_[id_cam1_] = id_preview_;
+  }
+
+  // --- Camera 2 ---
+  video::CameraOptions opt2;
+  opt2.device_index = 6;
+  id_cam2_ = cam_mgr_.createCamera(opt2, "Cam1");
+  
+  if (id_cam2_ != video::kInvalidCameraId) {
+    cam_to_win_[id_cam2_] = id_second_;
+  }
+
+  // =========================================================
+  // 5. 表示確定とコールバック設定
+  // =========================================================
+  
+  win_mgr_.forEach([](win::Window& w){
+    w.present();
+  });
 
   #if CV_VERSION_MAJOR >= 4 && defined(HAVE_OPENCV_HIGHGUI)
     cv::pollKey();
@@ -126,29 +141,56 @@ App::App()
     cv::waitKey(1);
   #endif
 
-  // マウスコールバック
-  mouse_callback_contexts_.reserve(windows_.size());
-  for (auto& w : windows_) {
-    mouse_callback_contexts_.push_back(MouseCallbackContext{this, w.id()});
+  mouse_callback_contexts_.reserve(win_mgr_.count());
+  
+  win_mgr_.forEach([this](win::Window& w){
+    mouse_callback_contexts_.push_back(MouseCallbackContext{this, static_cast<win::WindowId>(w.id())});
     
     cv::setMouseCallback(
       w.name().c_str(),
       &App::onMouseCallback,
       static_cast<void*>(&mouse_callback_contexts_.back())
     );
-  }
+  });
 
   // キーバインド
   install_default_bindings(input_, cmd_que_);
+
+  // 'p': パターン0を表示
+  input_.bind('p', [this](){
+      if (id_projector_ == win::kInvalidWindowId) return;
+
+      cmd_que_.push_back(DispatchCmd{
+          TargetById{ id_projector_ }, 
+          CmdShowPattern{ 0 }
+      });
+  });
+
+  // 'n': 次のパターンを表示 (★ここを修正しました)
+  input_.bind('n', [this](){
+      if (id_projector_ == win::kInvalidWindowId) return;
+
+      // 現在のインデックス + 1 を計算
+      int next_idx = current_pattern_index_ + 1;
+
+      // パターン数を超えたら0に戻す（ループ）
+      if (sl_system_ && next_idx >= (int)sl_system_->getPatternCount()) {
+          next_idx = 0;
+      }
+
+      cmd_que_.push_back(DispatchCmd{
+          TargetById{ id_projector_ },
+          CmdShowPattern{ next_idx }
+      });
+  });
+  
+  LOG_INFO("App: 初期化完了");
 }
 
 // -----------------------------------------------------------------------------
-/** @brief メインループを回す
- *
- * run() はアプリの寿命の間、入力→更新→描画の順に呼び出します。
- * ループは doQuit() で running_ が false になるまで継続します。
- */
-void App::run() {
+// メインループ
+// -----------------------------------------------------------------------------
+void App::loop() {
   while (running_) {
     processInput();
     update();
@@ -157,13 +199,8 @@ void App::run() {
 }
 
 // -----------------------------------------------------------------------------
-/** @brief 入力処理
- *
- * HighGUI のイベント処理は waitKey/pollKey だけが経路です。
- * ここでは非ブロッキングの pollKey が有効な場合はそれを使い、
- * そうでなければ短い待ち時間で waitKey を呼びます。
- * 得られたキーコードは input_ に渡してコマンドへ変換されます。
- */
+// 入力処理
+// -----------------------------------------------------------------------------
 void App::processInput() {
 #if CV_VERSION_MAJOR >= 4 && defined(HAVE_OPENCV_HIGHGUI)
   const int pressed_key_code = cv::pollKey();
@@ -174,57 +211,60 @@ void App::processInput() {
 }
 
 // -----------------------------------------------------------------------------
-/** @brief 更新処理
- *
- * - カメラからフレームを取得し、対応するウィンドウへ setImage します。
- * - コマンドキューに溜まった操作を順に適用します。
- */
+// 更新処理
+// -----------------------------------------------------------------------------
 void App::update() {
-  // 1) カメラ更新
-  for (auto& camera_instance : cameras_) {
-    if (!camera_instance.isOpened()) continue;
-    cv::Mat captured_frame = camera_instance.getFrame();  // 空なら前回据え置き
-    if (captured_frame.empty()) continue;
+  // 1) カメラ更新 (CameraManagerを使用)
+  cam_mgr_.forEach([this](video::Camera& cam){
+    if (!cam.isOpened()) return;
 
-    // 対応する Window に setImage
-    auto iterator_found = cam_to_win_.find(camera_instance.id());
-    if (iterator_found != cam_to_win_.end()) {
-      if (auto* target_window_ptr = findWindowById(iterator_found->second)) {
-        target_window_ptr->setImage(std::move(captured_frame)); // 二重バッファ back_ に書く
+    cv::Mat captured_frame = cam.getFrame();
+    if (captured_frame.empty()) return;
+
+    // 紐付いているウィンドウがあれば画像を送る
+    auto it = cam_to_win_.find(cam.id());
+    if (it != cam_to_win_.end()) {
+      win::WindowId target_id = it->second;
+      if (auto* w = win_mgr_.get(target_id)) {
+        w->setImage(std::move(captured_frame));
       }
     }
-  }
+  });
 
   // 2) コマンド適用
-  while (!cmd_que_.empty()) { // ← std::deque<DispatchCmd>
+  while (!cmd_que_.empty()) { 
     const DispatchCmd& next_command = cmd_que_.front();
-    dispatch(next_command);   // 宛先解決＋コマンド適用
+    dispatch(next_command);
     cmd_que_.pop_front();
-    if (!running_) break;     // Quit でループ離脱
+    if (!running_) break;
   }
+  
+  // 3) 構造光シーケンス制御 (必要に応じて実装)
+  /*
+  if (is_scanning_) {
+      // ...
+  }
+  */
 }
 
 // -----------------------------------------------------------------------------
-/** @brief 描画処理
- *
- * 各ウィンドウのリフレッシュレートに合わせて present() を呼び、
- * 二重バッファを入れ替えて表示を更新します。HighGUI の実描画は
- * pollKey/waitKey に依存するため、呼び出し側で定期的に processInput()
- * を回している前提です。
- */
+// 描画処理
+// -----------------------------------------------------------------------------
 void App::render() {
   if (skip_render_once_) { skip_render_once_ = false; return; }
 
   const auto now_steady = std::chrono::steady_clock::now();
-  for (auto& window_instance : windows_) {
-    if (!existsAndVisible(window_instance)) continue;
 
-    const int refresh_rate_hz_value = window_instance.refreshRate();
-    const auto minimum_delta = std::chrono::nanoseconds(
-        1'000'000'000LL / std::max(1, refresh_rate_hz_value));
+  // WindowManager経由で全ウィンドウを描画
+  win_mgr_.forEach([now_steady](win::Window& w){
+    // existsCheckはManagerが生存管理しているので不要。Visibleだけ見る
+    if (!w.visible()) return;
 
-    if (now_steady - window_instance.lastPresented() >= minimum_delta) {
-      window_instance.present(); // dirtyならswap→imshow
+    const int refresh_rate = w.refreshRate();
+    const auto min_delta = std::chrono::nanoseconds(1'000'000'000LL / std::max(1, refresh_rate));
+
+    if (now_steady - w.lastPresented() >= min_delta) {
+      w.present();
     }
-  }
+  });
 }

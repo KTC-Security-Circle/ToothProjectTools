@@ -45,12 +45,37 @@ void App::onMouseCallback(int event, int x, int y, int flags, void* userdata) {
  * 巡回させます。
  */
 void App::doFocusNext() {
-  if (windows_.empty()) return;
-  size_t index_found = 0;
-  for (; index_found < windows_.size(); ++index_found) {
-    if (windows_[index_found].id() == focused_id_) break;
+  // WindowManager から全ウィンドウのIDリストを取得
+  std::vector<win::WindowId> ids;
+  win_mgr_.forEach([&](win::Window& w) {
+    // 可視ウィンドウのみを対象にする
+    if (w.visible()) {
+      ids.push_back(w.id());
+    }
+  });
+
+  if (ids.empty()) return;
+
+  // ID順にソートしておくと挙動が安定します（作成順）
+  std::sort(ids.begin(), ids.end());
+
+  // 現在のフォーカスIDの位置を探す
+  auto it = std::find(ids.begin(), ids.end(), focused_id_);
+
+  if (it == ids.end()) {
+    // 現在のフォーカスが見つからない（閉じた場合など） -> 先頭へ
+    focused_id_ = ids[0];
+  } else {
+    // 次の要素へ（末尾なら先頭へループ）
+    auto next_it = std::next(it);
+    if (next_it == ids.end()) {
+      focused_id_ = ids[0];
+    } else {
+      focused_id_ = *next_it;
+    }
   }
-  focused_id_ = windows_[(index_found + 1) % windows_.size()].id();
+
+  LOG_INFO("フォーカス切り替え: New ID={}", focused_id_);
 }
 
 // -----------------------------------------------------------------------------

@@ -6,16 +6,17 @@
 #include "app/app.hpp"
 #include "logger/logger_macros.hpp"
 #include "app/app_locals.hpp"
+#include "cmd/commands.hpp" // CmdShowPatternのために必要
 
 #include <type_traits>
 #include <variant>
 #include <vector>
 #include <functional>
-#include <algorithm> // ← find_if 用
-#include <opencv2/imgcodecs.hpp> // cv::imwrite に必要
-#include <filesystem>            // ディレクトリ作成用 (C++17)
-#include <iomanip>               // 時刻フォーマット用
-#include <sstream>               // 文字列構築用
+#include <algorithm> 
+#include <opencv2/imgcodecs.hpp> 
+#include <filesystem>            
+#include <iomanip>               
+#include <sstream>               
 
 namespace fs = std::filesystem;
 
@@ -24,7 +25,6 @@ namespace fs = std::filesystem;
 bool App::handleAppLevelCommand_(const Command& command) {
   bool is_handled = false;
 
-  // App のメンバ関数内ラムダ（this 捕捉）なので private に合法アクセス可
   std::visit([&](auto&& concrete_command){
     using T = std::decay_t<decltype(concrete_command)>;
     if constexpr (std::is_same_v<T, CmdFocusNext>) {
@@ -58,36 +58,68 @@ void App::applyCommandToWindow_(win::Window& target_window, const Command& comma
       LOG_INFO("コマンド: 終了要求 -> アプリ全体に適用");
       this->running_ = false;
 
+    } else if constexpr (std::is_same_v<T, CmdShowPattern>) {
+      // パターン投影
+      if (this->sl_system_) {
+          int idx = concrete_command.index;
+          // インデックスの範囲チェック
+          if (idx >= 0 && idx < (int)this->sl_system_->getPatternCount()) {
+              
+              // 1. 画像をセット
+              target_window.setImage(this->sl_system_->getPattern(idx));
+              
+              // 2. ログ出力
+              LOG_INFO("パターン投影: index={} -> Window id={}", idx, target_window.id());
+              
+              // 3. 現在のインデックス状態を更新する
+              this->current_pattern_index_ = idx; 
+          }
+      }
+
     } else if constexpr (std::is_same_v<T, CmdCapturePush>) {
       const auto& cap = concrete_command;
-      using CamId = Camera::Id;
+
+      using CamId = video::CameraId;
 
       // 1. カメラIDの特定
-      const CamId cam_id = cap.camera_id
-                           ? static_cast<CamId>(*cap.camera_id)
-                           : static_cast<CamId>(target_window.cameraId());
+      // ※ Window側でcameraId()を持たせていない場合、cam_to_win_ から逆引きが必要ですが、
+      // ここでは簡略化のため cap.camera_id が指定されている前提か、あるいはマップから探します。
+      
+      CamId cam_id = video::kInvalidCameraId;
+      if (cap.camera_id) {
+          cam_id = static_cast<CamId>(*cap.camera_id);
+      } else {
+          // target_window に紐づくカメラを探す
+          // Appクラスで cam_to_win_ を管理しているので、そこから逆引き検索（重いですが）
+          for (const auto& [cid, wid] : this->cam_to_win_) {
+              if (wid == target_window.id()) {
+                  cam_id = cid;
+                  break;
+              }
+          }
+      }
 
-      if (static_cast<long>(cam_id) < 0) {
-        LOG_WARN("保存スキップ: Camera ID未割り当て (win={})", target_window.id());
+      if (cam_id == video::kInvalidCameraId) {
+        LOG_WARN("保存スキップ: 対象ウィンドウ(id={})に紐づくカメラが見つかりません", target_window.id());
         return;
       }
 
-      // 2. カメラの特定とフレーム取得
-      auto it = std::find_if(this->cameras_.begin(), this->cameras_.end(),
-                             [cam_id](const auto& c) { return c.id() == cam_id; });
+      // 2. カメラの特定とフレーム取得 (Manager経由)
+      // ★修正: this->cameras_ -> cam_mgr_.get(id)
+      video::Camera* camera_ptr = this->cam_mgr_.get(cam_id);
 
-      if (it == this->cameras_.end()) {
-        LOG_ERROR("保存エラー: カメラデバイスが見つかりません (id={})", static_cast<unsigned long>(cam_id));
+      if (!camera_ptr) {
+        LOG_ERROR("保存エラー: カメラデバイスが見つかりません (id={})", cam_id);
         return;
       }
 
-      Camera& camera = *it;
+      video::Camera& camera = *camera_ptr; // ★修正: video::Camera
 
       // カメラが開いていなければ一時的に開く
       bool needed_open = !camera.isOpened();
       if (needed_open) {
         if (!camera.open()) {
-            LOG_ERROR("保存エラー: カメラオープン失敗 (id={})", static_cast<unsigned long>(cam_id));
+            LOG_ERROR("保存エラー: カメラオープン失敗 (id={})", cam_id);
             return;
         }
       }
@@ -95,16 +127,15 @@ void App::applyCommandToWindow_(win::Window& target_window, const Command& comma
       // フレーム取得
       cv::Mat frame = camera.getFrame();
 
-      // 一時的に開いた場合は閉じる（運用によりますが、ここでは開けっ放しにせず戻す場合）
+      // 一時的に開いた場合は閉じる（運用による）
       // if (needed_open) camera.close(); 
 
       if (frame.empty()) {
-        LOG_WARN("保存エラー: 取得フレームが空でした (id={})", static_cast<unsigned long>(cam_id));
+        LOG_WARN("保存エラー: 取得フレームが空でした (id={})", cam_id);
         return;
       }
 
-      // 3. ファイル名の生成 (例: captures/cam1_20251129_123456.png)
-      // 保存先ディレクトリ
+      // 3. ファイル名の生成
       const std::string save_dir = "captures";
       try {
           if (!fs::exists(save_dir)) {
@@ -115,35 +146,29 @@ void App::applyCommandToWindow_(win::Window& target_window, const Command& comma
           return;
       }
 
-      // タイムスタンプ生成 (ミリ秒対応版)
+      // タイムスタンプ生成
       auto now = std::chrono::system_clock::now();
       std::time_t now_time = std::chrono::system_clock::to_time_t(now);
       std::tm tm_now = *std::localtime(&now_time);
-
-      // 現在時刻のミリ秒部分を計算 (0-999)
       auto duration = now.time_since_epoch();
       auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count() % 1000;
 
       std::stringstream ss;
-      ss << save_dir << "/cam" << static_cast<unsigned long>(cam_id) << "_"
+      ss << save_dir << "/cam" << cam_id << "_"
          << std::put_time(&tm_now, "%Y%m%d_%H%M%S")
-         << "_" << std::setfill('0') << std::setw(3) << millis // ここに _000 ～ _999 を追加
+         << "_" << std::setfill('0') << std::setw(3) << millis
          << ".png";
       
       std::string filepath = ss.str();
 
-      // 4. 画像の保存 (cv::imwrite)
-      // 圧縮パラメータ（PNG圧縮レベル3など）を指定する場合
-      // std::vector<int> params = {cv::IMWRITE_PNG_COMPRESSION, 3};
+      // 4. 画像の保存
       bool success = cv::imwrite(filepath, frame);
-
       if (success) {
         LOG_INFO("画像保存完了: {}", filepath);
       } else {
         LOG_ERROR("画像保存失敗: {}", filepath);
       }
     }
-    // それ以外は no-op
   }, command);
 }
 
@@ -168,38 +193,29 @@ void App::dispatch(const DispatchCmd& dispatch_command) {
 
     if constexpr (std::is_same_v<Target, TargetAll>) {
       LOG_INFO("宛先: 全ウィンドウ");
-      for (auto& w : this->windows_) {
-        // existsAndVisible が無い前提：visible() で代替
-        if (w.visible()) {
-          LOG_INFO("  適用対象: Window id={}, name='{}'", w.id(), w.name());
-          this->applyCommandToWindow_(w, dispatch_command.cmd);
-        }
-      }
+      // ★修正: windows_ ループ -> win_mgr_.forEach
+      this->win_mgr_.forEach([this, &dispatch_command](win::Window& w){
+          if (w.visible()) {
+              this->applyCommandToWindow_(w, dispatch_command.cmd);
+          }
+      });
 
     } else if constexpr (std::is_same_v<Target, TargetFocused>) {
       LOG_INFO("宛先: フォーカス中のウィンドウ id={}", this->focused_id_);
-      if (auto* fw = this->findWindowById(this->focused_id_)) {
+      // ★修正: findWindowById -> win_mgr_.get
+      if (auto* fw = this->win_mgr_.get(this->focused_id_)) {
         if (fw->visible()) {
-          LOG_INFO("  適用対象: Window id={}, name='{}'", fw->id(), fw->name());
           this->applyCommandToWindow_(*fw, dispatch_command.cmd);
-        } else {
-          LOG_INFO("  フォーカス中のウィンドウは不可視または存在しません");
         }
-      } else {
-        LOG_INFO("  フォーカス中のウィンドウは見つかりませんでした");
       }
 
-    } else if constexpr (std::is_same_v<Target, TargetById>) {
-      LOG_INFO("宛先: 指定IDのウィンドウ id={}", target_variant.id);
-      if (auto* tw = this->findWindowById(target_variant.id)) {
+    } else if constexpr (std::is_same_v<Target, TargetById>) { // ★win::TargetById -> TargetById
+      LOG_INFO("宛先: 指定ID id={}", target_variant.id);
+      // ★修正: findWindowById -> win_mgr_.get
+      if (auto* tw = this->win_mgr_.get(target_variant.id)) {
         if (tw->visible()) {
-          LOG_INFO("  適用対象: Window id={}, name='{}'", tw->id(), tw->name());
           this->applyCommandToWindow_(*tw, dispatch_command.cmd);
-        } else {
-          LOG_INFO("  指定IDのウィンドウは不可視または存在しません");
         }
-      } else {
-        LOG_INFO("  指定IDのウィンドウは見つかりませんでした");
       }
     }
   }, dispatch_command.target);

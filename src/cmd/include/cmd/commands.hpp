@@ -22,10 +22,15 @@ struct CmdCapturePush {
   std::string            tag{};        // 任意ラベル（保存名等に使う想定）
 };
 
+struct CmdShowPattern { 
+    int index; 
+  };
+
 using Command = std::variant<
   CmdToggleFullscreen,
   CmdMoveToMonitor,
   CmdQuit,
   CmdFocusNext,
-  CmdCapturePush
+  CmdCapturePush,
+  CmdShowPattern
 >;
