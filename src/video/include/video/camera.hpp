@@ -13,14 +13,19 @@
 #include <chrono>
 #include <cstdint>
 
+#include "video_types.hpp"
+
 namespace cv { class Mat; class VideoCapture; }
 
+namespace video {
 class Camera {
 public:
   using Id = std::uint64_t;
 
   // コンストラクタ
-  Camera(int device_index, Id camera_id, const std::string& camera_name = "Camera");
+  Camera(const CameraOptions& options, Id camera_id, const std::string& camera_name = "Camera");
+
+  ~Camera();
 
   // ライフサイクル
   bool open();
@@ -48,6 +53,7 @@ public:
   const cv::Mat& distCoeffs() const noexcept;
 
 private:
+  CameraOptions options_;
   int device_index_{0};
   Id id_{0};
   std::string name_;
@@ -69,3 +75,4 @@ private:
   cv::Mat&          intrinsics_();
   cv::Mat&          distortion_();
 };
+}

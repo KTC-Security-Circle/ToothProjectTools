@@ -1,127 +1,143 @@
+// src/video/camera.cpp
 // =============================================================================
-//  camera.cpp
-//  Camera クラスの実装。重い OpenCV ヘッダはここに限定する。
+//  camera.cpp 実装
 // =============================================================================
 
 #include "video/camera.hpp"
-#include "logger/logger_macros.hpp"
+#include "logger/logger_macros.hpp" // プロジェクトのロガー
 
-#include <opencv2/videoio.hpp>   // VideoCapture
-#include <opencv2/core/mat.hpp>  // cv::Mat
-#include <utility>
+#include <opencv2/videoio.hpp>
+#include <opencv2/core/mat.hpp>
+#include <stdexcept>
 
+namespace video {
+
+// -----------------------------------------------------------------------------
+// 内部ヘルパー: ポインタ検証
+// -----------------------------------------------------------------------------
 namespace {
-
-// ヒープ確保の薄いヘルパ（例外安全簡易化のため）
-template <typename T>
-T& ensure_ptr(T*& ptr) {
-  if (!ptr) ptr = new T();
-  return *ptr;
+  template <typename T>
+  T& ensure_ptr(T* ptr) {
+    if (!ptr) {
+      throw std::runtime_error("[Camera] Internal pointer is null (allocation failed?)");
+    }
+    return *ptr;
+  }
 }
-template <typename T>
-void release_ptr(T*& ptr) {
-  delete ptr;
-  ptr = nullptr;
-}
-
-// const 参照用の空行列（確保しない方針の const getter 向け）
-const cv::Mat& empty_mat() {
-  static const cv::Mat kEmpty;
-  return kEmpty;
-}
-
-} // namespace
 
 // -----------------------------------------------------------------------------
-// コンストラクタ
+// コンストラクタ / デストラクタ
 // -----------------------------------------------------------------------------
-Camera::Camera(int device_index, Id camera_id, const std::string& camera_name)
-  : device_index_(device_index),
-    id_(camera_id),
-    name_(camera_name) {}
+Camera::Camera(const CameraOptions& options, Id camera_id, const std::string& camera_name)
+    : options_(options), id_(camera_id), name_(camera_name)
+{
+    // PIMPLイディオム（ポインタの実体確保）
+    capture_ptr_ = new cv::VideoCapture();
+    current_frame_ptr_ = new cv::Mat();
+    intrinsics_storage_ptr_ = new cv::Mat();
+    distortion_storage_ptr_ = new cv::Mat();
+}
 
-// 内部参照（非constのみ確保）
+Camera::~Camera() {
+    close(); // 確実に閉じる
+    
+    // メモリ解放
+    delete capture_ptr_;
+    delete current_frame_ptr_;
+    delete intrinsics_storage_ptr_;
+    delete distortion_storage_ptr_;
+}
+
+// -----------------------------------------------------------------------------
+// 内部アクセサ（実装ファイル内でのみ使用）
+// -----------------------------------------------------------------------------
 cv::VideoCapture& Camera::capture_()      { return ensure_ptr(capture_ptr_); }
 cv::Mat&          Camera::currentFrame_() { return ensure_ptr(current_frame_ptr_); }
 cv::Mat&          Camera::intrinsics_()   { return ensure_ptr(intrinsics_storage_ptr_); }
 cv::Mat&          Camera::distortion_()   { return ensure_ptr(distortion_storage_ptr_); }
 
 // -----------------------------------------------------------------------------
-// デバイスを開く
+// ライフサイクル
 // -----------------------------------------------------------------------------
 bool Camera::open() {
-  if (is_opened_) return true;
+    if (is_opened_) return true;
 
-  cv::VideoCapture& cap = capture_();
+    // オプションからデバイスインデックスを取得してオープン
+    if (capture_().open(options_.device_index, cv::CAP_V4L2)) {
+        is_opened_ = true;
 
-  // V4L2 を優先（Linux 想定）。失敗時は既定バックエンドへフォールバック。
-  if (!cap.open(device_index_, cv::CAP_V4L2)) {
-    LOG_WARN("VideoCapture(V4L2) でオープンに失敗: index={}", device_index_);
-    if (!cap.open(device_index_)) {
-      LOG_ERROR("VideoCapture でオープンに失敗: index={}", device_index_);
-      is_opened_ = false;
-      return false;
+        capture_().set(cv::CAP_PROP_FOURCC, options_.fourcc);
+        capture_().set(cv::CAP_PROP_FRAME_WIDTH, options_.width);
+        capture_().set(cv::CAP_PROP_FRAME_HEIGHT, options_.height);
+        
+        if (options_.fps > 0) {
+            capture_().set(cv::CAP_PROP_FPS, options_.fps);
+        }
+        
+        // 自動露光設定 (V4L2: 0.25 or 0.75 など環境依存があるため注意)
+        if (options_.auto_exposure) {
+             capture_().set(cv::CAP_PROP_AUTO_EXPOSURE, 3); // 3=Auto (V4L2)
+        } else {
+             capture_().set(cv::CAP_PROP_AUTO_EXPOSURE, 1); // 1=Manual (V4L2)
+             // 必要であれば exposure_ms 設定を追加
+        }
+
+        LOG_INFO("Camera opened: id={}, device={}, name='{}', size={}x{}", 
+                 id_, options_.device_index, name_, options_.width, options_.height);
+        return true;
     }
-  }
 
-  is_opened_ = true;
-  LOG_INFO("Camera をオープン: index={}, id={}, name='{}'",
-           device_index_, id_, name_);
-  return true;
+    LOG_ERROR("Camera open failed: id={}, device={}, name='{}'", id_, options_.device_index, name_);
+    return false;
 }
 
-// -----------------------------------------------------------------------------
-// デバイスを閉じる
-// -----------------------------------------------------------------------------
 void Camera::close() {
-  if (!is_opened_) return;
-
-  if (capture_ptr_) {
-    if (capture_ptr_->isOpened()) capture_ptr_->release();
-  }
-  is_opened_ = false;
-  LOG_INFO("Camera をクローズ: index={}, id={}, name='{}'",
-           device_index_, id_, name_);
+    if (is_opened_ && capture_ptr_) {
+        capture_().release();
+    }
+    is_opened_ = false;
 }
 
 // -----------------------------------------------------------------------------
 // フレーム取得
 // -----------------------------------------------------------------------------
 cv::Mat Camera::getFrame() {
-  cv::Mat& current = currentFrame_();
+    if (!is_opened_) return cv::Mat();
 
-  if (capture_ptr_ && capture_ptr_->isOpened()) {
-    cv::Mat grabbed;
-    (*capture_ptr_) >> grabbed; // 1フレーム取得
-    if (!grabbed.empty()) {
-      current = grabbed.clone();
-      last_captured_time_ = std::chrono::steady_clock::now();
+    cv::Mat& frame = currentFrame_();
+    if (capture_().read(frame)) {
+        last_captured_time_ = std::chrono::steady_clock::now();
+        return frame.clone(); // 呼び出し元が加工できるようコピーを返す
     }
-  }
-  // 最新フレーム（空の可能性あり）を返す
-  return current;
+    
+    LOG_WARN("Camera read failed (empty frame): id={}", id_);
+    return cv::Mat();
 }
 
 // -----------------------------------------------------------------------------
-// キャリブレーション：内部行列
+// キャリブレーション設定
 // -----------------------------------------------------------------------------
 void Camera::setIntrinsics(const cv::Mat& camera_matrix) {
-  intrinsics_() = camera_matrix.clone();
+    if (!camera_matrix.empty()) {
+        camera_matrix.copyTo(intrinsics_());
+    }
 }
 
-// -----------------------------------------------------------------------------
-// キャリブレーション：歪み係数
-// -----------------------------------------------------------------------------
 void Camera::setDistCoeffs(const cv::Mat& distortion) {
-  distortion_() = distortion.clone();
+    if (!distortion.empty()) {
+        distortion.copyTo(distortion_());
+    }
 }
 
 // -----------------------------------------------------------------------------
-// キャリブレーション取得（const）
+// キャリブレーション取得
 // -----------------------------------------------------------------------------
 const cv::Mat& Camera::intrinsics() const noexcept {
-  return intrinsics_storage_ptr_ ? *intrinsics_storage_ptr_ : empty_mat();
+    return *intrinsics_storage_ptr_;
 }
+
 const cv::Mat& Camera::distCoeffs() const noexcept {
-  return distortion_storage_ptr_ ? *distortion_storage_ptr_ : empty_mat();
+    return *distortion_storage_ptr_;
 }
+
+} // namespace video

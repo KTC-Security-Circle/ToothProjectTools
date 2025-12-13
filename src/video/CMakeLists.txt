@@ -1,6 +1,7 @@
 # src/video/CMakeLists.txt
 add_library(video
   camera.cpp
+  camera_manager.cpp
 )
 
 target_include_directories(video
