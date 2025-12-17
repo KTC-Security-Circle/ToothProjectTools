@@ -59,22 +59,121 @@ void App::applyCommandToWindow_(win::Window& target_window, const Command& comma
       this->running_ = false;
 
     } else if constexpr (std::is_same_v<T, CmdShowPattern>) {
-      // パターン投影
       if (this->sl_system_) {
-          int idx = concrete_command.index;
-          // インデックスの範囲チェック
-          if (idx >= 0 && idx < (int)this->sl_system_->getPatternCount()) {
-              
-              // 1. 画像をセット
-              target_window.setImage(this->sl_system_->getPattern(idx));
-              
-              // 2. ログ出力
-              LOG_INFO("パターン投影: index={} -> Window id={}", idx, target_window.id());
-              
-              // 3. 現在のインデックス状態を更新する
-              this->current_pattern_index_ = idx; 
-          }
+          // 指定インデックスへ移動（内部で時刻リセットされる）
+          this->sl_system_->setIndex(concrete_command.index);
+          
+          // 表示更新
+          target_window.setImage(this->sl_system_->getCurrentPatternImage());
+          LOG_INFO("パターン指定: index={}", this->sl_system_->getCurrentIndex());
       }
+
+    } else if constexpr (std::is_same_v<T, CmdNextPattern>) {
+      if (this->sl_system_) {
+          this->sl_system_->nextPattern(/*loop=*/true);
+          
+          target_window.setImage(this->sl_system_->getCurrentPatternImage());
+          LOG_INFO("パターン(次): index={}", this->sl_system_->getCurrentIndex());
+      }
+
+    } else if constexpr (std::is_same_v<T, CmdPrevPattern>) {
+      if (this->sl_system_) {
+          this->sl_system_->prevPattern(/*loop=*/true);
+          
+          target_window.setImage(this->sl_system_->getCurrentPatternImage());
+          LOG_INFO("パターン(前): index={}", this->sl_system_->getCurrentIndex());
+      }
+
+    } else if constexpr (std::is_same_v<T, CmdStartScan>) {
+        if (!this->sl_system_) {
+            LOG_ERROR("スキャン開始失敗: StructuredLight未初期化");
+            return;
+        }
+        
+        // 設定保存
+        this->scan_interval_ms_ = concrete_command.interval_ms;
+        this->scanned_imgs_left_.clear();
+        this->scanned_imgs_right_.clear();
+        
+        // StructuredLight側の状態をリセット＆開始
+        this->sl_system_->startScan(); 
+        
+        // 最初のパターン(index 0)を投影
+        target_window.setImage(this->sl_system_->getCurrentPatternImage());
+        
+        LOG_INFO("=== 自動スキャン開始 (間隔: {}ms, 枚数: {}) ===", 
+                 this->scan_interval_ms_, this->sl_system_->getPatternCount());
+
+    // スキャン中断
+    } else if constexpr (std::is_same_v<T, CmdStopScan>) {
+        if (this->sl_system_ && this->sl_system_->isScanning()) {
+            this->sl_system_->stopScan();
+            LOG_INFO("=== 自動スキャン中断 ===");
+        }
+
+    } else if constexpr (std::is_same_v<T, CmdCalibrate>) {
+        
+        if (!this->calibrator_) {
+            LOG_ERROR("Calib: Calibratorが初期化されていません");
+            return;
+        }
+
+        const auto& target_id = concrete_command.target_camera_id;
+        const auto& folder = concrete_command.image_folder;
+
+        LOG_INFO("Calib: 開始 -> CameraID={}, Folder='{}'", target_id, folder);
+
+        // 1. フォルダから画像ファイルをリストアップ
+        std::vector<std::string> image_files;
+        try {
+            if (!fs::exists(folder)) {
+                LOG_ERROR("Calib: フォルダが見つかりません {}", folder);
+                return;
+            }
+            for (const auto& entry : fs::directory_iterator(folder)) {
+                if (entry.is_regular_file()) {
+                    auto ext = entry.path().extension().string();
+                    // 拡張子フィルタ（簡易的）
+                    if (ext == ".png" || ext == ".bmp" || ext == ".jpg") {
+                        image_files.push_back(entry.path().string());
+                    }
+                }
+            }
+        } catch (const std::exception& e) {
+            LOG_ERROR("Calib: ファイル探索エラー {}", e.what());
+            return;
+        }
+
+        if (image_files.empty()) {
+            LOG_WARN("Calib: 指定フォルダに画像がありません");
+            return;
+        }
+
+        // 2. 計算実行 (重い処理なので本来は別スレッド推奨だが、今回はコマンド内で実行)
+        cv::Mat cam_mat, dist_coeffs;
+        double rms = this->calibrator_->runCalibration(image_files, cam_mat, dist_coeffs);
+
+        if (rms > 0 && rms < 1.0) { // RMSが1.0未満なら良好とされることが多い
+            LOG_INFO("Calib: 成功! RMS Error = {}", rms);
+            
+            // 3. カメラにセット
+            if (auto* camera = this->cam_mgr_.get(target_id)) {
+                camera->setIntrinsics(cam_mat);
+                camera->setDistCoeffs(dist_coeffs);
+                LOG_INFO("Calib: パラメータをカメラ({})に適用しました", camera->name());
+                
+                // 確認のためコンソール出力
+                // std::cout << "Camera Matrix:\n" << cam_mat << std::endl;
+                // std::cout << "Dist Coeffs:\n" << dist_coeffs << std::endl;
+            } else {
+                LOG_ERROR("Calib: 対象カメラインスタンスが見つかりません");
+            }
+
+        } else if (rms >= 1.0) {
+            LOG_WARN("Calib: 精度不良 (RMS={})。パラメータは適用されません。撮影環境を見直してください。", rms);
+        } else {
+            LOG_ERROR("Calib: 失敗 (チェッカーボードが検出できませんでした)");
+        }
 
     } else if constexpr (std::is_same_v<T, CmdCapturePush>) {
       const auto& cap = concrete_command;

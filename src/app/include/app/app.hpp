@@ -13,6 +13,7 @@
 #include "video/camera.hpp"
 #include "video/camera_manager.hpp" // Manager追加
 #include "structured_light/structured_light.hpp"
+#include "calibration/calibrator.hpp"
 
 //=== 前方宣言・コンテキスト ================================================
 class App;
@@ -99,8 +100,17 @@ private:
   //--- 構造光システム -------------------------------------------------------
   std::unique_ptr<sl::StructuredLight> sl_system_;
 
-  // 構造光シーケンス管理用
-  bool is_scanning_{false};       
-  int current_pattern_index_{-1}; 
-  std::chrono::steady_clock::time_point last_pattern_change_time_;
+  std::vector<cv::Mat> scanned_imgs_left_;
+  std::vector<cv::Mat> scanned_imgs_right_;
+  // スキャン設定
+  int scan_interval_ms_{500};
+  
+  // 撮影に使用するカメラID (initで設定する)
+  video::CameraId scan_cam_id_left_{video::kInvalidCameraId};
+  video::CameraId scan_cam_id_right_{video::kInvalidCameraId};
+
+  void saveScanResults_();
+
+  std::unique_ptr<calib::Calibrator> calibrator_; // 追加
+  bool show_chess_corners_{true}; // キー「T」などで切り替えられるようにすると便利
 };

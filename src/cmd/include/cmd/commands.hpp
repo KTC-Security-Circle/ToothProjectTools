@@ -3,6 +3,7 @@
 #include <variant>
 #include <optional>
 #include <string>
+#include "video/video_types.hpp"
 
 struct CmdToggleFullscreen { };
 struct CmdMoveToMonitor   { int index; };
@@ -23,8 +24,23 @@ struct CmdCapturePush {
 };
 
 struct CmdShowPattern { 
-    int index; 
-  };
+  int index; 
+};
+
+struct CmdNextPattern {}; 
+struct CmdPrevPattern {};
+
+struct CmdStartScan { 
+  int interval_ms = 500; // パターン切り替え後の待機時間
+};
+
+// スキャン強制中断
+struct CmdStopScan {};
+
+struct CmdCalibrate {
+  video::CameraId target_camera_id; // 適用先のカメラ
+  std::string     image_folder;     // 画像が入っているフォルダパス
+};
 
 using Command = std::variant<
   CmdToggleFullscreen,
@@ -32,5 +48,10 @@ using Command = std::variant<
   CmdQuit,
   CmdFocusNext,
   CmdCapturePush,
-  CmdShowPattern
+  CmdShowPattern,
+  CmdNextPattern,
+  CmdPrevPattern,
+  CmdStartScan,
+  CmdStopScan,
+  CmdCalibrate
 >;

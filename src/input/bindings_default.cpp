@@ -15,7 +15,8 @@
 ///       （未入力の仕様は OpenCV HighGUI の waitKey 系に準ずる）
 void install_default_bindings(
   InputHandler& handler,
-  std::deque<DispatchCmd>& cmd_que
+  std::deque<DispatchCmd>& cmd_que,
+  win::WindowId projector_id
 ) {
   //======================================================================
   // 1) アプリ終了系（ESC / q / Q）: 宛先 = アプリ全体
@@ -88,12 +89,72 @@ void install_default_bindings(
   // 6) カメラ: プッシュ撮影（camera_id グループ）:
   //    宛先 = フォーカス中ウィンドウの camera_id に紐づく全ウィンドウ
   //======================================================================
-  handler.bind('z', [&]{
+  handler.bind('a', [&]{
     LOG_INFO("プッシュ撮影（camera_idグループ）を予約します");
     CmdCapturePush cap{CaptureScope::CameraGroup, std::nullopt, {}};
     cmd_que.push_back(DispatchCmd{
       Target{TargetAll{}},
       Command{cap}
+    });
+  });
+  //======================================================================
+  // 7) 構造光パターン制御 (P/N/B)
+  //    宛先 = 指定されたプロジェクタID
+  //======================================================================
+  
+  // 'P': 最初のパターンへリセット (ShowPattern 0)
+  handler.bind('p', [&, projector_id]{
+    if (projector_id == win::kInvalidWindowId) return;
+    LOG_INFO("パターンリセット(0)を予約します");
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetById{projector_id}},
+      Command{CmdShowPattern{0}}
+    });
+  });
+
+  // 'n': 次のパターン (Next)
+  handler.bind('n', [&, projector_id]{
+    if (projector_id == win::kInvalidWindowId) return;
+    LOG_INFO("次のパターンを予約します");
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetById{projector_id}},
+      Command{CmdNextPattern{}}
+    });
+  });
+
+  // 'b': 前のパターン (Back)
+  handler.bind('b', [&, projector_id]{
+    if (projector_id == win::kInvalidWindowId) return;
+    LOG_INFO("前のパターンを予約します");
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetById{projector_id}},
+      Command{CmdPrevPattern{}}
+    });
+  });
+
+  //======================================================================
+  // 8) 自動スキャン制御 (Z/X)
+  //    宛先 = プロジェクタID (または全体)
+  //======================================================================
+
+  // 'z': スキャン開始 (Start Scan) - 以前の'c'/'z'と競合しないよう注意
+  // ※ 既存コードで 'z' が CaptureGroup に割り当てられている場合、キーを変更するか上書きします。
+  //   ここでは 'S' (Start) に変更する例を示します。
+  handler.bind('z', [&, projector_id]{
+    if (projector_id == win::kInvalidWindowId) return;
+    LOG_INFO("自動スキャン開始を予約します");
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetById{projector_id}},
+      Command{CmdStartScan{500}} // 500ms
+    });
+  });
+
+  // 'x': スキャン中断 (Stop)
+  handler.bind('x', [&]{
+    LOG_INFO("スキャン中断を予約します");
+    cmd_que.push_back(DispatchCmd{
+      Target{TargetAll{}}, 
+      Command{CmdStopScan{}}
     });
   });
 }
