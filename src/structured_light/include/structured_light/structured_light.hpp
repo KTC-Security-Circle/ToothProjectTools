@@ -4,6 +4,7 @@
 #include <opencv2/structured_light.hpp>
 #include <vector>
 #include <memory>
+#include <chrono>
 #include "calibration_types.hpp"
 
 namespace sl {
@@ -44,6 +45,25 @@ namespace sl {
     // ハレーションとみなす白レベルしきい値 (0-255)
     void setWhiteThreshold(int value);
 
+    // 現在のインデックス操作
+    int getCurrentIndex() const { return current_pattern_index_; }
+    void setIndex(int index); // 範囲チェック付きでセット
+    
+    // 次/前のインデックスを計算してセット（ループするかは引数で制御可）
+    void nextPattern(bool loop = true);
+    void prevPattern(bool loop = true);
+
+    // スキャン状態
+    bool isScanning() const { return is_scanning_; }
+    void startScan();
+    void stopScan();
+
+    // タイマー管理: 指定ミリ秒経過したか判定し、経過していれば時刻を更新してtrueを返す
+    bool checkTimerAndReset(int interval_ms);
+    
+    // 現在表示すべきパターン画像を取得（現在のインデックスに基づき返す）
+    const cv::Mat& getCurrentPatternImage() const;
+
   private:
     // 解像度
     int width_;
@@ -66,5 +86,9 @@ namespace sl {
     SystemCalibration calib_;
 
     cv::Mat disparity_map_;
+
+    bool is_scanning_{false};
+    int current_pattern_index_{0};
+    std::chrono::steady_clock::time_point last_pattern_change_time_;
   };
 }

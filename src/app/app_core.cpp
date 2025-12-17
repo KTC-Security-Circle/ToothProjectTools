@@ -16,6 +16,11 @@
 #include <opencv2/imgproc.hpp>
 #include <chrono>
 #include <utility>
+#include <filesystem>
+#include <iomanip>
+#include <sstream>
+
+namespace fs = std::filesystem;
 
 // -----------------------------------------------------------------------------
 // コンストラクタ (軽量化)
@@ -109,23 +114,29 @@ void App::init() {
   // 4. カメラの初期化 (Manager経由)
   // =========================================================
   
-  // --- Camera 1 ---
+  // --- Camera 1 (Left想定) ---
   video::CameraOptions opt1;
-  opt1.device_index = 4;
-  id_cam1_ = cam_mgr_.createCamera(opt1, "Cam0");
+  opt1.device_index = 4; // 環境に合わせて設定
+  id_cam1_ = cam_mgr_.createCamera(opt1, "CamLeft");
   
   if (id_cam1_ != video::kInvalidCameraId) {
-    cam_to_win_[id_cam1_] = id_preview_;
+    cam_to_win_[id_cam1_] = id_preview_; // Previewに表示
   }
 
-  // --- Camera 2 ---
+  // --- Camera 2 (Right想定) ---
   video::CameraOptions opt2;
-  opt2.device_index = 6;
-  id_cam2_ = cam_mgr_.createCamera(opt2, "Cam1");
+  opt2.device_index = 6; // 環境に合わせて設定
+  id_cam2_ = cam_mgr_.createCamera(opt2, "CamRight");
   
   if (id_cam2_ != video::kInvalidCameraId) {
-    cam_to_win_[id_cam2_] = id_second_;
+    cam_to_win_[id_cam2_] = id_second_; // Secondに表示
   }
+
+  // スキャン用カメラとして登録
+  scan_cam_id_left_  = id_cam1_;
+  scan_cam_id_right_ = id_cam2_;
+
+  calibrator_ = std::make_unique<calib::Calibrator>();
 
   // =========================================================
   // 5. 表示確定とコールバック設定
@@ -154,34 +165,30 @@ void App::init() {
   });
 
   // キーバインド
-  install_default_bindings(input_, cmd_que_);
+  install_default_bindings(input_, cmd_que_, id_projector_);
 
-  // 'p': パターン0を表示
-  input_.bind('p', [this](){
-      if (id_projector_ == win::kInvalidWindowId) return;
-
-      cmd_que_.push_back(DispatchCmd{
-          TargetById{ id_projector_ }, 
-          CmdShowPattern{ 0 }
-      });
-  });
-
-  // 'n': 次のパターンを表示 (★ここを修正しました)
-  input_.bind('n', [this](){
-      if (id_projector_ == win::kInvalidWindowId) return;
-
-      // 現在のインデックス + 1 を計算
-      int next_idx = current_pattern_index_ + 1;
-
-      // パターン数を超えたら0に戻す（ループ）
-      if (sl_system_ && next_idx >= (int)sl_system_->getPatternCount()) {
-          next_idx = 0;
+  input_.bind('k', [this](){
+      // 左カメラのキャリブレーションを実行
+      // フォルダは事前に "captures/calibrationCameraL" に画像が入っている前提
+      if (scan_cam_id_left_ != video::kInvalidCameraId) {
+          cmd_que_.push_back(DispatchCmd{
+              TargetAll{}, // ターゲットウィンドウは関係ないのでAll
+              CmdCalibrate{ 
+                  scan_cam_id_left_, 
+                  "captures/calibrationCameraL" 
+              }
+          });
       }
-
-      cmd_que_.push_back(DispatchCmd{
-          TargetById{ id_projector_ },
-          CmdShowPattern{ next_idx }
-      });
+      
+      if (scan_cam_id_right_ != video::kInvalidCameraId) {
+          cmd_que_.push_back(DispatchCmd{
+              TargetAll{}, // ターゲットウィンドウは関係ないのでAll
+              CmdCalibrate{ 
+                  scan_cam_id_right_, 
+                  "captures/calibrationCameraR" 
+              }
+          });
+      }
   });
   
   LOG_INFO("App: 初期化完了");
@@ -231,7 +238,68 @@ void App::update() {
     }
   });
 
-  // 2) コマンド適用
+  // 2) 自動スキャンロジック
+  if (sl_system_ && sl_system_->isScanning()) {
+      
+      // 時間経過チェック
+      if (sl_system_->checkTimerAndReset(scan_interval_ms_)) {
+          
+          // --- A. 撮影 (Capture L/R) -----------------------------
+          // ※ ヘルパーラムダ: 指定IDのカメラから画像を撮ってバッファに入れる
+          auto capture_and_store = [&](video::CameraId cid, std::vector<cv::Mat>& buf, const char* label) {
+              cv::Mat frame;
+              if (cid != video::kInvalidCameraId) {
+                  if (auto* cam = cam_mgr_.get(cid)) {
+                      frame = cam->getFrame(); // 最新フレーム取得
+                  }
+              }
+              
+              if (!frame.empty()) {
+                  buf.push_back(frame.clone());
+              } else {
+                  LOG_WARN("Scan: {} フレーム取得失敗 (Skip)", label);
+                  buf.push_back(cv::Mat()); // 欠損してもインデックスを合わせるため空画像を追加
+              }
+          };
+
+          // 左右それぞれ撮影
+          capture_and_store(scan_cam_id_left_,  scanned_imgs_left_,  "Left");
+          capture_and_store(scan_cam_id_right_, scanned_imgs_right_, "Right");
+
+          LOG_INFO("Scan: パターン {} 撮影 (L:{}, R:{})", 
+                   sl_system_->getCurrentIndex(), scanned_imgs_left_.size(), scanned_imgs_right_.size());
+
+          // --- B. 次のパターンへ (Advance) -----------------------
+          int old_idx = sl_system_->getCurrentIndex();
+          sl_system_->nextPattern(/*loop=*/false);
+          int new_idx = sl_system_->getCurrentIndex();
+
+          if (new_idx > old_idx) {
+               // --- C. 投影 (Project) ---
+               if (auto* proj = win_mgr_.get(id_projector_)) {
+                   proj->setImage(sl_system_->getCurrentPatternImage());
+               }
+          } else {
+               // --- D. 完了 (Finish) ---
+               sl_system_->stopScan();
+               
+               // プロジェクタOFF
+               if (auto* proj = win_mgr_.get(id_projector_)) {
+                   cv::Mat black(proj->size().height, proj->size().width, CV_8UC3, cv::Scalar(0,0,0));
+                   proj->setImage(black);
+               }
+
+               LOG_INFO("=== スキャン完了 ===");
+
+               saveScanResults_();
+               
+               // 将来的なデコード処理への接続点
+               // sl_system_->decodeStereo(scanned_imgs_left_, scanned_imgs_right_);
+          }
+      }
+  }
+
+  // 3) コマンド適用
   while (!cmd_que_.empty()) { 
     const DispatchCmd& next_command = cmd_que_.front();
     dispatch(next_command);
@@ -267,4 +335,60 @@ void App::render() {
       w.present();
     }
   });
+}
+
+void App::saveScanResults_() {
+  if (scanned_imgs_left_.empty() && scanned_imgs_right_.empty()) {
+    LOG_WARN("Save: 保存する画像がありません");
+    return;
+  }
+
+  LOG_INFO("=== 画像保存を開始します... ===");
+
+  // 1. 保存先ディレクトリの作成 (captures/scan_YYYYMMDD_HHMMSS)
+  auto now = std::chrono::system_clock::now();
+  std::time_t t = std::chrono::system_clock::to_time_t(now);
+  std::tm tm = *std::localtime(&t);
+
+  std::stringstream ss;
+  ss << "captures/scan_" << std::put_time(&tm, "%Y%m%d_%H%M%S");
+  std::string dir_path = ss.str();
+
+  try {
+    if (!fs::exists(dir_path)) {
+      fs::create_directories(dir_path);
+    }
+  } catch (const std::exception& e) {
+    LOG_ERROR("Save: ディレクトリ作成失敗: {}", e.what());
+    return;
+  }
+
+  // 2. 画像保存ループ
+  // ヘルパー: vectorを回して保存
+  auto save_images = [&](const std::vector<cv::Mat>& imgs, const std::string& prefix) {
+    for (size_t i = 0; i < imgs.size(); ++i) {
+      if (imgs[i].empty()) continue;
+
+      // ファイル名: left_00.png, right_00.png ...
+      std::stringstream fname;
+      fname << dir_path << "/" << prefix << "_" 
+            << std::setfill('0') << std::setw(2) << i << ".png";
+      
+      // PNG圧縮パラメータ (0-9, 大きいほど高圧縮・遅い。3推奨)
+      // 高速化したい場合は保存フォーマットを ".bmp" や ".jpg" に変えるか、
+      // 別のスレッドで保存処理を行う必要があります。
+      if (cv::imwrite(fname.str(), imgs[i])) {
+         // 成功時はログ過多になるので、全部終わってから出すか、デバッグレベルで
+         // LOG_DEBUG("Saved: {}", fname.str());
+      } else {
+         LOG_ERROR("Save: 書き込み失敗 {}", fname.str());
+      }
+    }
+    LOG_INFO("Save: {}画像 {}枚 保存完了", prefix, imgs.size());
+  };
+
+  if (!scanned_imgs_left_.empty())  save_images(scanned_imgs_left_, "left");
+  if (!scanned_imgs_right_.empty()) save_images(scanned_imgs_right_, "right");
+
+  LOG_INFO("=== 全画像の保存が完了しました: {} ===", dir_path);
 }

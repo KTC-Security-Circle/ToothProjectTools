@@ -206,4 +206,69 @@ void StructuredLight::setWhiteThreshold(int value) {
   white_threshold_ = static_cast<size_t>(value);
 }
 
+// =============================================================
+// シーケンス状態管理の実装
+// =============================================================
+
+void StructuredLight::setIndex(int index) {
+    if (patterns_.empty()) return;
+    // 範囲内に収める
+    current_pattern_index_ = std::clamp(index, 0, (int)patterns_.size() - 1);
+    // 時刻リセット
+    last_pattern_change_time_ = std::chrono::steady_clock::now();
+}
+
+void StructuredLight::nextPattern(bool loop) {
+    if (patterns_.empty()) return;
+    int sz = static_cast<int>(patterns_.size());
+    int next = current_pattern_index_ + 1;
+    
+    if (next >= sz) {
+        next = loop ? 0 : sz - 1;
+    }
+    setIndex(next);
+}
+
+void StructuredLight::prevPattern(bool loop) {
+    if (patterns_.empty()) return;
+    int sz = static_cast<int>(patterns_.size());
+    int prev = current_pattern_index_ - 1;
+
+    if (prev < 0) {
+        prev = loop ? sz - 1 : 0;
+    }
+    setIndex(prev);
+}
+
+void StructuredLight::startScan() {
+    is_scanning_ = true;
+    setIndex(0); // 最初から
+}
+
+void StructuredLight::stopScan() {
+    is_scanning_ = false;
+}
+
+bool StructuredLight::checkTimerAndReset(int interval_ms) {
+    auto now = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now - last_pattern_change_time_).count();
+    
+    if (elapsed >= interval_ms) {
+        // 時刻はここでリセットせず、次のパターンへ遷移した時にリセットするのが一般的だが、
+        // 呼び出し元のロジックに合わせて調整。ここでは「判定OK」だけ返す
+        return true;
+    }
+    return false;
+}
+
+const cv::Mat& StructuredLight::getCurrentPatternImage() const {
+    if (patterns_.empty()) {
+        // パターンがない場合のダミー（または例外）
+        static cv::Mat dummy(100, 100, CV_8UC1, cv::Scalar(0));
+        return dummy;
+    }
+    return getPattern(current_pattern_index_);
+}
+
 } // namespace sl
