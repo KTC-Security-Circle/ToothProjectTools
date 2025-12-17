@@ -105,6 +105,7 @@ add_subdirectory(src/logger)  # ライブラリ（公開ヘッダ・依存はこ
 add_subdirectory(src/window)
 add_subdirectory(src/video)
 add_subdirectory(src/structured_light)
+add_subdirectory(src/calibration)
 add_subdirectory(src/cmd)
 add_subdirectory(src/input)
 add_subdirectory(src/app)     # 実行ファイル（logger + project_wiring に依存）

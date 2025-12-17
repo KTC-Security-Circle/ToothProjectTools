@@ -19,6 +19,7 @@ target_link_libraries(structured_light_decoder
         cmd
         video
         structured_light
+        calibration
     PRIVATE
         logger
 )
