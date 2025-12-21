@@ -2,8 +2,7 @@
 #include "logger/logger_macros.hpp"
 #include "cmd/dispatch_cmd.hpp"
 #include "cmd/commands.hpp" 
-#include "cmd/keycodes.hpp"
-#include "window/window.hpp"
+#include "window/window.hpp" 
 
 namespace input {
 
@@ -15,109 +14,139 @@ void install_default_bindings(
   TargetResolver get_focused_target
 ) {
   // ======================================================================
-  // 1) アプリ終了系 (ESC / Ctrl+Q)
+  // 1) アプリ終了系 (ESC / q)
   // ======================================================================
   auto request_quit = [&]{
     LOG_INFO("終了要求を予約します");
     cmd_que.push_back(DispatchCmd{ TargetAll{}, cmd::CmdQuit{} });
   };
-  handler.bind(KEY_ESC,      request_quit);
-  handler.bind(CTRL_KEY('q'), request_quit); // Ctrl+Q で終了
+  handler.bind(27, request_quit);  // ESC
+  handler.bind('q', request_quit); // q
 
   // ======================================================================
   // 2) ウィンドウ制御
   // ======================================================================
-  // F: フルスクリーン
+  // [f] フルスクリーン
   handler.bind('f', [&]{
     cmd_que.push_back(DispatchCmd{ TargetFocused{}, cmd::CmdToggleFullscreen{} });
   });
 
-  // TAB: 次のウィンドウへフォーカス
-  handler.bind(KEY_TAB, [&]{
+  // [TAB] (9) 次のウィンドウへフォーカス
+  handler.bind(9, [&]{
     cmd_que.push_back(DispatchCmd{ TargetFocused{}, cmd::CmdFocusNext{} });
   });
 
-  // 1, 2: モニタ移動
+  // [1], [2] モニタ移動
   handler.bind('1', [&]{ cmd_que.push_back(DispatchCmd{ TargetFocused{}, cmd::CmdMoveToMonitor{1} }); });
   handler.bind('2', [&]{ cmd_que.push_back(DispatchCmd{ TargetFocused{}, cmd::CmdMoveToMonitor{2} }); });
 
   // ======================================================================
-  // 3) 汎用カメラ撮影 (Ctrl+S) - ScreenShot
+  // 3) キャリブレーション機能 (Mono / Stereo 分離)
   // ======================================================================
-  handler.bind(CTRL_KEY('s'), [&]{
-    LOG_INFO("スナップショット(Focused)を予約します");
-    cmd::CmdCapturePush cap{cmd::CaptureScope::FocusedOnly, std::nullopt, {}};
-    cmd_que.push_back(DispatchCmd{ TargetFocused{}, cap });
-  });
-
-  // ======================================================================
-  // 4) 構造光パターン制御 (P/N/B)
-  // ======================================================================
-  if (projector_id != win::kInvalidWindowId) {
-      // p: Reset
-      handler.bind('p', [&, projector_id]{
-        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdShowPattern{0} });
-      });
-      // n: Next
-      handler.bind('n', [&, projector_id]{
-        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdNextPattern{} });
-      });
-      // b: Back
-      handler.bind('b', [&, projector_id]{
-        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdPrevPattern{} });
-      });
-  }
-
-  // ======================================================================
-  // 5) 自動スキャン (Ctrl+Z: Start, Ctrl+X: Stop)
-  // ======================================================================
-  if (projector_id != win::kInvalidWindowId) {
-      handler.bind(CTRL_KEY('z'), [&, projector_id]{
-        LOG_INFO("自動スキャン開始");
-        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdStartScan{500} });
-      });
-  }
-  
-  handler.bind(CTRL_KEY('x'), [&]{
-    LOG_INFO("スキャン中断");
-    cmd_que.push_back(DispatchCmd{ TargetAll{}, cmd::CmdStopScan{} });
-  });
-
-  // ======================================================================
-  // 6) キャリブレーション機能 (統合)
-  // ======================================================================
-  
-  // 変数をコピーキャプチャして寿命問題を回避
-  // (std::string はコピーコストがかかりますが、初期化時の1回だけなので問題ありません)
   auto cfg = calib_config; 
 
-  // [K] Calibrate (計算実行)
-  handler.bind('k', [&, cfg](){
-      if (cfg.scan_cam_left != video::kInvalidCameraId) 
-          cmd_que.push_back({TargetAll{}, cmd::CmdCalibrate{cfg.scan_cam_left, cfg.dir_left}});
-      if (cfg.scan_cam_right != video::kInvalidCameraId) 
-          cmd_que.push_back({TargetAll{}, cmd::CmdCalibrate{cfg.scan_cam_right, cfg.dir_right}});
-  });
+  // --- A. Mono (単眼) ---
+  // 対象: フォーカスしているウィンドウのカメラ
+  // 保存先: mono_L / mono_R
 
-  // [Shift + C] Clear Folder (誤爆防止のためShift必須)
-  // 'C' は Shift+c のコード
-  handler.bind('C', [&, get_focused_target](){
-      auto [cam, dir] = get_focused_target();
-      if (cam != video::kInvalidCameraId) {
-          cmd_que.push_back({TargetAll{}, cmd::CmdCalibClear{dir}});
-      } else {
-          LOG_WARN("Clear: ターゲット(カメラウィンドウ)を選択してください");
-      }
-  });
-
-  // [c] Capture Single Frame (小文字)
+  // [c] Capture Mono
   handler.bind('c', [&, get_focused_target](){
       auto [cam, dir] = get_focused_target();
       if (cam != video::kInvalidCameraId) {
           cmd_que.push_back({TargetAll{}, cmd::CmdCalibCapture{cam, dir}});
       } else {
-          LOG_WARN("Capture: ターゲット(カメラウィンドウ)を選択してください");
+          LOG_WARN("MonoCapture: ターゲットを選択してください");
       }
+  });
+
+  // [d] Delete Mono
+  handler.bind('d', [&, get_focused_target](){
+      auto [cam, dir] = get_focused_target();
+      if (cam != video::kInvalidCameraId) {
+          LOG_INFO("MonoClear: {}", dir);
+          cmd_que.push_back({TargetAll{}, cmd::CmdCalibClear{dir}});
+      } else {
+          LOG_WARN("MonoClear: ターゲットを選択してください");
+      }
+  });
+
+  // [k] Calc Mono
+  handler.bind('k', [&, cfg](){
+      if (cfg.scan_cam_left != video::kInvalidCameraId) 
+          cmd_que.push_back({TargetAll{}, cmd::CmdCalibrate{cfg.scan_cam_left, cfg.dir_mono_left}});
+      if (cfg.scan_cam_right != video::kInvalidCameraId) 
+          cmd_que.push_back({TargetAll{}, cmd::CmdCalibrate{cfg.scan_cam_right, cfg.dir_mono_right}});
+  });
+
+  // --- B. Stereo (ステレオ) ---
+  // 対象: 左右カメラ同時
+  // 保存先: stereo_L / stereo_R
+
+  // [e] Capture Stereo (Extrinsics) -> 同時撮影
+  handler.bind('e', [&, cfg](){
+      if (cfg.scan_cam_left != video::kInvalidCameraId && cfg.scan_cam_right != video::kInvalidCameraId) {
+          LOG_INFO("StereoCapture: 同時撮影");
+          cmd_que.push_back({TargetAll{}, cmd::CmdCalibCapture{cfg.scan_cam_left,  cfg.dir_stereo_left}});
+          cmd_que.push_back({TargetAll{}, cmd::CmdCalibCapture{cfg.scan_cam_right, cfg.dir_stereo_right}});
+      }
+  });
+
+  // [r] Reset Stereo Folder -> 同時クリア
+  handler.bind('r', [&, cfg](){
+      LOG_INFO("StereoClear: フォルダリセット");
+      cmd_que.push_back({TargetAll{}, cmd::CmdCalibClear{cfg.dir_stereo_left}});
+      cmd_que.push_back({TargetAll{}, cmd::CmdCalibClear{cfg.dir_stereo_right}});
+  });
+
+  // [s] Calc Stereo
+  handler.bind('s', [&, cfg](){
+      if (cfg.scan_cam_left != video::kInvalidCameraId && cfg.scan_cam_right != video::kInvalidCameraId) {
+          LOG_INFO("StereoCalc: 計算要求");
+          cmd_que.push_back(DispatchCmd{
+              TargetAll{}, 
+              cmd::CmdStereoCalibrate{
+                  cfg.scan_cam_left, cfg.scan_cam_right,
+                  cfg.dir_stereo_left, cfg.dir_stereo_right, // stereoフォルダを使う
+                  "calibration_stereo.yml"
+              }
+          });
+      }
+  });
+
+  // ======================================================================
+  // 4) 構造光パターン制御 (p/n/b)
+  // ======================================================================
+  if (projector_id != win::kInvalidWindowId) {
+      // [p] Reset
+      handler.bind('p', [&, projector_id]{
+        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdShowPattern{0} });
+      });
+      // [n] Next
+      handler.bind('n', [&, projector_id]{
+        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdNextPattern{} });
+      });
+      // [b] Back
+      handler.bind('b', [&, projector_id]{
+        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdPrevPattern{} });
+      });
+
+      // ==================================================================
+      // 5) 自動スキャン (Space / x)
+      // ==================================================================
+      
+      // [Space] (32) 自動スキャン開始
+      // Ctrl+Z が効かない環境のため Space に割り当て
+      handler.bind(32, [&, projector_id]{
+        LOG_INFO("自動スキャン開始");
+        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdStartScan{500} });
+      });
+  }
+  
+  // [x] スキャン中断
+  // Ctrl+X が効かない環境のため x に割り当て
+  handler.bind('x', [&]{
+    LOG_INFO("スキャン中断");
+    cmd_que.push_back(DispatchCmd{ TargetAll{}, cmd::CmdStopScan{} });
   });
 }
 

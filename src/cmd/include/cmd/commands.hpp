@@ -56,6 +56,14 @@ struct CmdCalibCapture {
     std::string     prefix = ""; // ファイル名プレフィックス (任意)
 };
 
+struct CmdStereoCalibrate {
+    video::CameraId left_cam_id;
+    video::CameraId right_cam_id;
+    std::string left_dir;
+    std::string right_dir;
+    std::string output_file = "calibration_result.yml"; // 結果保存先
+};
+
 using Command = std::variant<
   CmdToggleFullscreen,
   CmdMoveToMonitor,
@@ -69,7 +77,8 @@ using Command = std::variant<
   CmdStopScan,
   CmdCalibrate,
   CmdCalibClear,
-  CmdCalibCapture
+  CmdCalibCapture,
+  CmdStereoCalibrate
 >;
 
 } // namespace cmd

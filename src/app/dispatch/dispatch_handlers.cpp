@@ -202,6 +202,87 @@ void handle_window(AppContext& ctx, win::Window& target_window, const cmd::Comma
                     }
                 }
             }
+        } else if constexpr (std::is_same_v<T, cmd::CmdStereoCalibrate>) {
+            if (!ctx.stereo_calibrator) {
+                LOG_ERROR("Stereo: Calibrator未初期化");
+                return;
+            }
+
+            // 1. カメラ取得 (内部パラメータK, Dが必要)
+            auto* camL = ctx.cam_mgr.get(c.left_cam_id);
+            auto* camR = ctx.cam_mgr.get(c.right_cam_id);
+
+            if (!camL || !camR) {
+                LOG_ERROR("Stereo: カメラが見つかりません");
+                return;
+            }
+
+            // 単眼パラメータの取得チェック
+            cv::Mat K1 = camL->intrinsics();
+            cv::Mat D1 = camL->distCoeffs();
+            cv::Mat K2 = camR->intrinsics();
+            cv::Mat D2 = camR->distCoeffs();
+
+            if (K1.empty() || K2.empty()) {
+                LOG_ERROR("Stereo: 事前に単眼キャリブレーション(Kキー)を実行してください");
+                return;
+            }
+
+            // 2. 画像ファイルリスト作成
+            auto get_files = [](const std::string& dir) {
+                std::vector<std::string> files;
+                if (fs::exists(dir)) {
+                    for (const auto& entry : fs::directory_iterator(dir)) {
+                        if (entry.is_regular_file()) files.push_back(entry.path().string());
+                    }
+                    std::sort(files.begin(), files.end()); // 順序合わせのためソート必須
+                }
+                return files;
+            };
+
+            auto filesL = get_files(c.left_dir);
+            auto filesR = get_files(c.right_dir);
+
+            if (filesL.empty() || filesR.empty() || filesL.size() != filesR.size()) {
+                LOG_ERROR("Stereo: 画像枚数不一致または空 (L:{} != R:{})", filesL.size(), filesR.size());
+                return;
+            }
+
+            // 3. 計算実行
+            LOG_INFO("Stereo: 計算開始 ({} pairs)...", filesL.size());
+            
+            calib::StereoData result;
+            double rms = ctx.stereo_calibrator->run(
+                filesL, filesR,
+                K1, D1, K2, D2,
+                result
+            );
+
+            if (rms > 0 && result.valid) {
+                LOG_INFO("Stereo: 成功! RMS={}", rms);
+                
+                // 結果をコンテキストに保存
+                ctx.stereo_data = result;
+
+                // 4. ファイルへ保存 (YAML)
+                try {
+                    cv::FileStorage fs(c.output_file, cv::FileStorage::WRITE);
+                    if (fs.isOpened()) {
+                        fs << "RMS" << rms;
+                        fs << "K1" << K1 << "D1" << D1;
+                        fs << "K2" << K2 << "D2" << D2;
+                        fs << "R" << result.R << "T" << result.T;
+                        fs << "Q" << result.Q; // 3D復元で最も重要
+                        fs.release();
+                        LOG_INFO("Stereo: 結果を保存しました -> {}", c.output_file);
+                    }
+                } catch (const std::exception& e) {
+                    LOG_ERROR("Stereo: 保存失敗 {}", e.what());
+                }
+
+            } else {
+                LOG_ERROR("Stereo: 計算失敗");
+            }
         }
 
     }, command);

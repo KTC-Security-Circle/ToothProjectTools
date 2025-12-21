@@ -17,8 +17,13 @@ namespace input {
 struct CalibrationBindConfig {
     video::CameraId scan_cam_left;
     video::CameraId scan_cam_right;
-    std::string dir_left;
-    std::string dir_right;
+    // 単眼用 (Mono)
+    std::string dir_mono_left;
+    std::string dir_mono_right;
+
+    // ステレオ用 (Stereo)
+    std::string dir_stereo_left;
+    std::string dir_stereo_right;
 };
 
 // フォーカス中のターゲットを特定するためのコールバック型

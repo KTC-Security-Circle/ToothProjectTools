@@ -31,28 +31,22 @@ bool InputHandler::bound(int keycode) const {
   return result;
 }
 
-/**
- * @brief 登録されている全てのキー入力バインドを削除する。
- */
-void InputHandler::clear() {
-  size_t count = map_.size();
-  map_.clear();
-  LOG_INFO("{} 件のキー入力バインドを全て削除しました", count);
-}
-
-/**
- * @brief 入力されたキーコードに応じてバインド済みアクションを実行する。
- */
 void InputHandler::handle(int keycode) const {
-  if (keycode < 0) {
-    LOG_TRACE("無効なキーコード {} を受信（入力なしとして無視）", keycode);
-    return;
-  }
-  if (auto it = map_.find(keycode); it != map_.end()) {
-    LOG_INFO("キーコード {} に対応するアクションを実行します", keycode);
+  if (keycode < 0) return;
+
+  // 下位8ビットと、生の値を両方出力して確認する
+  int clean_key = keycode & 0xFF;
+  
+  // ★デバッグ用: このログで実際の値を確認してください
+  LOG_INFO("Key Input: Raw={} (0x{:X}), Clean={} (0x{:X}) -> Char='{}'", 
+           keycode, keycode, clean_key, clean_key, 
+           (clean_key >= 32 && clean_key <= 126) ? static_cast<char>(clean_key) : '?');
+
+  if (auto it = map_.find(clean_key); it != map_.end()) {
     it->second();
   } else {
-    LOG_DEBUG("キーコード {} はバインドされていません（処理なし）", keycode);
+    // 未登録キーのログ（確認用）
+    LOG_WARN("Unbound Key: {}", clean_key);
   }
 }
 

@@ -6,6 +6,7 @@
 #include "calibration/calibrator.hpp"
 #include "input/input_handler.hpp"
 #include "cmd/dispatch_cmd.hpp"
+#include "calibration/stereo_calibrator.hpp"
 
 #include <vector>
 #include <memory>
@@ -27,6 +28,12 @@ struct AppContext {
     // --- Modules ---
     std::unique_ptr<sl::StructuredLight> sl_system;
     std::unique_ptr<calib::Calibrator>   calibrator;
+
+    // ★追加: ステレオキャリブレーション機能
+    std::unique_ptr<calib::StereoCalibrator> stereo_calibrator;
+    
+    // ★追加: 計算結果 (3D復元時に使用する)
+    calib::StereoData stereo_data;
 
     // --- State / Flags ---
     bool running = true;

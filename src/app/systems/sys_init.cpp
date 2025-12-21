@@ -75,6 +75,10 @@ void setup_app(AppContext& ctx) {
     ctx.calibrator = std::make_unique<calib::Calibrator>();
     ctx.calibrator->setBoardConfig({cv::Size(10, 7), 10.0f});
 
+    ctx.stereo_calibrator = std::make_unique<calib::StereoCalibrator>();
+    // 単眼と同じボード設定にする
+    ctx.stereo_calibrator->setBoardConfig({cv::Size(10, 7), 10.0f});
+
     // 6. 表示確定 & マウス設定
     ctx.win_mgr.forEach([](win::Window& w){ w.present(); });
     #if CV_VERSION_MAJOR >= 4 && defined(HAVE_OPENCV_HIGHGUI)
@@ -89,46 +93,44 @@ void setup_app(AppContext& ctx) {
         cv::setMouseCallback(w.name(), app::sys::on_mouse_event, &ctx.mouse_contexts.back());
     });
 
-    // 7. 入力バインド (Dispatchへ委譲)
-    // ローカル変数の定義
-    const std::string dir_L = "captures/calibrationCameraL";
-    const std::string dir_R = "captures/calibrationCameraR";
-
     // 設定構造体を作成
     input::CalibrationBindConfig calib_cfg;
-    calib_cfg.scan_cam_left  = ctx.scan_cam_id_left;
-    calib_cfg.scan_cam_right = ctx.scan_cam_id_right;
-    calib_cfg.dir_left       = dir_L;
-    calib_cfg.dir_right      = dir_R;
+    calib_cfg.scan_cam_left    = ctx.scan_cam_id_left;
+    calib_cfg.scan_cam_right   = ctx.scan_cam_id_right;
+    calib_cfg.dir_mono_left    = dir_mono_L;
+    calib_cfg.dir_mono_right   = dir_mono_R;
+    calib_cfg.dir_stereo_left  = dir_stereo_L;
+    calib_cfg.dir_stereo_right = dir_stereo_R;
 
-    // 状態取得用のラムダ (ctxを参照キャプチャ)
-    auto get_focused = [&ctx, dir_L, dir_R]() -> std::pair<video::CameraId, std::string> {
+    // フォーカス連動ヘルパー (Mono用)
+    // ※ ここでは dir_mono_L/R を使う
+    auto get_focused_mono = [&ctx, dir_mono_L, dir_mono_R]() -> std::pair<video::CameraId, std::string> {
         if (ctx.scan_cam_id_left != video::kInvalidCameraId) {
-            if (ctx.cam_to_win[ctx.scan_cam_id_left] == ctx.focused_id) return {ctx.scan_cam_id_left, dir_L};
+            if (ctx.cam_to_win[ctx.scan_cam_id_left] == ctx.focused_id) return {ctx.scan_cam_id_left, dir_mono_L};
         }
         if (ctx.scan_cam_id_right != video::kInvalidCameraId) {
-            if (ctx.cam_to_win[ctx.scan_cam_id_right] == ctx.focused_id) return {ctx.scan_cam_id_right, dir_R};
+            if (ctx.cam_to_win[ctx.scan_cam_id_right] == ctx.focused_id) return {ctx.scan_cam_id_right, dir_mono_R};
         }
         return {video::kInvalidCameraId, ""};
     };
 
-    // 一括登録
+    // バインド登録
     input::install_default_bindings(
         ctx.input,
         ctx.cmd_que,
         ctx.id_projector,
         calib_cfg,
-        get_focused
+        get_focused_mono
     );
 
-    // [T] キーだけはApp固有の単純フラグ操作なので、ここで追加してもOK
-    // あるいは CmdToggleOverlay を作ってコマンド化する
+    // [T] Overlay Toggle
     ctx.input.bind('t', [&ctx](){
         ctx.show_chess_corners = !ctx.show_chess_corners;
         LOG_INFO("Checkers: {}", ctx.show_chess_corners ? "ON" : "OFF");
     });
 
     LOG_INFO("System: 初期化完了");
+}
 }
 
 } // namespace
