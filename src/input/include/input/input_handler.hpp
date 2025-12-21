@@ -2,6 +2,8 @@
 #include <functional>
 #include <unordered_map>
 
+namespace input {
+
 /**
  * @brief キーコード→アクション（関数）を管理するシンプルな入力ハンドラ。
  * 
@@ -24,3 +26,5 @@ public:
 private:
   std::unordered_map<int, Action> map_;
 };
+
+}

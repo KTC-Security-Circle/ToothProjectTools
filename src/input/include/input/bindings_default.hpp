@@ -5,8 +5,12 @@
 #include <deque>
 #include "cmd/dispatch_cmd.hpp"
 
-void install_default_bindings(
+namespace input {
+
+  void install_default_bindings(
   InputHandler& handler,
   std::deque<DispatchCmd>& cmd_que,
   win::WindowId projector_id
 );
+
+}

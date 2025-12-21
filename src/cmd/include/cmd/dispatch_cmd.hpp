@@ -5,5 +5,5 @@
 
 struct DispatchCmd {
   Target  target;
-  Command cmd;
+  cmd::Command cmd;
 };

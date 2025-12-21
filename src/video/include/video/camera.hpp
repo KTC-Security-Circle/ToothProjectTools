@@ -7,9 +7,9 @@
 #include <string>
 #include <chrono>
 #include <cstdint>
-#include <thread>  // ★追加
-#include <mutex>   // ★追加
-#include <atomic>  // ★追加
+#include <thread>
+#include <mutex> 
+#include <atomic>
 
 #include "video_types.hpp"
 

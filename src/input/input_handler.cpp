@@ -1,6 +1,8 @@
 #include "input/input_handler.hpp"
 #include "logger/logger_macros.hpp" // LOG_INFO, LOG_WARN, LOG_DEBUG, LOG_TRACE などを定義したヘッダを想定
 
+namespace input {
+
 /**
  * @brief キー入力と対応するアクションをバインドする。
  */
@@ -52,4 +54,6 @@ void InputHandler::handle(int keycode) const {
   } else {
     LOG_DEBUG("キーコード {} はバインドされていません（処理なし）", keycode);
   }
+}
+
 }

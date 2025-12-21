@@ -4,6 +4,8 @@
 #include "cmd/commands.hpp" 
 #include "cmd/keycodes.hpp"
 
+namespace input {
+
 /// @brief アプリ既定のキー→コマンド・バインディングを登録する。
 /// @details
 /// - ここでは「コマンドをキューに積むだけ」。実処理は dispatch/update 側で行う。
@@ -25,7 +27,7 @@ void install_default_bindings(
     LOG_INFO("終了要求を予約します");
     cmd_que.push_back(DispatchCmd{
       Target{TargetAll{}},
-      Command{CmdQuit{}}
+      cmd::Command{cmd::CmdQuit{}}
     });
   };
   handler.bind(KEY_ESC,      request_quit);
@@ -39,7 +41,7 @@ void install_default_bindings(
     LOG_INFO("フルスクリーン切替を予約します");
     cmd_que.push_back(DispatchCmd{
       Target{TargetFocused{}},
-      Command{CmdToggleFullscreen{}}
+      cmd::Command{cmd::CmdToggleFullscreen{}}
     });
   });
 
@@ -50,7 +52,7 @@ void install_default_bindings(
     LOG_INFO("モニタ1への移動を予約します");
     cmd_que.push_back(DispatchCmd{
       Target{TargetFocused{}},
-      Command{CmdMoveToMonitor{1}}
+      cmd::Command{cmd::CmdMoveToMonitor{1}}
     });
   });
 
@@ -58,7 +60,7 @@ void install_default_bindings(
     LOG_INFO("モニタ2への移動を予約します");
     cmd_que.push_back(DispatchCmd{
       Target{TargetFocused{}},
-      Command{CmdMoveToMonitor{2}}
+      cmd::Command{cmd::CmdMoveToMonitor{2}}
     });
   });
 
@@ -69,7 +71,7 @@ void install_default_bindings(
     LOG_INFO("次のウィンドウへのフォーカス移動を予約します");
     cmd_que.push_back(DispatchCmd{
       Target{TargetFocused{}},
-      Command{CmdFocusNext{}}
+      cmd::Command{cmd::CmdFocusNext{}}
     });
   });
 
@@ -78,10 +80,10 @@ void install_default_bindings(
   //======================================================================
   handler.bind('c', [&]{
     LOG_INFO("プッシュ撮影（フォーカスのみ）を予約します");
-    CmdCapturePush cap{CaptureScope::FocusedOnly, std::nullopt, {}};
+    cmd::CmdCapturePush cap{cmd::CaptureScope::FocusedOnly, std::nullopt, {}};
     cmd_que.push_back(DispatchCmd{
       Target{TargetFocused{}},
-      Command{cap}
+      cmd::Command{cap}
     });
   });
 
@@ -91,10 +93,10 @@ void install_default_bindings(
   //======================================================================
   handler.bind('a', [&]{
     LOG_INFO("プッシュ撮影（camera_idグループ）を予約します");
-    CmdCapturePush cap{CaptureScope::CameraGroup, std::nullopt, {}};
+    cmd::CmdCapturePush cap{cmd::CaptureScope::CameraGroup, std::nullopt, {}};
     cmd_que.push_back(DispatchCmd{
       Target{TargetAll{}},
-      Command{cap}
+      cmd::Command{cap}
     });
   });
   //======================================================================
@@ -108,7 +110,7 @@ void install_default_bindings(
     LOG_INFO("パターンリセット(0)を予約します");
     cmd_que.push_back(DispatchCmd{
       Target{TargetById{projector_id}},
-      Command{CmdShowPattern{0}}
+      cmd::Command{cmd::CmdShowPattern{0}}
     });
   });
 
@@ -118,7 +120,7 @@ void install_default_bindings(
     LOG_INFO("次のパターンを予約します");
     cmd_que.push_back(DispatchCmd{
       Target{TargetById{projector_id}},
-      Command{CmdNextPattern{}}
+      cmd::Command{cmd::CmdNextPattern{}}
     });
   });
 
@@ -128,7 +130,7 @@ void install_default_bindings(
     LOG_INFO("前のパターンを予約します");
     cmd_que.push_back(DispatchCmd{
       Target{TargetById{projector_id}},
-      Command{CmdPrevPattern{}}
+      cmd::Command{cmd::CmdPrevPattern{}}
     });
   });
 
@@ -145,7 +147,7 @@ void install_default_bindings(
     LOG_INFO("自動スキャン開始を予約します");
     cmd_que.push_back(DispatchCmd{
       Target{TargetById{projector_id}},
-      Command{CmdStartScan{500}} // 500ms
+      cmd::Command{cmd::CmdStartScan{500}} // 500ms
     });
   });
 
@@ -154,7 +156,9 @@ void install_default_bindings(
     LOG_INFO("スキャン中断を予約します");
     cmd_que.push_back(DispatchCmd{
       Target{TargetAll{}}, 
-      Command{CmdStopScan{}}
+      cmd::Command{cmd::CmdStopScan{}}
     });
   });
+}
+
 }
