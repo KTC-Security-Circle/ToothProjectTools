@@ -103,7 +103,7 @@ private:
 
   Size  size_{};
   Point pos_{};
-  int   monitor_index_{0};
+  int   monitor_index_{1};
   LayoutMode layout_{LayoutMode::Free};
   bool   visible_{true};
   int    camera_id{-1};   // ★ このウィンドウに紐づくカメラ（-1: 未割当）

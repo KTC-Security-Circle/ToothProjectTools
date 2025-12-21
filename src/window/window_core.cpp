@@ -120,7 +120,14 @@ void Window::create(int create_flags) {
   if (create_flags == cv::WINDOW_NORMAL) {
     cv::resizeWindow(name_, size_.width, size_.height);
   }
-  cv::moveWindow(name_, pos_.x, pos_.y);
+
+  #if CV_VERSION_MAJOR >= 4 && defined(HAVE_OPENCV_HIGHGUI)
+    cv::pollKey(); 
+  #else
+    cv::waitKey(1);
+  #endif
+
+  move(pos_);
 
   // 初期プロパティの適用
   if (fullscreen_) {
