@@ -1,4 +1,5 @@
 #include "calibration/calibrator.hpp"
+#include "logger/logger_macros.hpp"
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
@@ -55,10 +56,16 @@ double Calibrator::runCalibration(
     cv::Mat& out_camera_matrix,
     cv::Mat& out_dist_coeffs
 ) {
-    if (image_files.empty()) return -1.0;
+    // 1. 設定の確認ログ
+    LOG_INFO("Calib: 画像数={}, パターン設定(交点数)={}x{}", 
+             image_files.size(), config_.pattern_size.width, config_.pattern_size.height);
 
-    // 1. チェッカーボードの定義 (3D座標: Z=0)
-    // (0,0,0), (1,0,0), ..., (cols-1, rows-1, 0) * square_size
+    if (image_files.empty()) {
+        LOG_WARN("Calib: 画像リストが空です");
+        return -1.0;
+    }
+
+    // チェッカーボードの定義 (3D座標: Z=0)
     std::vector<cv::Point3f> objp;
     for (int i = 0; i < config_.pattern_size.height; i++) {
         for (int j = 0; j < config_.pattern_size.width; j++) {
@@ -66,29 +73,40 @@ double Calibrator::runCalibration(
         }
     }
 
-    std::vector<std::vector<cv::Point3f>> object_points; // 全画像の3D点
-    std::vector<std::vector<cv::Point2f>> image_points;  // 全画像の2D点
+    std::vector<std::vector<cv::Point3f>> object_points;
+    std::vector<std::vector<cv::Point2f>> image_points;
     cv::Size img_size;
 
     int success_count = 0;
+    int total_files = image_files.size();
 
-    // 2. 画像を読み込んでコーナー検出
-    for (const auto& fpath : image_files) {
+    // 2. 画像読み込みループ
+    for (int i = 0; i < total_files; ++i) {
+        const auto& fpath = image_files[i];
+        
         cv::Mat img = cv::imread(fpath);
-        if (img.empty()) continue;
+        if (img.empty()) {
+            LOG_WARN("[{}/{}] 読込失敗: {}", i+1, total_files, fpath);
+            continue;
+        }
 
         if (img_size.area() == 0) {
             img_size = img.size();
+            LOG_INFO("Calib: 画像サイズを確定: {}x{}", img_size.width, img_size.height);
         } else if (img_size != img.size()) {
-            // サイズが不揃いだとエラーになるのでスキップ
+            LOG_WARN("[{}/{}] サイズ不一致のためスキップ: {} ({}x{})", 
+                     i+1, total_files, fpath, img.size().width, img.size().height);
             continue;
         }
 
         cv::Mat gray;
-        cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+        if (img.channels() == 3) {
+            cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
+        } else {
+            gray = img;
+        }
 
         std::vector<cv::Point2f> corners;
-        // detectAndDraw でも使っているフラグ
         int flags = cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE | cv::CALIB_CB_FAST_CHECK;
         
         bool found = cv::findChessboardCorners(gray, config_.pattern_size, corners, flags);
@@ -101,24 +119,33 @@ double Calibrator::runCalibration(
             image_points.push_back(corners);
             object_points.push_back(objp);
             success_count++;
+            
+            // 成功時はDEBUGレベルで（大量に出るので）
+            LOG_DEBUG("[{}/{}] OK: {}", i+1, total_files, fpath);
+        } else {
+            // 失敗時はWARNで理由のヒントになるよう出す
+            LOG_WARN("[{}/{}] 検出失敗: {}", i+1, total_files, fpath);
         }
     }
 
+    LOG_INFO("Calib: 検出完了 {}/{} 枚成功", success_count, total_files);
+
     if (success_count < 5) {
-        // 画像枚数が少なすぎると精度が出ない
+        LOG_ERROR("Calib: 有効な画像が少なすぎます (最低5枚推奨)");
         return -1.0; 
     }
 
-    // 3. キャリブレーション計算
+    // 3. 計算
+    LOG_INFO("Calib: パラメータ計算中...");
     std::vector<cv::Mat> rvecs, tvecs;
     
-    // 初期値フラグなし（標準的な設定）
     double rms = cv::calibrateCamera(
         object_points, image_points, img_size,
         out_camera_matrix, out_dist_coeffs,
         rvecs, tvecs
     );
 
+    LOG_INFO("Calib: 計算完了 RMS={}", rms);
     return rms;
 }
 

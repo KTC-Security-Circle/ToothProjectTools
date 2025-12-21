@@ -5,6 +5,8 @@
 #include <string>
 #include "video/video_types.hpp"
 
+namespace cmd {
+
 struct CmdToggleFullscreen { };
 struct CmdMoveToMonitor   { int index; };
 struct CmdQuit            { };
@@ -42,6 +44,18 @@ struct CmdCalibrate {
   std::string     image_folder;     // 画像が入っているフォルダパス
 };
 
+// キャリブレーション用フォルダのクリア
+struct CmdCalibClear {
+    std::string target_directory;
+};
+
+// キャリブレーション画像の撮影と保存
+struct CmdCalibCapture {
+    video::CameraId camera_id;
+    std::string     target_directory;
+    std::string     prefix = ""; // ファイル名プレフィックス (任意)
+};
+
 using Command = std::variant<
   CmdToggleFullscreen,
   CmdMoveToMonitor,
@@ -53,5 +67,9 @@ using Command = std::variant<
   CmdPrevPattern,
   CmdStartScan,
   CmdStopScan,
-  CmdCalibrate
+  CmdCalibrate,
+  CmdCalibClear,
+  CmdCalibCapture
 >;
+
+} // namespace cmd
