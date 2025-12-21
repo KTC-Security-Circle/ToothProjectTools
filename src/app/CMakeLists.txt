@@ -1,8 +1,12 @@
 add_executable(structured_light_decoder
     main.cpp
-    app_core.cpp
-    app_dispatch.cpp
-    app_mouse.cpp
+    systems/sys_init.cpp
+    systems/sys_update.cpp
+    systems/sys_input.cpp
+    systems/sys_render.cpp
+    app.cpp
+    dispatch/dispatch_handlers.cpp
+    dispatch/dispatch_router.cpp
 )
 
 target_include_directories(structured_light_decoder

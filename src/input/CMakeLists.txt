@@ -11,6 +11,7 @@ target_include_directories(input
 
 target_link_libraries(input
   PUBLIC
+    video
     window
     cmd
   PRIVATE
