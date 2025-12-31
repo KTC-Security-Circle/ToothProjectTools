@@ -64,6 +64,13 @@ struct CmdStereoCalibrate {
     std::string output_file = "calibration_result.yml"; // 結果保存先
 };
 
+struct CmdReconstruct {
+    std::string calib_file = "calibration_stereo.yml";
+    std::string scan_dir_L = "scans/L";
+    std::string scan_dir_R = "scans/R";
+    std::string output_ply = "reconstruction.ply";
+};
+
 using Command = std::variant<
   CmdToggleFullscreen,
   CmdMoveToMonitor,
@@ -78,7 +85,8 @@ using Command = std::variant<
   CmdCalibrate,
   CmdCalibClear,
   CmdCalibCapture,
-  CmdStereoCalibrate
+  CmdStereoCalibrate,
+  CmdReconstruct
 >;
 
 } // namespace cmd

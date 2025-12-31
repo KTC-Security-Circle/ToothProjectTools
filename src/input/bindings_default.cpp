@@ -148,6 +148,20 @@ void install_default_bindings(
     LOG_INFO("スキャン中断");
     cmd_que.push_back(DispatchCmd{ TargetAll{}, cmd::CmdStopScan{} });
   });
+
+  // [m] 3D Reconstruction
+  handler.bind('m', [&](){
+      LOG_INFO("3D復元を開始します");
+      cmd_que.push_back(DispatchCmd{
+          TargetAll{}, 
+          cmd::CmdReconstruct{
+              "calibration_stereo.yml", // キャリブレーションファイル
+              "captures/scan_L",        // 左画像フォルダ
+              "captures/scan_R",        // 右画像フォルダ
+              "reconstruction.ply"      // 出力ファイル
+          }
+      });
+  });
 }
 
 } // namespace input

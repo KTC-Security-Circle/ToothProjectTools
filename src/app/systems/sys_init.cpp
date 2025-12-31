@@ -93,6 +93,11 @@ void setup_app(AppContext& ctx) {
         cv::setMouseCallback(w.name(), app::sys::on_mouse_event, &ctx.mouse_contexts.back());
     });
 
+    const std::string dir_mono_L   = "captures/mono_L";
+    const std::string dir_mono_R   = "captures/mono_R";
+    const std::string dir_stereo_L = "captures/stereo_L";
+    const std::string dir_stereo_R = "captures/stereo_R";
+
     // 設定構造体を作成
     input::CalibrationBindConfig calib_cfg;
     calib_cfg.scan_cam_left    = ctx.scan_cam_id_left;
@@ -130,7 +135,6 @@ void setup_app(AppContext& ctx) {
     });
 
     LOG_INFO("System: 初期化完了");
-}
 }
 
 } // namespace

@@ -7,6 +7,7 @@ add_executable(structured_light_decoder
     app.cpp
     dispatch/dispatch_handlers.cpp
     dispatch/dispatch_router.cpp
+    dispatch/logic/reconstruct.cpp
 )
 
 target_include_directories(structured_light_decoder
