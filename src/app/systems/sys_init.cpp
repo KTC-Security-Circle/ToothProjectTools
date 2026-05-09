@@ -60,11 +60,11 @@ void setup_app(AppContext& ctx) {
     }
 
     // 4. カメラ初期化
-    video::CameraOptions opt1; opt1.device_index = 4;
+    video::CameraOptions opt1; opt1.device_index = 0;
     ctx.id_cam1 = ctx.cam_mgr.createCamera(opt1, "CamLeft");
     if (ctx.id_cam1 != video::kInvalidCameraId) ctx.cam_to_win[ctx.id_cam1] = ctx.id_preview;
 
-    video::CameraOptions opt2; opt2.device_index = 6;
+    video::CameraOptions opt2; opt2.device_index = 2;
     ctx.id_cam2 = ctx.cam_mgr.createCamera(opt2, "CamRight");
     if (ctx.id_cam2 != video::kInvalidCameraId) ctx.cam_to_win[ctx.id_cam2] = ctx.id_second;
 

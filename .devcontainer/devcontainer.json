@@ -1,6 +1,6 @@
 {
   "name": "structured-container",
-  "dockerComposeFile": ["../docker-compose.yml"],
+  "dockerComposeFile": ["./docker-compose.yml"],
   "service": "structured-service",
   "workspaceFolder": "/workspace",
 
@@ -51,24 +51,26 @@
   },
 
     // ✅ フック群（ログに色付き）
-    "initializeCommand": "echo '[\u001b[36m init \u001b[0m] docker build後に実行されます' && echo \"VIDEO_GID=$(stat -c '%g' /dev/video0)\" > .env", 
+    "initializeCommand": "echo '[\u001b[36m init \u001b[0m] docker build後に実行されます'  && echo \"VIDEO_GID=$(stat -c '%g' /dev/video0)\" > .env", 
     "onCreateCommand": "echo '[\u001b[35m onCreate \u001b[0m] コンテナ作成直後に1回だけ実行されます'",
     "postCreateCommand": "echo '[\u001b[33m postCreate \u001b[0m] 拡張機能とfeature導入後に実行されます' && \n sudo chown -R $(id -u):$(id -g) /workspace && sudo find /workspace -type d -exec chmod u+rwx {} +",
     "postStartCommand": "echo '[\u001b[32m start \u001b[0m] コンテナが起動しました'", 
-    "postAttachCommand": "echo '[\u001b[34m attach \u001b[0m] VSCodeが接続しました' && \n mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR",
+    "postAttachCommand": "echo '[\u001b[34m attach \u001b[0m] VSCodeが接続しました' && mkdir -p $XDG_RUNTIME_DIR",
 
   "overrideCommand": false,
 
   // SSH エージェント共有：標準の書き方
   // 参考: devcontainers docs（localEnv 置換と mounts）/ Git 資格共有
   "mounts": [
-    "type=bind,source=${localEnv:SSH_AUTH_SOCK},target=/ssh-agent"
+    "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind"
   ],
   "remoteEnv": {
     "TERM": "xterm-256color",
     "SSH_AUTH_SOCK": "/ssh-agent"
   },
   "containerEnv": {
-    "XDG_RUNTIME_DIR": "/tmp/runtime-vscode"
+    "XDG_RUNTIME_DIR": "/tmp/runtime-vscode",
+    "WAYLAND_DISPLAY": "",
+    "DISPLAY": "${localEnv:DISPLAY}"
   }
 }

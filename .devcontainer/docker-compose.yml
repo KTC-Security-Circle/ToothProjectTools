@@ -18,22 +18,28 @@ services:
       - ${XAUTHORITY:-$HOME/.Xauthority}:/root/.Xauthority:ro
 
       # ソースと ccache を永続化
-      - ./:/workspace
+      - ../:/workspace
       - ccache:/opt/ccache
 
     # 明示的にデバイスを渡す
     devices:
       - /dev/video0:/dev/video0
-      # - /dev/video2:/dev/video2
-      - /dev/video4:/dev/video4
+      - /dev/video2:/dev/video2
+      # - /dev/video4:/dev/video4
       # - /dev/video6:/dev/video6
       - /dev/dri:/dev/dri
 
     cap_add:
       - SYS_PTRACE
 
+    tmpfs:
+      - /tmp/runtime-vscode:rw,mode=777
+
     tty: true
     stdin_open: true
+    network_mode: host
+    ipc: host
+    hostname: localhost
     working_dir: /workspace
 
 volumes:
