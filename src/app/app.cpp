@@ -2,7 +2,7 @@
 #include "app/systems.hpp"
 
 // コンストラクタ
-App::App() : ctx_(std::make_unique<app::AppContext>()) {}
+App::App() : ctx_(std::make_unique<runtime::AppContext>()) {}
 
 // デストラクタ
 App::~App() = default;

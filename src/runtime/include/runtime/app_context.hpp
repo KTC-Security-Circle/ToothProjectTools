@@ -13,7 +13,7 @@
 #include <map>
 #include <deque> // ★追加
 
-namespace app {
+namespace runtime {
 
 // アプリケーション全体で共有する状態
 struct AppContext {
@@ -69,4 +69,4 @@ struct AppContext {
     int scan_interval_ms = 500;
 };
 
-} // namespace app
+} // namespace runtime

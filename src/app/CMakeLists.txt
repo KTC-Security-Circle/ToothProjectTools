@@ -5,9 +5,6 @@ add_executable(structured_light_decoder
     systems/sys_input.cpp
     systems/sys_render.cpp
     app.cpp
-    dispatch/dispatch_handlers.cpp
-    dispatch/dispatch_router.cpp
-    dispatch/logic/reconstruct.cpp
 )
 
 target_include_directories(structured_light_decoder
@@ -25,6 +22,8 @@ target_link_libraries(structured_light_decoder
         video
         structured_light
         calibration
+        dispatch
+        runtime
     PRIVATE
         logger
 )
