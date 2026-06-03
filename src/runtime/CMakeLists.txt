@@ -8,6 +8,7 @@ target_include_directories(runtime
 target_link_libraries(runtime
   INTERFACE
     cmd
+    input
     window
     video
     structured_light
