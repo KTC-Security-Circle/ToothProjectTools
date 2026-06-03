@@ -1,7 +1,15 @@
 #include "input/input_handler.hpp"
-#include "logger/logger_macros.hpp" // LOG_INFO, LOG_WARN, LOG_DEBUG, LOG_TRACE などを定義したヘッダを想定
+#include "logger/logger_macros.hpp" // LOG_INFO, LOG_WARN, LOG_DEBUG などを定義したヘッダを想定
 
 namespace input {
+
+namespace
+{
+constexpr bool is_ascii_key(int raw_key) noexcept
+{
+    return raw_key >= 0 && raw_key <= 0x7F;
+}
+} // namespace
 
 /**
  * @brief キー入力と対応するアクションをバインドする。
@@ -34,19 +42,19 @@ bool InputHandler::bound(int keycode) const {
 void InputHandler::handle(int keycode) const {
   if (keycode < 0) return;
 
-  // 下位8ビットと、生の値を両方出力して確認する
-  int clean_key = keycode & 0xFF;
-  
-  // ★デバッグ用: このログで実際の値を確認してください
-  LOG_INFO("Key Input: Raw={} (0x{:X}), Clean={} (0x{:X}) -> Char='{}'", 
-           keycode, keycode, clean_key, clean_key, 
-           (clean_key >= 32 && clean_key <= 126) ? static_cast<char>(clean_key) : '?');
+  const int raw_key = keycode;
+  LOG_INFO("Key Input: Raw={} (0x{:X})", raw_key, raw_key);
 
-  if (auto it = map_.find(clean_key); it != map_.end()) {
+  // HighGUI / X11 の特殊キーは ASCII でないので、ここで無視する。
+  if (!is_ascii_key(raw_key)) {
+    LOG_DEBUG("Special Key Ignored: Raw={} (0x{:X})", raw_key, raw_key);
+    return;
+  }
+
+  if (auto it = map_.find(raw_key); it != map_.end()) {
     it->second();
   } else {
-    // 未登録キーのログ（確認用）
-    LOG_WARN("Unbound Key: {}", clean_key);
+    LOG_WARN("Unbound Key: {} (Raw=0x{:X})", raw_key, raw_key);
   }
 }
 
