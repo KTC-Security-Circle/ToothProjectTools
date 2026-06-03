@@ -108,6 +108,7 @@ add_subdirectory(src/structured_light)
 add_subdirectory(src/calibration)
 add_subdirectory(src/cmd)
 add_subdirectory(src/input)
-add_subdirectory(src/dispatch)
 add_subdirectory(src/runtime)  # INTERFACE ターゲット（依存の伝播先）
+add_subdirectory(src/handler)
+add_subdirectory(src/dispatch)  # INTERFACE ターゲット（依存の伝播先）
 add_subdirectory(src/app)     # 実行ファイル（logger + project_wiring に依存）

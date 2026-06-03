@@ -11,7 +11,7 @@ void execute(runtime::AppContext& ctx, const DispatchCmd& dcmd);
 
 void setup_bindings(runtime::AppContext& ctx);
 
-namespace handlers
+namespace local_handler
 {
 bool handle_global(runtime::AppContext& ctx, const cmd::Command& cmd);
 void handle_window(runtime::AppContext& ctx, win::Window& target, const cmd::Command& cmd);
