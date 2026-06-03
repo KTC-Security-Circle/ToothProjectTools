@@ -1,17 +1,18 @@
 #pragma once
-#include "app/app_context.hpp"
+#include "runtime/app_context.hpp"
 
-namespace app::sys {
+namespace app::sys
+{
 
 // --- Initialization ---
-void setup_app(AppContext& ctx);
+void setup_app(runtime::AppContext& ctx);
 
 // --- Core Loop Systems ---
-void process_input(AppContext& ctx);
-void process_commands(AppContext& ctx);
-void update_scan(AppContext& ctx);
-void update_preview(AppContext& ctx);
-void render_all(AppContext& ctx);
+void process_input(runtime::AppContext& ctx);
+void process_commands(runtime::AppContext& ctx);
+void update_scan(runtime::AppContext& ctx);
+void update_preview(runtime::AppContext& ctx);
+void render_all(runtime::AppContext& ctx);
 
 // --- Input Helpers ---
 // マウスコールバック実体
