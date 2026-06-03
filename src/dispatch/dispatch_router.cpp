@@ -1,5 +1,7 @@
 #include "dispatch/dispatch.hpp"
-#include "logger/logger_macros.hpp"
+
+#include "runtime/app_context.hpp"
+#include "window/window.hpp"
 
 #include <type_traits>
 

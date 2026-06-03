@@ -24,6 +24,7 @@ target_link_libraries(handler
     video
     structured_light
     calibration
+    service
     cv_lib
     logger
 )
