@@ -1,9 +1,11 @@
 #include "service/stereo_calibration_service.hpp"
 
+#include "calibration/stereo_calibrator.hpp"
 #include "calibration/stereo_data.hpp"
 #include "logger/logger_macros.hpp"
-#include "runtime/app_context.hpp"
+#include "runtime/handler_context.hpp"
 #include "video/camera.hpp"
+#include "video/camera_manager.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -15,15 +17,15 @@ namespace fs = std::filesystem;
 namespace service::stereo_calibration
 {
 
-void calibrate(runtime::AppContext& ctx, const cmd::CmdStereoCalibrate& command)
+void calibrate(runtime::StereoCalibrationHandlerContext& ctx, const cmd::CmdStereoCalibrate& command)
 {
     if (!ctx.stereo_calibrator)
     {
         return;
     }
 
-    auto* cL = ctx.cam_mgr.get(command.left_cam_id);
-    auto* cR = ctx.cam_mgr.get(command.right_cam_id);
+    auto* cL = ctx.cameras.get(command.left_cam_id);
+    auto* cR = ctx.cameras.get(command.right_cam_id);
     if (!cL || !cR)
     {
         return;

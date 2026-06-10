@@ -4,12 +4,12 @@
 
 namespace runtime
 {
-struct AppContext;
+struct StereoCalibrationHandlerContext;
 }
 
 namespace service::stereo_calibration
 {
 
-void calibrate(runtime::AppContext& ctx, const cmd::CmdStereoCalibrate& command);
+void calibrate(runtime::StereoCalibrationHandlerContext& ctx, const cmd::CmdStereoCalibrate& command);
 
 } // namespace service::stereo_calibration

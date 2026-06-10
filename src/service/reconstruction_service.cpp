@@ -1,7 +1,7 @@
 #include "service/reconstruction_service.hpp"
 
 #include "logger/logger_macros.hpp"
-#include "runtime/app_context.hpp"
+#include "runtime/handler_context.hpp"
 #include "window/window.hpp"
 
 #include <algorithm>
@@ -38,10 +38,10 @@ uint64_t grayToBinary(uint64_t num)
 
 } // namespace
 
-void run(runtime::AppContext& ctx, win::Window& target_window,
+void run(runtime::ReconstructionHandlerContext& ctx, win::Window& target_window,
          const cmd::CmdReconstruct& command)
 {
-    if (target_window.id() != ctx.id_preview)
+    if (target_window.id() != ctx.preview_window_id)
     {
         return;
     }

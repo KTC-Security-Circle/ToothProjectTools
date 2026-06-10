@@ -1,9 +1,12 @@
 #include "service/scan_service.hpp"
 
 #include "logger/logger_macros.hpp"
-#include "runtime/app_context.hpp"
+#include "runtime/handler_context.hpp"
+#include "structured_light/structured_light.hpp"
 #include "video/camera.hpp"
+#include "video/camera_manager.hpp"
 #include "window/window.hpp"
+#include "window/window_manager.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -18,9 +21,9 @@ namespace fs = std::filesystem;
 namespace service::scan
 {
 
-void start(runtime::AppContext& ctx, win::Window& target_window, const cmd::CmdStartScan& command)
+void start(runtime::ScanHandlerContext& ctx, win::Window& target_window, const cmd::CmdStartScan& command)
 {
-    if (!ctx.sl_system)
+    if (!ctx.structured_light)
     {
         return;
     }
@@ -39,28 +42,28 @@ void start(runtime::AppContext& ctx, win::Window& target_window, const cmd::CmdS
         return;
     }
 
-    ctx.scan_interval_ms = static_cast<int>(command.interval_ms);
-    ctx.sl_system->startScan();
+    ctx.interval_ms = static_cast<int>(command.interval_ms);
+    ctx.structured_light->startScan();
     int count = 0;
-    LOG_INFO("=== 自動スキャン開始 (間隔: {}ms) ===", ctx.scan_interval_ms);
+    LOG_INFO("=== 自動スキャン開始 (間隔: {}ms) ===", ctx.interval_ms);
 
     while (true)
     {
-        target_window.setImage(ctx.sl_system->getCurrentPatternImage());
+        target_window.setImage(ctx.structured_light->getCurrentPatternImage());
         target_window.present();
-        cv::waitKey(std::max(50, ctx.scan_interval_ms));
+        cv::waitKey(std::max(50, ctx.interval_ms));
 
         cv::Mat img_L, img_R;
-        if (auto* cam = ctx.cam_mgr.get(ctx.scan_cam_id_left))
+        if (auto* cam = ctx.cameras.get(ctx.left_camera_id))
         {
             img_L = cam->getFrame();
         }
-        if (auto* cam = ctx.cam_mgr.get(ctx.scan_cam_id_right))
+        if (auto* cam = ctx.cameras.get(ctx.right_camera_id))
         {
             img_R = cam->getFrame();
         }
 
-        if (auto* w = ctx.win_mgr.get(ctx.id_preview))
+        if (auto* w = ctx.windows.get(ctx.preview_window_id))
         {
             if (!img_L.empty())
             {
@@ -68,7 +71,7 @@ void start(runtime::AppContext& ctx, win::Window& target_window, const cmd::CmdS
                 w->present();
             }
         }
-        if (auto* w = ctx.win_mgr.get(ctx.id_second))
+        if (auto* w = ctx.windows.get(ctx.second_window_id))
         {
             if (!img_R.empty())
             {
@@ -89,25 +92,25 @@ void start(runtime::AppContext& ctx, win::Window& target_window, const cmd::CmdS
         }
 
         count++;
-        int prev = ctx.sl_system->getCurrentIndex();
-        ctx.sl_system->nextPattern(false);
-        if (ctx.sl_system->getCurrentIndex() <= prev)
+        int prev = ctx.structured_light->getCurrentIndex();
+        ctx.structured_light->nextPattern(false);
+        if (ctx.structured_light->getCurrentIndex() <= prev)
         {
             break;
         }
     }
 
-    ctx.sl_system->stopScan();
+    ctx.structured_light->stopScan();
     target_window.setImage(cv::Mat(target_window.size().height, target_window.size().width, CV_8UC3, cv::Scalar(0)));
     target_window.present();
     LOG_INFO("=== 自動スキャン完了 (計 {} 枚) ===", count);
 }
 
-void stop(runtime::AppContext& ctx)
+void stop(runtime::ScanHandlerContext& ctx)
 {
-    if (ctx.sl_system)
+    if (ctx.structured_light)
     {
-        ctx.sl_system->stopScan();
+        ctx.structured_light->stopScan();
     }
 }
 
