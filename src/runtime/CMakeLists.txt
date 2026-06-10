@@ -1,12 +1,14 @@
-add_library(runtime INTERFACE)
+add_library(runtime STATIC
+  handler_context.cpp
+)
 
 target_include_directories(runtime
-  INTERFACE
+  PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(runtime
-  INTERFACE
+  PUBLIC
     cmd
     input
     window
