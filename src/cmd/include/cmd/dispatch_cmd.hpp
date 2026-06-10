@@ -4,6 +4,6 @@
 #include "cmd/commands.hpp"
 
 struct DispatchCmd {
-  Target  target;
+  cmd::Target  target;
   cmd::Command cmd;
 };

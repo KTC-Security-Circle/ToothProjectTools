@@ -18,7 +18,7 @@ void install_default_bindings(
   // ======================================================================
   auto request_quit = [&]{
     LOG_INFO("終了要求を予約します");
-    cmd_que.push_back(DispatchCmd{ TargetAll{}, cmd::CmdQuit{} });
+    cmd_que.push_back(DispatchCmd{cmd::TargetAll{}, cmd::CmdQuit{}});
   };
   handler.bind(27, request_quit);  // ESC
   handler.bind('q', request_quit); // q
@@ -28,17 +28,17 @@ void install_default_bindings(
   // ======================================================================
   // [f] フルスクリーン
   handler.bind('f', [&]{
-    cmd_que.push_back(DispatchCmd{ TargetFocused{}, cmd::CmdToggleFullscreen{} });
+    cmd_que.push_back(DispatchCmd{cmd::TargetFocus{}, cmd::CmdToggleFullscreen{}});
   });
 
   // [TAB] (9) 次のウィンドウへフォーカス
   handler.bind(9, [&]{
-    cmd_que.push_back(DispatchCmd{ TargetFocused{}, cmd::CmdFocusNext{} });
+    cmd_que.push_back(DispatchCmd{cmd::TargetFocus{}, cmd::CmdFocusNext{}});
   });
 
   // [1], [2] モニタ移動
-  handler.bind('1', [&]{ cmd_que.push_back(DispatchCmd{ TargetFocused{}, cmd::CmdMoveToMonitor{1} }); });
-  handler.bind('2', [&]{ cmd_que.push_back(DispatchCmd{ TargetFocused{}, cmd::CmdMoveToMonitor{2} }); });
+  handler.bind('1', [&]{ cmd_que.push_back(DispatchCmd{cmd::TargetFocus{}, cmd::CmdMoveToMonitor{1}}); });
+  handler.bind('2', [&]{ cmd_que.push_back(DispatchCmd{cmd::TargetFocus{}, cmd::CmdMoveToMonitor{2}}); });
 
   // ======================================================================
   // 3) キャリブレーション機能 (Mono / Stereo 分離)
@@ -53,7 +53,7 @@ void install_default_bindings(
   handler.bind('c', [&, get_focused_target](){
       auto [cam, dir] = get_focused_target();
       if (cam != video::kInvalidCameraId) {
-          cmd_que.push_back({TargetAll{}, cmd::CmdCalibCapture{cam, dir}});
+          cmd_que.push_back({cmd::TargetCamera{cam}, cmd::CmdCalibCapture{cam, dir}});
       } else {
           LOG_WARN("MonoCapture: ターゲットを選択してください");
       }
@@ -64,7 +64,7 @@ void install_default_bindings(
       auto [cam, dir] = get_focused_target();
       if (cam != video::kInvalidCameraId) {
           LOG_INFO("MonoClear: {}", dir);
-          cmd_que.push_back({TargetAll{}, cmd::CmdCalibClear{dir}});
+          cmd_que.push_back({cmd::TargetAll{}, cmd::CmdCalibClear{dir}});
       } else {
           LOG_WARN("MonoClear: ターゲットを選択してください");
       }
@@ -73,9 +73,13 @@ void install_default_bindings(
   // [k] Calc Mono
   handler.bind('k', [&, cfg](){
       if (cfg.scan_cam_left != video::kInvalidCameraId) 
-          cmd_que.push_back({TargetAll{}, cmd::CmdCalibrate{cfg.scan_cam_left, cfg.dir_mono_left}});
+          cmd_que.push_back(
+              {cmd::TargetCamera{cfg.scan_cam_left},
+               cmd::CmdCalibrate{cfg.scan_cam_left, cfg.dir_mono_left}});
       if (cfg.scan_cam_right != video::kInvalidCameraId) 
-          cmd_que.push_back({TargetAll{}, cmd::CmdCalibrate{cfg.scan_cam_right, cfg.dir_mono_right}});
+          cmd_que.push_back(
+              {cmd::TargetCamera{cfg.scan_cam_right},
+               cmd::CmdCalibrate{cfg.scan_cam_right, cfg.dir_mono_right}});
   });
 
   // --- B. Stereo (ステレオ) ---
@@ -86,16 +90,20 @@ void install_default_bindings(
   handler.bind('e', [&, cfg](){
       if (cfg.scan_cam_left != video::kInvalidCameraId && cfg.scan_cam_right != video::kInvalidCameraId) {
           LOG_INFO("StereoCapture: 同時撮影");
-          cmd_que.push_back({TargetAll{}, cmd::CmdCalibCapture{cfg.scan_cam_left,  cfg.dir_stereo_left}});
-          cmd_que.push_back({TargetAll{}, cmd::CmdCalibCapture{cfg.scan_cam_right, cfg.dir_stereo_right}});
+          cmd_que.push_back(
+              {cmd::TargetCamera{cfg.scan_cam_left},
+               cmd::CmdCalibCapture{cfg.scan_cam_left, cfg.dir_stereo_left}});
+          cmd_que.push_back(
+              {cmd::TargetCamera{cfg.scan_cam_right},
+               cmd::CmdCalibCapture{cfg.scan_cam_right, cfg.dir_stereo_right}});
       }
   });
 
   // [r] Reset Stereo Folder -> 同時クリア
   handler.bind('r', [&, cfg](){
       LOG_INFO("StereoClear: フォルダリセット");
-      cmd_que.push_back({TargetAll{}, cmd::CmdCalibClear{cfg.dir_stereo_left}});
-      cmd_que.push_back({TargetAll{}, cmd::CmdCalibClear{cfg.dir_stereo_right}});
+      cmd_que.push_back({cmd::TargetAll{}, cmd::CmdCalibClear{cfg.dir_stereo_left}});
+      cmd_que.push_back({cmd::TargetAll{}, cmd::CmdCalibClear{cfg.dir_stereo_right}});
   });
 
   // [s] Calc Stereo
@@ -103,7 +111,7 @@ void install_default_bindings(
       if (cfg.scan_cam_left != video::kInvalidCameraId && cfg.scan_cam_right != video::kInvalidCameraId) {
           LOG_INFO("StereoCalc: 計算要求");
           cmd_que.push_back(DispatchCmd{
-              TargetAll{}, 
+              cmd::TargetAll{},
               cmd::CmdStereoCalibrate{
                   cfg.scan_cam_left, cfg.scan_cam_right,
                   cfg.dir_stereo_left, cfg.dir_stereo_right, // stereoフォルダを使う
@@ -119,15 +127,15 @@ void install_default_bindings(
   if (projector_id != win::kInvalidWindowId) {
       // [p] Reset
       handler.bind('p', [&, projector_id]{
-        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdShowPattern{0} });
+        cmd_que.push_back(DispatchCmd{cmd::TargetWindow{projector_id}, cmd::CmdShowPattern{0}});
       });
       // [n] Next
       handler.bind('n', [&, projector_id]{
-        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdNextPattern{} });
+        cmd_que.push_back(DispatchCmd{cmd::TargetWindow{projector_id}, cmd::CmdNextPattern{}});
       });
       // [b] Back
       handler.bind('b', [&, projector_id]{
-        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdPrevPattern{} });
+        cmd_que.push_back(DispatchCmd{cmd::TargetWindow{projector_id}, cmd::CmdPrevPattern{}});
       });
 
       // ==================================================================
@@ -138,7 +146,7 @@ void install_default_bindings(
       // Ctrl+Z が効かない環境のため Space に割り当て
       handler.bind(32, [&, projector_id]{
         LOG_INFO("自動スキャン開始");
-        cmd_que.push_back(DispatchCmd{ TargetById{projector_id}, cmd::CmdStartScan{500} });
+        cmd_que.push_back(DispatchCmd{cmd::TargetWindow{projector_id}, cmd::CmdStartScan{500}});
       });
   }
   
@@ -146,14 +154,14 @@ void install_default_bindings(
   // Ctrl+X が効かない環境のため x に割り当て
   handler.bind('x', [&]{
     LOG_INFO("スキャン中断");
-    cmd_que.push_back(DispatchCmd{ TargetAll{}, cmd::CmdStopScan{} });
+    cmd_que.push_back(DispatchCmd{cmd::TargetAll{}, cmd::CmdStopScan{}});
   });
 
   // [m] 3D Reconstruction
   handler.bind('m', [&](){
       LOG_INFO("3D復元を開始します");
       cmd_que.push_back(DispatchCmd{
-          TargetAll{}, 
+          cmd::TargetAll{},
           cmd::CmdReconstruct{
               "calibration_stereo.yml", // キャリブレーションファイル
               "captures/scan_L",        // 左画像フォルダ

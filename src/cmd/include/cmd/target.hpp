@@ -1,12 +1,26 @@
-// src/cmd/include/cmd/target.hpp
 #pragma once
-#include <cstdint>
+
+#include "video/video_types.hpp"
+#include "window/window_types.hpp"
+
 #include <variant>
 
-using WindowId = std::uint64_t;     // ← window から独立
+namespace cmd
+{
 
 struct TargetAll {};
-struct TargetFocused {};
-struct TargetById { WindowId id; };
+struct TargetFocus {};
 
-using Target = std::variant<TargetAll, TargetFocused, TargetById>;
+struct TargetWindow
+{
+    win::WindowId window_id;
+};
+
+struct TargetCamera
+{
+    video::CameraId camera_id;
+};
+
+using Target = std::variant<TargetAll, TargetFocus, TargetWindow, TargetCamera>;
+
+} // namespace cmd
