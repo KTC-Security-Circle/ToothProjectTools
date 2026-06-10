@@ -1,8 +1,10 @@
 #include "service/calibration_service.hpp"
 
+#include "calibration/calibrator.hpp"
 #include "logger/logger_macros.hpp"
-#include "runtime/app_context.hpp"
+#include "runtime/handler_context.hpp"
 #include "video/camera.hpp"
+#include "video/camera_manager.hpp"
 #include "window/window.hpp"
 
 #include <filesystem>
@@ -18,9 +20,9 @@ namespace fs = std::filesystem;
 namespace service::calibration
 {
 
-void clear(runtime::AppContext& ctx, win::Window& target_window, const cmd::CmdCalibClear& command)
+void clear(runtime::CalibrationHandlerContext& ctx, win::Window& target_window, const cmd::CmdCalibClear& command)
 {
-    if (target_window.id() == ctx.id_preview && !command.target_directory.empty())
+    if (target_window.id() == ctx.preview_window_id && !command.target_directory.empty())
     {
         fs::remove_all(command.target_directory);
         fs::create_directories(command.target_directory);
@@ -28,15 +30,16 @@ void clear(runtime::AppContext& ctx, win::Window& target_window, const cmd::CmdC
     }
 }
 
-void capture(runtime::AppContext& ctx, win::Window& target_window, const cmd::CmdCalibCapture& command)
+void capture(runtime::CalibrationHandlerContext& ctx, win::Window& target_window,
+             const cmd::CmdCalibCapture& command)
 {
     if (command.camera_id == video::kInvalidCameraId)
     {
         return;
     }
 
-    auto it = ctx.cam_to_win.find(command.camera_id);
-    if (it != ctx.cam_to_win.end() && it->second != target_window.id())
+    auto it = ctx.camera_windows.find(command.camera_id);
+    if (it != ctx.camera_windows.end() && it->second != target_window.id())
     {
         return;
     }
@@ -47,7 +50,7 @@ void capture(runtime::AppContext& ctx, win::Window& target_window, const cmd::Cm
     }
 
     auto cnt = std::distance(fs::directory_iterator(command.target_directory), fs::directory_iterator{});
-    if (auto* cam = ctx.cam_mgr.get(command.camera_id))
+    if (auto* cam = ctx.cameras.get(command.camera_id))
     {
         cv::Mat frame = cam->getFrame();
         if (!frame.empty())
@@ -61,7 +64,7 @@ void capture(runtime::AppContext& ctx, win::Window& target_window, const cmd::Cm
     }
 }
 
-void calibrate(runtime::AppContext& ctx, const cmd::CmdCalibrate& command)
+void calibrate(runtime::CalibrationHandlerContext& ctx, const cmd::CmdCalibrate& command)
 {
     if (!ctx.calibrator)
     {
@@ -89,7 +92,7 @@ void calibrate(runtime::AppContext& ctx, const cmd::CmdCalibrate& command)
     double rms = ctx.calibrator->runCalibration(files, K, D);
     if (rms > 0 && rms < 1.0)
     {
-        if (auto* cam = ctx.cam_mgr.get(command.target_camera_id))
+        if (auto* cam = ctx.cameras.get(command.target_camera_id))
         {
             cam->setIntrinsics(K);
             cam->setDistCoeffs(D);

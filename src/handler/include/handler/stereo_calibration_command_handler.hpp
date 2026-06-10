@@ -4,17 +4,12 @@
 
 namespace runtime
 {
-struct AppContext;
-}
-
-namespace win
-{
-class Window;
+struct StereoCalibrationHandlerContext;
 }
 
 namespace handler::stereo_calibration
 {
 
-bool handle(runtime::AppContext& ctx, win::Window& target_window, const cmd::Command& command);
+bool handle(runtime::StereoCalibrationHandlerContext& ctx, const cmd::Command& command);
 
 } // namespace handler::stereo_calibration

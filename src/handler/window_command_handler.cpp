@@ -1,6 +1,6 @@
 #include "handler/window_command_handler.hpp"
 
-#include "runtime/app_context.hpp"
+#include "runtime/handler_context.hpp"
 #include "window/window.hpp"
 
 #include <type_traits>
@@ -8,7 +8,7 @@
 namespace handler::window
 {
 
-bool handle(runtime::AppContext& ctx, win::Window& target_window, const cmd::Command& command)
+bool handle(runtime::WindowHandlerContext& ctx, win::Window& target_window, const cmd::Command& command)
 {
     (void)ctx;
 

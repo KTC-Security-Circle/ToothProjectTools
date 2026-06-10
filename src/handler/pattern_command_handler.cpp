@@ -1,6 +1,7 @@
 #include "handler/pattern_command_handler.hpp"
 
-#include "runtime/app_context.hpp"
+#include "runtime/handler_context.hpp"
+#include "structured_light/structured_light.hpp"
 #include "window/window.hpp"
 
 #include <type_traits>
@@ -8,7 +9,7 @@
 namespace handler::pattern
 {
 
-bool handle(runtime::AppContext& ctx, win::Window& target_window, const cmd::Command& command)
+bool handle(runtime::PatternHandlerContext& ctx, win::Window& target_window, const cmd::Command& command)
 {
     bool handled = false;
 
@@ -19,28 +20,28 @@ bool handle(runtime::AppContext& ctx, win::Window& target_window, const cmd::Com
 
             if constexpr (std::is_same_v<T, cmd::CmdShowPattern>)
             {
-                if (ctx.sl_system)
+                if (ctx.structured_light)
                 {
-                    ctx.sl_system->setIndex(c.index);
-                    target_window.setImage(ctx.sl_system->getCurrentPatternImage());
+                    ctx.structured_light->setIndex(c.index);
+                    target_window.setImage(ctx.structured_light->getCurrentPatternImage());
                 }
                 handled = true;
             }
             else if constexpr (std::is_same_v<T, cmd::CmdNextPattern>)
             {
-                if (ctx.sl_system)
+                if (ctx.structured_light)
                 {
-                    ctx.sl_system->nextPattern(true);
-                    target_window.setImage(ctx.sl_system->getCurrentPatternImage());
+                    ctx.structured_light->nextPattern(true);
+                    target_window.setImage(ctx.structured_light->getCurrentPatternImage());
                 }
                 handled = true;
             }
             else if constexpr (std::is_same_v<T, cmd::CmdPrevPattern>)
             {
-                if (ctx.sl_system)
+                if (ctx.structured_light)
                 {
-                    ctx.sl_system->prevPattern(true);
-                    target_window.setImage(ctx.sl_system->getCurrentPatternImage());
+                    ctx.structured_light->prevPattern(true);
+                    target_window.setImage(ctx.structured_light->getCurrentPatternImage());
                 }
                 handled = true;
             }
