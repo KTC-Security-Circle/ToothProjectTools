@@ -7,4 +7,8 @@ target_include_directories(cmd
 )
 
 # もし target.hpp が win::Window::Id に依存するなら↓を有効化
-target_link_libraries(cmd INTERFACE video)
+target_link_libraries(cmd
+  INTERFACE
+    video
+    window
+)
