@@ -4,12 +4,12 @@
 
 namespace runtime
 {
-struct AppContext;
+struct GlobalHandlerContext;
 }
 
 namespace handler::global
 {
 
-bool handle(runtime::AppContext& ctx, const cmd::Command& command);
+bool handle(runtime::GlobalHandlerContext& ctx, const cmd::Command& command);
 
 } // namespace handler::global

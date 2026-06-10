@@ -1,5 +1,6 @@
 #include "handler/scan_command_handler.hpp"
 
+#include "runtime/handler_context.hpp"
 #include "service/scan_service.hpp"
 
 #include <type_traits>
@@ -7,7 +8,7 @@
 namespace handler::scan
 {
 
-bool handle(runtime::AppContext& ctx, win::Window& target_window, const cmd::Command& command)
+bool handle(runtime::ScanHandlerContext& ctx, win::Window& target_window, const cmd::Command& command)
 {
     bool handled = false;
 

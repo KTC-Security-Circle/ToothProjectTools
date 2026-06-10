@@ -1,6 +1,8 @@
 #include "handler/global_command_handler.hpp"
 
-#include "runtime/app_context.hpp"
+#include "runtime/handler_context.hpp"
+#include "window/window.hpp"
+#include "window/window_manager.hpp"
 
 #include <algorithm>
 #include <iterator>
@@ -10,7 +12,7 @@
 namespace handler::global
 {
 
-bool handle(runtime::AppContext& ctx, const cmd::Command& command)
+bool handle(runtime::GlobalHandlerContext& ctx, const cmd::Command& command)
 {
     bool handled = false;
 
@@ -22,7 +24,7 @@ bool handle(runtime::AppContext& ctx, const cmd::Command& command)
             if constexpr (std::is_same_v<T, cmd::CmdFocusNext>)
             {
                 std::vector<win::WindowId> ids;
-                ctx.win_mgr.forEach(
+                ctx.windows.forEach(
                     [&](win::Window& w)
                     {
                         if (w.visible())

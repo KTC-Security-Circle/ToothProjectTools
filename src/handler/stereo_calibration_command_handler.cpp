@@ -1,5 +1,6 @@
 #include "handler/stereo_calibration_command_handler.hpp"
 
+#include "runtime/handler_context.hpp"
 #include "service/stereo_calibration_service.hpp"
 
 #include <type_traits>
@@ -7,10 +8,8 @@
 namespace handler::stereo_calibration
 {
 
-bool handle(runtime::AppContext& ctx, win::Window& target_window, const cmd::Command& command)
+bool handle(runtime::StereoCalibrationHandlerContext& ctx, const cmd::Command& command)
 {
-    (void)target_window;
-
     bool handled = false;
 
     std::visit(

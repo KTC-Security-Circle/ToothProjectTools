@@ -4,7 +4,7 @@
 
 namespace runtime
 {
-struct AppContext;
+struct ScanHandlerContext;
 }
 
 namespace win
@@ -15,6 +15,6 @@ class Window;
 namespace handler::scan
 {
 
-bool handle(runtime::AppContext& ctx, win::Window& target_window, const cmd::Command& command);
+bool handle(runtime::ScanHandlerContext& ctx, win::Window& target_window, const cmd::Command& command);
 
 } // namespace handler::scan
