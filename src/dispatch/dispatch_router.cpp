@@ -27,19 +27,28 @@ void execute(runtime::AppContext& ctx, const DispatchCmd& dcmd)
         {
             using T = std::decay_t<decltype(target)>;
 
-            if constexpr (std::is_same_v<T, TargetAll>)
+            if constexpr (std::is_same_v<T, cmd::TargetAll>)
             {
                 ctx.win_mgr.forEach(apply);
             }
-            else if constexpr (std::is_same_v<T, TargetFocused>)
+            else if constexpr (std::is_same_v<T, cmd::TargetFocus>)
             {
                 if (auto* w = ctx.win_mgr.get(ctx.focused_id))
                     apply(*w);
             }
-            else if constexpr (std::is_same_v<T, TargetById>)
+            else if constexpr (std::is_same_v<T, cmd::TargetWindow>)
             {
-                if (auto* w = ctx.win_mgr.get(target.id))
+                if (auto* w = ctx.win_mgr.get(target.window_id))
                     apply(*w);
+            }
+            else if constexpr (std::is_same_v<T, cmd::TargetCamera>)
+            {
+                auto it = ctx.cam_to_win.find(target.camera_id);
+                if (it != ctx.cam_to_win.end())
+                {
+                    if (auto* w = ctx.win_mgr.get(it->second))
+                        apply(*w);
+                }
             }
         },
         dcmd.target);
