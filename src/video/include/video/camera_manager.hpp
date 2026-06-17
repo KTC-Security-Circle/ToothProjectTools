@@ -30,6 +30,11 @@ public:
   Camera* get(CameraId id) const;
 
   /**
+   * @brief 指定したカメラを閉じて管理対象から外す
+   */
+  bool remove(CameraId id);
+
+  /**
    * @brief 全カメラに対して処理を行う（フレーム取得ループなどで使用）
    */
   void forEach(std::function<void(Camera&)> action);

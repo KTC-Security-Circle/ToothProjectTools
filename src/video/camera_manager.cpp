@@ -37,6 +37,20 @@ Camera* CameraManager::get(CameraId id) const {
   return nullptr;
 }
 
+bool CameraManager::remove(CameraId id) {
+  auto it = std::find_if(cameras_.begin(), cameras_.end(),
+                         [id](const auto& c) { return c && c->id() == id; });
+  if (it == cameras_.end()) {
+    return false;
+  }
+
+  if ((*it)->isOpened()) {
+    (*it)->close();
+  }
+  cameras_.erase(it);
+  return true;
+}
+
 void CameraManager::forEach(std::function<void(Camera&)> action) {
   for (auto& c : cameras_) {
     if (c) action(*c);
