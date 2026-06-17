@@ -35,12 +35,41 @@ SidecarService::~SidecarService() {
   shutdown();
 }
 
+std::string_view toString(SidecarErrorCode code) {
+  using enum SidecarErrorCode;
+
+  switch (code) {
+  case InvalidJson:
+    return "invalid_json";
+  case InvalidCommand:
+    return "invalid_command";
+  case MissingField:
+    return "missing_field";
+  case InvalidRole:
+    return "invalid_role";
+  case CameraOpenFailed:
+    return "camera_open_failed";
+  case CameraNotOpen:
+    return "camera_not_open";
+  case StreamStartFailed:
+    return "stream_start_failed";
+  case CaptureFailed:
+    return "capture_failed";
+  case FileWriteFailed:
+    return "file_write_failed";
+  case InternalError:
+    return "internal_error";
+  }
+
+  return "internal_error";
+}
+
 SidecarResult SidecarService::openCamera(int device_index, const std::string& role) {
   if (device_index < 0) {
-    return SidecarResult::failure(SidecarErrorCode::CameraOpenFailed, "camera_id must be non-negative");
+    return SidecarResult::failure(SidecarErrorCode::CameraOpenFailed, toString(SidecarErrorCode::CameraOpenFailed).data());
   }
   if (!validRole(role)) {
-    return SidecarResult::failure(SidecarErrorCode::InvalidCommand, "role contains unsupported characters");
+    return SidecarResult::failure(SidecarErrorCode::InvalidRole, toString(SidecarErrorCode::InvalidRole).data());
   }
 
   if (bindings_.contains(role)) {
@@ -67,7 +96,7 @@ SidecarResult SidecarService::openCamera(int device_index, const std::string& ro
 SidecarResult SidecarService::closeCamera(const std::string& role) {
   auto it = bindings_.find(role);
   if (it == bindings_.end()) {
-    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, "camera role is not open: " + role);
+    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, toString(SidecarErrorCode::CameraNotOpen).data());
   }
 
   if (it->second.publisher) {
@@ -84,7 +113,7 @@ SidecarResult SidecarService::closeCamera(const std::string& role) {
 SidecarResult SidecarService::startStream(const std::string& role) {
   auto it = bindings_.find(role);
   if (it == bindings_.end()) {
-    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, "camera role is not open: " + role);
+    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, toString(SidecarErrorCode::CameraNotOpen).data());
   }
 
   if (it->second.publisher && it->second.publisher->running()) {
@@ -93,14 +122,14 @@ SidecarResult SidecarService::startStream(const std::string& role) {
 
   auto* camera = cameras_.get(it->second.camera_id);
   if (!camera || !camera->isOpened()) {
-    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, "camera role is not open: " + role);
+    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, toString(SidecarErrorCode::CameraNotOpen).data());
   }
 
   auto publisher = std::make_unique<stream::FramePublisher>(role, *camera, streams_);
   streams_.setStreaming(role, true);
   if (!publisher->start()) {
     streams_.setStreaming(role, false);
-    return SidecarResult::failure(SidecarErrorCode::StreamStartFailed, "failed to start stream: " + role);
+    return SidecarResult::failure(SidecarErrorCode::StreamStartFailed, toString(SidecarErrorCode::StreamStartFailed).data());
   }
   it->second.publisher = std::move(publisher);
   return SidecarResult::success(streamUrl(role));
@@ -109,7 +138,7 @@ SidecarResult SidecarService::startStream(const std::string& role) {
 SidecarResult SidecarService::stopStream(const std::string& role) {
   auto it = bindings_.find(role);
   if (it == bindings_.end()) {
-    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, "camera role is not open: " + role);
+    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, toString(SidecarErrorCode::CameraNotOpen).data());
   }
 
   if (it->second.publisher) {
@@ -125,17 +154,17 @@ SidecarResult SidecarService::captureFrame(
     const std::string& output) {
   auto it = bindings_.find(role);
   if (it == bindings_.end()) {
-    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, "camera role is not open: " + role);
+    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, toString(SidecarErrorCode::CameraNotOpen).data());
   }
 
   auto* camera = cameras_.get(it->second.camera_id);
   if (!camera || !camera->isOpened()) {
-    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, "camera role is not open: " + role);
+    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, toString(SidecarErrorCode::CameraNotOpen).data());
   }
 
   auto frame = camera->getFrame();
   if (frame.empty()) {
-    return SidecarResult::failure(SidecarErrorCode::CaptureFailed, "camera has no frame yet: " + role);
+    return SidecarResult::failure(SidecarErrorCode::CaptureFailed, toString(SidecarErrorCode::CaptureFailed).data());
   }
 
   try {
@@ -144,11 +173,11 @@ SidecarResult SidecarService::captureFrame(
       std::filesystem::create_directories(output_path.parent_path());
     }
     if (!cv::imwrite(output, frame)) {
-      return SidecarResult::failure(SidecarErrorCode::FileWriteFailed, "failed to write image: " + output);
+      return SidecarResult::failure(SidecarErrorCode::FileWriteFailed, toString(SidecarErrorCode::FileWriteFailed).data());
     }
   } catch (const std::exception& error) {
     LOG_ERROR("Frame save failed for '{}': {}", output, error.what());
-    return SidecarResult::failure(SidecarErrorCode::FileWriteFailed, "failed to write image: " + output);
+    return SidecarResult::failure(SidecarErrorCode::FileWriteFailed, toString(SidecarErrorCode::FileWriteFailed).data());
   }
 
   return SidecarResult::success(output);
