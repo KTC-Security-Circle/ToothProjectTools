@@ -20,7 +20,7 @@ SidecarResult SidecarResult::success(std::string value) {
 }
 
 SidecarResult SidecarResult::failure(SidecarErrorCode code, std::string message) {
-  return SidecarResult{false, SidecarError{{code, message}}, {}};
+  return SidecarResult{false, SidecarError{code, message}, {}};
 }
 
 SidecarService::SidecarService(

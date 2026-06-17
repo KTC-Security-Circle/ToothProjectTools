@@ -146,8 +146,15 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message) {
 void ControlInputAdapter::writeServiceFailure(
     const std::string& id,
     const service::SidecarResult& result) {
-  writer_.writeResponse(ControlResponse::failure(
-      id, result.error_code, result.error_message));
+  const auto code = result.error
+      ? std::string(service::toString(result.error->code))
+      : std::string{"internal_error"};
+
+  const auto message = result.error
+      ? result.error->message
+      : std::string{"sidecar command failed without error detail"};
+
+  writer_.writeResponse(ControlResponse::failure(id, code, message));
 }
 
 } // namespace control
