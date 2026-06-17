@@ -14,4 +14,10 @@ void init(const std::string& logfile = "logs/app.log",
         std::size_t rotate_bytes = 5 * 1024 * 1024,
         std::size_t rotate_files = 3);
 
+/// @brief stdoutを制御プロトコル専用にするsidecar向け初期化
+void init_sidecar(const std::string& logfile = "logs/tooth-backend.log",
+                  const char* env_console_level = "SIDECAR_CONSOLE_LEVEL",
+                  std::size_t rotate_bytes = 5 * 1024 * 1024,
+                  std::size_t rotate_files = 3);
+
 } // namespace public_logger
