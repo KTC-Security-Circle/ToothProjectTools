@@ -16,11 +16,11 @@
 namespace service {
 
 SidecarResult SidecarResult::success(std::string value) {
-  return SidecarResult{true, {}, {}, std::move(value)};
+  return SidecarResult{true, std::nullopt, std::move(value)};
 }
 
 SidecarResult SidecarResult::failure(SidecarErrorCode code, std::string message) {
-  return SidecarResult{false, {{code, message}}, {}, {}};
+  return SidecarResult{false, SidecarError{{code, message}}, {}};
 }
 
 SidecarService::SidecarService(
