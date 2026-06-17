@@ -2,6 +2,7 @@ add_library(mjpeg_stream STATIC
   frame_publisher.cpp
   mjpeg_server.cpp
   stream_registry.cpp
+  role_name.cpp
 )
 
 target_include_directories(mjpeg_stream
