@@ -19,7 +19,12 @@ ControlResponse missingField(const std::string& id, const std::string& field) {
 ControlInputAdapter::ControlInputAdapter(
     service::SidecarService& service,
     JsonLineWriter& writer)
-    : service_(service), writer_(writer) {}
+    : service_(service),
+      writer_(writer),
+      headless_mapper_(service),
+      headless_dispatcher_(service.captureService())
+{
+}
 
 AdapterResult ControlInputAdapter::handle(const ControlMessage& message) {
   if (!message.id || message.id->empty()) {
@@ -110,24 +115,38 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message) {
   }
 
   if (*message.cmd == "capture_frame") {
-    if (!message.role || message.role->empty()) {
-      writer_.writeResponse(missingField(id, "role"));
+    const auto map_result = headless_mapper_.mapCaptureFrame(message);
+    if (!map_result.ok) {
+      writeHeadlessFailure(
+          id,
+          map_result.error.value_or(headless::HeadlessCommandError{
+              "invalid_command",
+              "failed to map capture_frame command"}));
       return AdapterResult::continue_running;
     }
-    if (!message.output || message.output->empty()) {
-      writer_.writeResponse(missingField(id, "output"));
+
+    const auto result = headless_dispatcher_.execute(*map_result.command);
+    if (!result.handled) {
+      writer_.writeResponse(ControlResponse::failure(
+          id, "invalid_command", "headless dispatcher did not handle capture_frame"));
       return AdapterResult::continue_running;
     }
-    const auto result = service_.captureFrame(*message.role, *message.output);
     if (!result.ok) {
-      writeServiceFailure(id, result);
+      writeHeadlessFailure(
+          id,
+          result.error.value_or(headless::HeadlessCommandError{
+              "capture_failed",
+              "failed to capture frame"}));
       return AdapterResult::continue_running;
     }
+
+    const auto path_it = result.values.find("path");
+    const auto path = path_it != result.values.end() ? path_it->second : std::string{};
     writer_.writeResponse(ControlResponse::success(
-        id, {{"path", result.value}}));
+        id, {{"path", path}}));
     writer_.writeEvent(ControlEvent{
         "frame_saved",
-        {{"role", *message.role}, {"path", result.value}}});
+        {{"role", *message.role}, {"path", path}}});
     return AdapterResult::continue_running;
   }
 
@@ -155,6 +174,12 @@ void ControlInputAdapter::writeServiceFailure(
       : std::string{"sidecar command failed without error detail"};
 
   writer_.writeResponse(ControlResponse::failure(id, code, message));
+}
+
+void ControlInputAdapter::writeHeadlessFailure(
+    const std::string& id,
+    const headless::HeadlessCommandError& error) {
+  writer_.writeResponse(ControlResponse::failure(id, error.code, error.message));
 }
 
 } // namespace control

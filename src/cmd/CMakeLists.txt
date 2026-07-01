@@ -1,14 +1,20 @@
-# ヘッダ専用ライブラリ
-add_library(cmd INTERFACE)
+add_library(cmd_commands INTERFACE)
 
-target_include_directories(cmd
+target_include_directories(cmd_commands
   INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# もし target.hpp が win::Window::Id に依存するなら↓を有効化
-target_link_libraries(cmd
+target_link_libraries(cmd_commands
   INTERFACE
     video
+)
+
+# ヘッダ専用ライブラリ
+add_library(cmd INTERFACE)
+
+target_link_libraries(cmd
+  INTERFACE
+    cmd_commands
     window
 )

@@ -12,6 +12,7 @@ target_include_directories(sidecar_control
 
 target_link_libraries(sidecar_control
   PUBLIC
+    headless_dispatch
     sidecar_service
   PRIVATE
     cv_lib

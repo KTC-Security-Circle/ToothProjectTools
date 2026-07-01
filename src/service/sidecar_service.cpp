@@ -183,6 +183,18 @@ SidecarResult SidecarService::captureFrame(
   return SidecarResult::success(output);
 }
 
+std::optional<video::CameraId> SidecarService::resolveCameraId(const std::string& role) const {
+  const auto it = bindings_.find(role);
+  if (it == bindings_.end()) {
+    return std::nullopt;
+  }
+  return it->second.camera_id;
+}
+
+capture::CaptureService& SidecarService::captureService() {
+  return capture_service_;
+}
+
 void SidecarService::shutdown() {
   for (auto& [role, binding] : bindings_) {
     if (binding.publisher) {

@@ -111,6 +111,7 @@ add_subdirectory(src/cmd)
 add_subdirectory(src/input)
 add_subdirectory(src/runtime)  # INTERFACE ターゲット（依存の伝播先）
 add_subdirectory(src/service)
+add_subdirectory(src/headless)
 add_subdirectory(src/control)
 add_subdirectory(src/serve)
 add_subdirectory(src/handler)
