@@ -9,6 +9,7 @@
 
 #include <spdlog/cfg/env.h> // load_env_levels()
 #include <spdlog/sinks/rotating_file_sink.h>
+#include <spdlog/sinks/sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
@@ -47,19 +48,20 @@ inline spdlog::level::level_enum parse_level_or_fallback(const char* environment
                : parsed_level;
 }
 
-} // namespace
-
-namespace public_logger {
-
-void init(const std::string& logfile,
-          const char* environment_variable_for_console_level,
-          std::size_t rotate_bytes,
-          std::size_t rotate_files) {
-    // 環境変数 SPDLOG_LEVEL で既定ロガー/規定レベルを設定可能（"info,app=trace" 等）
+void init_logger(const std::string& logfile,
+                 const char* environment_variable_for_console_level,
+                 std::size_t rotate_bytes,
+                 std::size_t rotate_files,
+                 bool use_stderr) {
     spdlog::cfg::load_env_levels();
 
-    // コンソール sink
-    auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    std::shared_ptr<spdlog::sinks::sink> console_sink;
+    if (use_stderr) {
+        console_sink = std::make_shared<spdlog::sinks::stderr_color_sink_mt>();
+    } else {
+        console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
+    }
+
     const char* environment_value_for_console_level =
         std::getenv(environment_variable_for_console_level); // NOLINT(concurrency-mt-unsafe)
     auto console_level =
@@ -67,22 +69,20 @@ void init(const std::string& logfile,
     console_sink->set_level(console_level);
     console_sink->set_pattern(console_pattern);
 
-    // ファイル sink（ローテーション）。ディレクトリは必要なら作成
     try {
         std::filesystem::path logfile_path{logfile};
         if (logfile_path.has_parent_path()) {
             std::filesystem::create_directories(logfile_path.parent_path());
         }
     } catch (...) {
-        // 失敗してもコンソール出力は生きる
+        // コンソール出力は継続する
     }
 
     auto file_sink =
         std::make_shared<spdlog::sinks::rotating_file_sink_mt>(logfile, rotate_bytes, rotate_files);
-    file_sink->set_level(spdlog::level::trace); // ファイルは詳細に残す
+    file_sink->set_level(spdlog::level::trace);
     file_sink->set_pattern(file_pattern);
 
-    // 統合ロガーを既定に据える
     auto combined_logger =
         std::make_shared<spdlog::logger>("app", spdlog::sinks_init_list{console_sink, file_sink});
     combined_logger->set_level(spdlog::level::trace);
@@ -91,6 +91,24 @@ void init(const std::string& logfile,
     SPDLOG_INFO("logger initialized: console_level={}, file_rotate={} bytes, keep {} files",
                 spdlog::level::to_string_view(console_level), rotate_bytes, rotate_files);
     spdlog::flush_on(spdlog::level::info);
+}
+
+} // namespace
+
+namespace public_logger {
+
+void init(const std::string& logfile,
+          const char* environment_variable_for_console_level,
+          std::size_t rotate_bytes,
+          std::size_t rotate_files) {
+    init_logger(logfile, environment_variable_for_console_level, rotate_bytes, rotate_files, false);
+}
+
+void init_sidecar(const std::string& logfile,
+                  const char* environment_variable_for_console_level,
+                  std::size_t rotate_bytes,
+                  std::size_t rotate_files) {
+    init_logger(logfile, environment_variable_for_console_level, rotate_bytes, rotate_files, true);
 }
 
 } // namespace public_logger

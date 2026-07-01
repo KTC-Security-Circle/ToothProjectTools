@@ -10,8 +10,9 @@ target_include_directories(video
 )
 
 target_link_libraries(video
-  PRIVATE
+  PUBLIC
     cv_lib
+  PRIVATE
     logger
 )
 
