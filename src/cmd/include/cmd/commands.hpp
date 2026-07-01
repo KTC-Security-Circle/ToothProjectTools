@@ -1,5 +1,6 @@
 // src/cmd/include/cmd/commands.hpp
 #pragma once
+#include <filesystem>
 #include <variant>
 #include <optional>
 #include <string>
@@ -23,6 +24,30 @@ struct CmdCapturePush {
   CaptureScope           scope{CaptureScope::FocusedOnly};
   std::optional<int>     camera_id{};  // 省略時はフォーカス中ウィンドウの camera_id を使用
   std::string            tag{};        // 任意ラベル（保存名等に使う想定）
+};
+
+/// @brief 指定cameraからframeを取得して画像ファイルに保存するcommand。
+struct CmdCaptureFrame {
+  /// camera_id <video::CameraId>: Capture対象のcamera識別子。
+  video::CameraId camera_id{video::kInvalidCameraId};
+
+  /// output_path <std::filesystem::path>: 保存先画像ファイルのpath。
+  std::filesystem::path output_path;
+};
+
+/// @brief 左右cameraから近いタイミングでframeを取得して画像ファイルに保存するcommand。
+struct CmdCaptureStereo {
+  /// left_camera_id <video::CameraId>: 左側Capture対象のcamera識別子。
+  video::CameraId left_camera_id{video::kInvalidCameraId};
+
+  /// right_camera_id <video::CameraId>: 右側Capture対象のcamera識別子。
+  video::CameraId right_camera_id{video::kInvalidCameraId};
+
+  /// left_output_path <std::filesystem::path>: 左camera画像ファイルの保存先path。
+  std::filesystem::path left_output_path;
+
+  /// right_output_path <std::filesystem::path>: 右camera画像ファイルの保存先path。
+  std::filesystem::path right_output_path;
 };
 
 struct CmdShowPattern { 
@@ -77,6 +102,8 @@ using Command = std::variant<
   CmdQuit,
   CmdFocusNext,
   CmdCapturePush,
+  CmdCaptureFrame,
+  CmdCaptureStereo,
   CmdShowPattern,
   CmdNextPattern,
   CmdPrevPattern,
