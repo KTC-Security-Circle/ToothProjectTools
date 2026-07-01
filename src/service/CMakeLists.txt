@@ -32,6 +32,7 @@ target_include_directories(sidecar_service
 
 target_link_libraries(sidecar_service
   PUBLIC
+    capture
     mjpeg_stream
     video
   PRIVATE
