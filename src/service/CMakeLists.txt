@@ -15,6 +15,7 @@ target_include_directories(service
 target_link_libraries(service
   PUBLIC
     runtime
+    capture
   PRIVATE
     cv_lib
     logger

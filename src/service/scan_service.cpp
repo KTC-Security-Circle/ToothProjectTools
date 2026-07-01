@@ -1,5 +1,7 @@
 #include "service/scan_service.hpp"
 
+#include "capture/capture_result.hpp"
+#include "capture/capture_service.hpp"
 #include "logger/logger_macros.hpp"
 #include "runtime/handler_context.hpp"
 #include "structured_light/structured_light.hpp"
@@ -13,7 +15,6 @@
 #include <iomanip>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
-#include <opencv2/imgcodecs.hpp>
 #include <sstream>
 
 namespace fs = std::filesystem;
@@ -87,8 +88,14 @@ void start(runtime::ScanHandlerContext& ctx, win::Window& target_window, const c
             std::stringstream ss_L, ss_R;
             ss_L << dir_L << "/" << std::setfill('0') << std::setw(3) << count << ".png";
             ss_R << dir_R << "/" << std::setfill('0') << std::setw(3) << count << ".png";
-            cv::imwrite(ss_L.str(), img_L);
-            cv::imwrite(ss_R.str(), img_R);
+            const auto result = ctx.capture_service.captureStereo(
+                ctx.left_camera_id, ctx.right_camera_id, ss_L.str(), ss_R.str());
+            if (!result.ok && result.error)
+            {
+                LOG_ERROR("Scan Capture: failed code={} message={}",
+                          capture::toString(result.error->code),
+                          result.error->message);
+            }
         }
 
         count++;

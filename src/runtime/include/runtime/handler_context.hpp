@@ -22,6 +22,11 @@ namespace video
 class CameraManager;
 }
 
+namespace capture
+{
+class CaptureService;
+}
+
 namespace win
 {
 class WindowManager;
@@ -52,6 +57,8 @@ struct ScanHandlerContext
 {
     win::WindowManager& windows;
     video::CameraManager& cameras;
+    /// capture_service <capture::CaptureService&>: scan中の画像保存を実行するCapture用domain service。
+    capture::CaptureService& capture_service;
     sl::StructuredLight* structured_light;
     video::CameraId left_camera_id;
     video::CameraId right_camera_id;
@@ -63,9 +70,17 @@ struct ScanHandlerContext
 struct CalibrationHandlerContext
 {
     video::CameraManager& cameras;
+    /// capture_service <capture::CaptureService&>: calibration画像保存を実行するCapture用domain service。
+    capture::CaptureService& capture_service;
     calib::Calibrator* calibrator;
     const std::map<video::CameraId, win::WindowId>& camera_windows;
     win::WindowId preview_window_id;
+};
+
+struct CaptureHandlerContext
+{
+    /// capture_service <capture::CaptureService&>: Capture commandを実行するdomain service。
+    capture::CaptureService& capture_service;
 };
 
 struct StereoCalibrationHandlerContext
@@ -87,5 +102,14 @@ ScanHandlerContext make_scan_handler_context(AppContext& ctx);
 CalibrationHandlerContext make_calibration_handler_context(AppContext& ctx);
 StereoCalibrationHandlerContext make_stereo_calibration_handler_context(AppContext& ctx);
 ReconstructionHandlerContext make_reconstruction_handler_context(AppContext& ctx);
+
+/// @brief AppContextからCaptureHandlerContextを作成する。
+///
+/// Args:
+///   ctx <AppContext&>: CaptureServiceを所有するapplication context。
+///
+/// Return:
+///   <CaptureHandlerContext>: CaptureHandlerへ渡すcontext。
+CaptureHandlerContext make_capture_handler_context(AppContext& ctx);
 
 } // namespace runtime
