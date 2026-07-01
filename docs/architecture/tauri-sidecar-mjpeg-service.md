@@ -117,7 +117,7 @@ stream中のroleをcloseした場合はpublisherを停止してからcameraを�
 {"event":"stream_started","role":"left","url":"http://127.0.0.1:39010/left.mjpg"}
 ```
 
-cameraがopen済みであることが前提。MVPのpublisherは最大約10fps、JPEG quality 80で最新frameを配信する。
+cameraがopen済みであることが前提。MVPのpublisherはデフォルト約60fps、JPEG quality 80で最新frameを配信する。
 
 ### stop_stream
 
