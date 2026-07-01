@@ -1,5 +1,6 @@
 #include "dispatch/dispatch.hpp"
 #include "handler/calibration_command_handler.hpp"
+#include "handler/capture_command_handler.hpp"
 #include "handler/global_command_handler.hpp"
 #include "handler/pattern_command_handler.hpp"
 #include "handler/reconstruction_command_handler.hpp"
@@ -15,6 +16,12 @@ bool handle_global(runtime::AppContext& ctx, const cmd::Command& command)
 {
     auto handler_ctx = runtime::make_global_handler_context(ctx);
     return handler::global::handle(handler_ctx, command);
+}
+
+bool handle_capture(runtime::AppContext& ctx, const cmd::Command& command)
+{
+    auto handler_ctx = runtime::make_capture_handler_context(ctx);
+    return handler::capture::handle(handler_ctx, command);
 }
 
 void handle_window(runtime::AppContext& ctx, win::Window& target_window, const cmd::Command& command)

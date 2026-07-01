@@ -16,6 +16,12 @@ void execute(runtime::AppContext& ctx, const DispatchCmd& dcmd)
         return;
     }
 
+    if (local_handler::handle_capture(ctx, dcmd.cmd))
+    {
+        ctx.skip_render_once = true;
+        return;
+    }
+
     auto apply = [&](win::Window& w)
     {
         if (w.visible())
