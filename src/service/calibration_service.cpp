@@ -1,6 +1,8 @@
 #include "service/calibration_service.hpp"
 
 #include "calibration/calibrator.hpp"
+#include "capture/capture_result.hpp"
+#include "capture/capture_service.hpp"
 #include "logger/logger_macros.hpp"
 #include "runtime/handler_context.hpp"
 #include "video/camera.hpp"
@@ -11,7 +13,6 @@
 #include <iomanip>
 #include <iterator>
 #include <opencv2/core.hpp>
-#include <opencv2/imgcodecs.hpp>
 #include <sstream>
 #include <vector>
 
@@ -50,17 +51,21 @@ void capture(runtime::CalibrationHandlerContext& ctx, win::Window& target_window
     }
 
     auto cnt = std::distance(fs::directory_iterator(command.target_directory), fs::directory_iterator{});
+    std::stringstream ss;
+    ss << command.target_directory << "/" << command.prefix << std::setfill('0') << std::setw(3) << cnt << ".png";
+
+    const auto result = ctx.capture_service.captureFrame(command.camera_id, ss.str());
+    if (!result.ok && result.error)
+    {
+        LOG_ERROR("Calib Capture: failed code={} message={}",
+                  capture::toString(result.error->code),
+                  result.error->message);
+        return;
+    }
+
     if (auto* cam = ctx.cameras.get(command.camera_id))
     {
-        cv::Mat frame = cam->getFrame();
-        if (!frame.empty())
-        {
-            std::stringstream ss;
-            ss << command.target_directory << "/" << command.prefix << std::setfill('0') << std::setw(3) << cnt
-               << ".png";
-            cv::imwrite(ss.str(), frame);
-            LOG_INFO("Saved[{}]: {}", cam->name(), ss.str());
-        }
+        LOG_INFO("Saved[{}]: {}", cam->name(), result.output_path.string());
     }
 }
 

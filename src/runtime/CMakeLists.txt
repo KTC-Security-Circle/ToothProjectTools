@@ -13,6 +13,7 @@ target_link_libraries(runtime
     input
     window
     video
+    capture
     structured_light
     calibration
 )
