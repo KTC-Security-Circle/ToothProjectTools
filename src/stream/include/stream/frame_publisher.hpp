@@ -20,7 +20,7 @@ public:
       std::string role,
       video::Camera& camera,
       StreamRegistry& registry,
-      int frames_per_second = 10,
+      int frames_per_second = 60,
       int jpeg_quality = 80);
   ~FramePublisher();
 

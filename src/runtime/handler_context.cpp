@@ -25,6 +25,7 @@ ScanHandlerContext make_scan_handler_context(AppContext& ctx)
     return {
         ctx.win_mgr,
         ctx.cam_mgr,
+        ctx.capture_service,
         ctx.sl_system.get(),
         ctx.scan_cam_id_left,
         ctx.scan_cam_id_right,
@@ -36,7 +37,7 @@ ScanHandlerContext make_scan_handler_context(AppContext& ctx)
 
 CalibrationHandlerContext make_calibration_handler_context(AppContext& ctx)
 {
-    return {ctx.cam_mgr, ctx.calibrator.get(), ctx.cam_to_win, ctx.id_preview};
+    return {ctx.cam_mgr, ctx.capture_service, ctx.calibrator.get(), ctx.cam_to_win, ctx.id_preview};
 }
 
 StereoCalibrationHandlerContext make_stereo_calibration_handler_context(AppContext& ctx)
@@ -47,6 +48,11 @@ StereoCalibrationHandlerContext make_stereo_calibration_handler_context(AppConte
 ReconstructionHandlerContext make_reconstruction_handler_context(AppContext& ctx)
 {
     return {ctx.id_preview};
+}
+
+CaptureHandlerContext make_capture_handler_context(AppContext& ctx)
+{
+    return {ctx.capture_service};
 }
 
 } // namespace runtime

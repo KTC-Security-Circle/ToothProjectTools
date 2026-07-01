@@ -7,6 +7,7 @@
 #include "input/input_handler.hpp"
 #include "cmd/dispatch_cmd.hpp"
 #include "calibration/stereo_calibrator.hpp"
+#include "capture/capture_service.hpp"
 
 #include <vector>
 #include <memory>
@@ -20,6 +21,8 @@ struct AppContext {
     // --- Managers & Core Systems ---
     win::WindowManager   win_mgr;
     video::CameraManager cam_mgr;
+    /// capture_service <capture::CaptureService>: CameraManagerを参照するCapture用domain service。
+    capture::CaptureService capture_service{cam_mgr};
     input::InputHandler  input;
     
     // ★修正: 型を std::deque<DispatchCmd> に明示
