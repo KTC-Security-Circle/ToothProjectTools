@@ -9,6 +9,10 @@ class SidecarService;
 struct SidecarResult;
 }
 
+namespace common {
+struct CommandError;
+}
+
 namespace control {
 
 class JsonLineWriter;
@@ -52,17 +56,17 @@ private:
       const std::string& id,
       const service::SidecarResult& result);
 
-  /// @brief HeadlessDispatcher由来の失敗をControlResponseへ変換して書き出す。
+  /// @brief command変換由来の失敗をControlResponseへ変換して書き出す。
   ///
   /// Args:
   ///   id <const std::string&>: responseへ設定するrequest id。
-  ///   error <const headless::HeadlessCommandError&>: headless mapperまたはdispatcherから返されたerror。
+  ///   error <const common::CommandError&>: mapperから返されたerror。
   ///
   /// Return:
   ///   <void>: 戻り値なし。
   void writeHeadlessFailure(
       const std::string& id,
-      const headless::HeadlessCommandError& error);
+      const common::CommandError& error);
 
   /// service_ <service::SidecarService&>: lifecycle commandとrole bindingを担当するservice。
   service::SidecarService& service_;
