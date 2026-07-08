@@ -51,6 +51,33 @@ class HeadlessCommandMapper
     ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
     CommandMapResult mapCaptureFrame(const control::ControlMessage& message);
 
+    /// @brief capture_stereo用ControlMessageをCmdCaptureStereoへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapCaptureStereo(const control::ControlMessage& message);
+
+    /// @brief calib_capture_frame用ControlMessageをCmdCaptureFrameへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapCalibrationCaptureFrame(const control::ControlMessage& message);
+
+    /// @brief calib_capture_stereo用ControlMessageをCmdCaptureStereoへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapCalibrationCaptureStereo(const control::ControlMessage& message);
+
   private:
     /// sidecar_service_ <service::SidecarService&>: role bindingを保持するsidecar service。
     service::SidecarService& sidecar_service_;
