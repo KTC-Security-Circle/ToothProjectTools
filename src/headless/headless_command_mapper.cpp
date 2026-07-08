@@ -4,6 +4,7 @@
 #include "service/sidecar_service.hpp"
 
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -27,6 +28,54 @@ CommandMapResult mapFailure(std::string code, std::string message)
     return result;
 }
 
+/// @brief 必須文字列fieldを検証する。
+///
+/// Args:
+///   value <const std::optional<std::string>&>: 検証するfield値。
+///   field_name <const std::string&>: error messageへ使用するfield名。
+///
+/// Return:
+///   <std::optional<CommandMapResult>>: field不足時の失敗結果。成功時はstd::nullopt。
+std::optional<CommandMapResult> requireString(
+    const std::optional<std::string>& value,
+    const std::string& field_name)
+{
+    if (!value || value->empty())
+    {
+        return mapFailure("missing_field", "missing required field: " + field_name);
+    }
+
+    return std::nullopt;
+}
+
+/// @brief role名からcamera_idを解決する。
+///
+/// Args:
+///   sidecar_service <service::SidecarService&>: role bindingを保持するsidecar service。
+///   role <const std::string&>: 解決対象のcamera role名。
+///
+/// Return:
+///   <std::optional<video::CameraId>>: role登録済みならcamera_id、未登録ならstd::nullopt。
+std::optional<video::CameraId> resolveCameraId(
+    service::SidecarService& sidecar_service,
+    const std::string& role)
+{
+    return sidecar_service.resolveCameraId(role);
+}
+
+
+/// @brief pathを存在確認なしで比較用に正規化する。
+///
+/// Args:
+///   path <const std::filesystem::path&>: 正規化対象のpath。
+///
+/// Return:
+///   <std::filesystem::path>: absolute化してlexically_normalした比較用path。
+std::filesystem::path normalizeOutputPathForCompare(const std::filesystem::path& path)
+{
+    return std::filesystem::absolute(path).lexically_normal();
+}
+
 } // namespace
 
 HeadlessCommandMapper::HeadlessCommandMapper(service::SidecarService& sidecar_service)
@@ -36,20 +85,20 @@ HeadlessCommandMapper::HeadlessCommandMapper(service::SidecarService& sidecar_se
 
 CommandMapResult HeadlessCommandMapper::mapCaptureFrame(const control::ControlMessage& message)
 {
-    if (!message.role || message.role->empty())
+    if (auto failure = requireString(message.role, "role"))
     {
-        return mapFailure("missing_field", "missing required field: role");
+        return *failure;
     }
 
-    if (!message.output || message.output->empty())
+    if (auto failure = requireString(message.output, "output"))
     {
-        return mapFailure("missing_field", "missing required field: output");
+        return *failure;
     }
 
-    const auto camera_id = sidecar_service_.resolveCameraId(*message.role);
+    const auto camera_id = resolveCameraId(sidecar_service_, *message.role);
     if (!camera_id)
     {
-        return mapFailure("camera_not_open", "camera role is not open: " + *message.role);
+        return mapFailure("camera_not_open", "role is not opened: " + *message.role);
     }
 
     CommandMapResult result;
@@ -59,6 +108,78 @@ CommandMapResult HeadlessCommandMapper::mapCaptureFrame(const control::ControlMe
         std::filesystem::path{*message.output},
     };
     return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapCaptureStereo(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.left_role, "left_role"))
+    {
+        return *failure;
+    }
+
+    if (auto failure = requireString(message.right_role, "right_role"))
+    {
+        return *failure;
+    }
+
+    if (auto failure = requireString(message.left_output, "left_output"))
+    {
+        return *failure;
+    }
+
+    if (auto failure = requireString(message.right_output, "right_output"))
+    {
+        return *failure;
+    }
+
+    const auto left_camera_id = resolveCameraId(sidecar_service_, *message.left_role);
+    if (!left_camera_id)
+    {
+        return mapFailure("camera_not_open", "role is not opened: " + *message.left_role);
+    }
+
+    const auto right_camera_id = resolveCameraId(sidecar_service_, *message.right_role);
+    if (!right_camera_id)
+    {
+        return mapFailure("camera_not_open", "role is not opened: " + *message.right_role);
+    }
+
+    if (*left_camera_id == *right_camera_id)
+    {
+        return mapFailure(
+            "invalid_command",
+            "left_role and right_role must resolve to different cameras");
+    }
+
+    const auto left_output_path = std::filesystem::path{*message.left_output};
+    const auto right_output_path = std::filesystem::path{*message.right_output};
+    if (normalizeOutputPathForCompare(left_output_path) ==
+        normalizeOutputPathForCompare(right_output_path))
+    {
+        return mapFailure(
+            "invalid_command",
+            "left_output and right_output must be different paths");
+    }
+
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdCaptureStereo{
+        *left_camera_id,
+        *right_camera_id,
+        left_output_path,
+        right_output_path,
+    };
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapCalibrationCaptureFrame(const control::ControlMessage& message)
+{
+    return mapCaptureFrame(message);
+}
+
+CommandMapResult HeadlessCommandMapper::mapCalibrationCaptureStereo(const control::ControlMessage& message)
+{
+    return mapCaptureStereo(message);
 }
 
 } // namespace headless

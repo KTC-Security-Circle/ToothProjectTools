@@ -44,6 +44,35 @@ public:
   AdapterResult handle(const ControlMessage& message);
 
 private:
+
+  /// @brief capture_frame系commandをmapper/dispatcher経由で実行する。
+  ///
+  /// Args:
+  ///   id <const std::string&>: responseへ設定するrequest id。
+  ///   message <const ControlMessage&>: JSON Linesからparseされたcontrol message。
+  ///   calibration <bool>: calibration用captureとしてpurposeとevent名を切り替えるか。
+  ///
+  /// Return:
+  ///   <AdapterResult>: serve loopを継続するかshutdownするかの指示。
+  AdapterResult handleCaptureFrameCommand(
+      const std::string& id,
+      const ControlMessage& message,
+      bool calibration);
+
+  /// @brief capture_stereo系commandをmapper/dispatcher経由で実行する。
+  ///
+  /// Args:
+  ///   id <const std::string&>: responseへ設定するrequest id。
+  ///   message <const ControlMessage&>: JSON Linesからparseされたcontrol message。
+  ///   calibration <bool>: calibration用captureとしてpurposeとevent名を切り替えるか。
+  ///
+  /// Return:
+  ///   <AdapterResult>: serve loopを継続するかshutdownするかの指示。
+  AdapterResult handleCaptureStereoCommand(
+      const std::string& id,
+      const ControlMessage& message,
+      bool calibration);
+
   /// @brief SidecarService由来の失敗をControlResponseへ変換して書き出す。
   ///
   /// Args:

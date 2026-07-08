@@ -98,12 +98,23 @@ JSONをparseできず `id` も復元できない場合、error responseには `i
 {"event":"camera_opened","camera_id":0,"role":"left"}
 ```
 
+```json
+{"id":"2","cmd":"open_camera","camera_id":2,"role":"right"}
+{"id":"2","ok":true}
+{"event":"camera_opened","camera_id":2,"role":"right"}
+```
+
 通常のcamera openに失敗した場合、dummy frameへ自動fallbackしない。
 
 ### close_camera
 
 ```json
 {"id":"3","cmd":"close_camera","role":"left"}
+{"id":"3","ok":true}
+```
+
+```json
+{"id":"3","cmd":"close_camera","role":"right"}
 {"id":"3","ok":true}
 ```
 
@@ -117,12 +128,23 @@ stream中のroleをcloseした場合はpublisherを停止してからcameraを�
 {"event":"stream_started","role":"left","url":"http://127.0.0.1:39010/left.mjpg"}
 ```
 
+```json
+{"id":"4","cmd":"start_stream","role":"right"}
+{"id":"4","ok":true,"url":"http://127.0.0.1:39010/right.mjpg"}
+{"event":"stream_started","role":"right","url":"http://127.0.0.1:39010/right.mjpg"}
+```
+
 cameraがopen済みであることが前提。MVPのpublisherはデフォルト約60fps、JPEG quality 80で最新frameを配信する。
 
 ### stop_stream
 
 ```json
 {"id":"5","cmd":"stop_stream","role":"left"}
+{"id":"5","ok":true}
+```
+
+```json
+{"id":"5","cmd":"stop_stream","role":"right"}
 {"id":"5","ok":true}
 ```
 
@@ -134,13 +156,51 @@ cameraがopen済みであることが前提。MVPのpublisherはデフォルト�
 {"event":"frame_saved","role":"left","path":"./data/mono_left/001.png"}
 ```
 
-保存先の親directoryが存在しない場合はC++側で作成する。frame未取得時は `capture_failed`、書き込み失敗時は `file_write_failed` を返す。
+```json
+{"id":"6","cmd":"capture_frame","role":"right","output":"./data/mono_right/002.png"}
+{"id":"6","ok":true,"path":"./data/mono_right/002.png"}
+{"event":"frame_saved","role":"right","path":"./data/mono_right/002.png"}
+```
+
+保存先の親directoryが存在しない場合はC++側で作成する。frame未取得時は `empty_frame`、書き込み失敗時は `file_write_failed` を返す。
+
+### capture_stereo
+
+左右roleに紐づくcameraから近いタイミングでframeを取得し、それぞれ保存する。
+
+```json
+{"id":"7","cmd":"capture_stereo","left_role":"left","right_role":"right","left_output":"./data/stereo/left_001.png","right_output":"./data/stereo/right_001.png"}
+{"id":"7","ok":true,"left_path":"./data/stereo/left_001.png","right_path":"./data/stereo/right_001.png"}
+{"event":"stereo_frame_saved","left_role":"left","right_role":"right","left_path":"./data/stereo/left_001.png","right_path":"./data/stereo/right_001.png"}
+```
+
+`left_role` / `right_role` はC++側でopen済みcamera idへ解決する。未openの場合は `camera_not_open` を返す。
+
+### calib_capture_frame
+
+calibration用の単眼画像を撮影・保存する。calibration計算は行わず、内部的には通常のcaptureと同じCaptureServiceを使う。
+
+```json
+{"id":"8","cmd":"calib_capture_frame","role":"left","output":"./data/calib/mono_left/001.png"}
+{"id":"8","ok":true,"path":"./data/calib/mono_left/001.png","purpose":"calibration"}
+{"event":"calibration_frame_saved","role":"left","path":"./data/calib/mono_left/001.png"}
+```
+
+### calib_capture_stereo
+
+calibration用の左右画像ペアを撮影・保存する。calibration計算は行わず、内部的には通常のstereo captureと同じCaptureServiceを使う。
+
+```json
+{"id":"9","cmd":"calib_capture_stereo","left_role":"left","right_role":"right","left_output":"./data/calib/stereo/left_001.png","right_output":"./data/calib/stereo/right_001.png"}
+{"id":"9","ok":true,"left_path":"./data/calib/stereo/left_001.png","right_path":"./data/calib/stereo/right_001.png","purpose":"calibration"}
+{"event":"calibration_stereo_frame_saved","left_role":"left","right_role":"right","left_path":"./data/calib/stereo/left_001.png","right_path":"./data/calib/stereo/right_001.png"}
+```
 
 ### shutdown
 
 ```json
-{"id":"7","cmd":"shutdown"}
-{"id":"7","ok":true}
+{"id":"10","cmd":"shutdown"}
+{"id":"10","ok":true}
 ```
 
 responseをflushした後、publisher、camera、MJPEG serverを停止し、processは終了code 0で終了する。stdinがEOFになった場合も同じcleanupを行う。
@@ -197,8 +257,11 @@ Web UIはsidecarが返したURLをそのまま利用する。
 | `camera_open_failed` | OpenCV camera open失敗 |
 | `camera_not_open` | roleにopen済みcameraがない |
 | `stream_start_failed` | frame publisher開始失敗 |
-| `capture_failed` | 最新frameを取得できない |
+| `empty_frame` | cameraから取得したframeが空 |
+| `invalid_output_path` | 保存先pathが不正 |
+| `directory_create_failed` | 保存先directory作成失敗 |
 | `file_write_failed` | image保存失敗 |
+| `capture_failed` | capture詳細errorがない失敗 |
 | `internal_error` | command処理中の予期しない例外 |
 
 ## Dispatch integration
