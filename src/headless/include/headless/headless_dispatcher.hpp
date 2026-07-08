@@ -1,8 +1,7 @@
 #pragma once
 
-#include "headless/headless_command_result.hpp"
-
 #include "cmd/commands.hpp"
+#include "common/command_result.hpp"
 
 namespace capture
 {
@@ -30,8 +29,8 @@ class HeadlessDispatcher
     ///   command <const cmd::Command&>: 実行対象のcommand variant。
     ///
     /// Return:
-    ///   <HeadlessCommandResult>: commandの処理有無、成功可否、error、response用values。
-    HeadlessCommandResult execute(const cmd::Command& command);
+    ///   <common::CommandResult>: commandの処理有無、成功可否、error、response用values。
+    common::CommandResult execute(const cmd::Command& command);
 
   private:
     /// capture_service_ <capture::CaptureService&>: capture系domain commandを実行するservice。

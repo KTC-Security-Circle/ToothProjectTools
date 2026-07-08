@@ -14,7 +14,10 @@ target_link_libraries(headless_dispatch
   PUBLIC
     cmd_commands
     capture
+    common
   PRIVATE
+    handler
+    runtime
     sidecar_service
     logger
 )

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cmd/commands.hpp"
+#include "common/command_result.hpp"
 
 namespace runtime
 {
@@ -17,7 +18,7 @@ namespace handler::capture
 ///   command <const cmd::Command&>: dispatch対象のcommand variant。
 ///
 /// Return:
-///   <bool>: Capture系commandを処理した場合はtrue、それ以外はfalse。
-bool handle(runtime::CaptureHandlerContext& ctx, const cmd::Command& command);
+///   <common::CommandResult>: Capture系commandの処理有無、成功可否、error、response用values。
+common::CommandResult handle(runtime::CaptureHandlerContext& ctx, const cmd::Command& command);
 
 } // namespace handler::capture
