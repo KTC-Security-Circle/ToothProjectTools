@@ -348,6 +348,12 @@ run_flow_test() {
     "${OUT_DIR}/calib/stereo/left_001.png" \
     "${OUT_DIR}/calib/stereo/right_001.png"
 
+
+  echo "[FLOW] calibration command validation" >&2
+  request_error "30" "missing_field"     '{"id":"30","cmd":"mono_calibrate","role":"left"}'
+  request_error "31" "missing_field"     '{"id":"31","cmd":"stereo_calibrate","left_role":"left","right_role":"right"}'
+  request_error "32" "invalid_command"     '{"id":"32","cmd":"stereo_calibrate","left_role":"left","right_role":"right","left_dir":"./captures/mono_L","right_dir":"./captures/mono_R","output_file":"./calibration_stereo.yml"}'
+
   echo "[FLOW] shutdown" >&2
   shutdown_sidecar
 

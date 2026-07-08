@@ -196,6 +196,30 @@ calibration用の左右画像ペアを撮影・保存する。calibration計算�
 {"event":"calibration_stereo_frame_saved","left_role":"left","right_role":"right","left_path":"./data/calib/stereo/left_001.png","right_path":"./data/calib/stereo/right_001.png"}
 ```
 
+### mono_calibrate
+
+保存済み単眼calibration画像からcamera intrinsicsを計算する。
+
+```json
+{"id":"20","cmd":"mono_calibrate","role":"left","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml"}
+{"id":"20","ok":true,"role":"left","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml","rms":"0.420000"}
+{"event":"mono_calibration_finished","role":"left","output_file":"./data/calib/mono_left.yml","rms":"0.420000"}
+```
+
+`output_file` 省略時は `./data/calib/<role>_mono.yml` に保存する。calibration画像が不足している場合や結果fileを書けない場合は失敗responseを返す。
+
+### stereo_calibrate
+
+保存済み左右calibration画像pairからstereo calibrationを計算する。
+
+```json
+{"id":"21","cmd":"stereo_calibrate","left_role":"left","right_role":"right","left_dir":"./data/calib/stereo/left","right_dir":"./data/calib/stereo/right","output_file":"./data/calib/stereo.yml"}
+{"id":"21","ok":true,"left_role":"left","right_role":"right","left_dir":"./data/calib/stereo/left","right_dir":"./data/calib/stereo/right","output_file":"./data/calib/stereo.yml","rms":"0.620000"}
+{"event":"stereo_calibration_finished","left_role":"left","right_role":"right","output_file":"./data/calib/stereo.yml","rms":"0.620000"}
+```
+
+左右roleが同じcameraへ解決される場合、または `left_dir` と `right_dir` が同じpathを指す場合は `invalid_command` を返す。
+
 ### shutdown
 
 ```json
@@ -262,6 +286,11 @@ Web UIはsidecarが返したURLをそのまま利用する。
 | `directory_create_failed` | 保存先directory作成失敗 |
 | `file_write_failed` | image保存失敗 |
 | `capture_failed` | capture詳細errorがない失敗 |
+| `calibration_failed` | mono calibration計算失敗 |
+| `stereo_calibration_failed` | stereo calibration計算失敗 |
+| `calibration_image_not_found` | calibration画像directoryまたは画像が見つからない |
+| `calibration_image_count_mismatch` | stereo calibration左右画像数不一致 |
+| `calibration_output_write_failed` | calibration結果file書き込み失敗 |
 | `internal_error` | command処理中の予期しない例外 |
 
 ## Dispatch integration

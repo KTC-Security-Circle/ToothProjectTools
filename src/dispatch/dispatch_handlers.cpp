@@ -40,11 +40,13 @@ void handle_window(runtime::AppContext& ctx, win::Window& target_window, const c
         return;
 
     auto calibration_ctx = runtime::make_calibration_handler_context(ctx);
-    if (handler::calibration::handle(calibration_ctx, target_window, command))
+    const auto calibration_result = handler::calibration::handle(calibration_ctx, target_window, command);
+    if (calibration_result.handled)
         return;
 
     auto stereo_calibration_ctx = runtime::make_stereo_calibration_handler_context(ctx);
-    if (handler::stereo_calibration::handle(stereo_calibration_ctx, command))
+    const auto stereo_calibration_result = handler::stereo_calibration::handle(stereo_calibration_ctx, command);
+    if (stereo_calibration_result.handled)
         return;
 
     auto reconstruction_ctx = runtime::make_reconstruction_handler_context(ctx);

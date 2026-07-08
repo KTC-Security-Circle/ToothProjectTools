@@ -77,6 +77,15 @@ struct CalibrationHandlerContext
     win::WindowId preview_window_id;
 };
 
+struct MonoCalibrationCalcContext
+{
+    /// cameras <video::CameraManager&>: calibration対象cameraを取得するmanager。
+    video::CameraManager& cameras;
+
+    /// calibrator <calib::Calibrator*>: mono calibration計算器。
+    calib::Calibrator* calibrator;
+};
+
 struct CaptureHandlerContext
 {
     /// capture_service <capture::CaptureService&>: Capture commandを実行するdomain service。
@@ -87,6 +96,18 @@ struct StereoCalibrationHandlerContext
 {
     video::CameraManager& cameras;
     calib::StereoCalibrator* stereo_calibrator;
+    calib::StereoData& stereo_data;
+};
+
+struct StereoCalibrationCalcContext
+{
+    /// cameras <video::CameraManager&>: stereo calibration対象cameraを取得するmanager。
+    video::CameraManager& cameras;
+
+    /// stereo_calibrator <calib::StereoCalibrator*>: stereo calibration計算器。
+    calib::StereoCalibrator* stereo_calibrator;
+
+    /// stereo_data <calib::StereoData&>: stereo calibration計算結果の保存先。
     calib::StereoData& stereo_data;
 };
 
