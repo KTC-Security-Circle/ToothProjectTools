@@ -65,8 +65,17 @@ struct CmdStartScan {
 struct CmdStopScan {};
 
 struct CmdCalibrate {
-  video::CameraId target_camera_id; // 適用先のカメラ
-  std::string     image_folder;     // 画像が入っているフォルダパス
+  /// target_camera_id <video::CameraId>: mono calibration結果を適用するcamera識別子。
+  video::CameraId target_camera_id;
+
+  /// image_folder <std::string>: mono calibration画像が入っているdirectory path。
+  std::string image_folder;
+
+  /// output_file <std::string>: mono calibration結果の保存先file path。
+  std::string output_file;
+
+  /// role <std::string>: sidecar response/eventへ返すcamera role名。
+  std::string role;
 };
 
 // キャリブレーション用フォルダのクリア
@@ -82,11 +91,26 @@ struct CmdCalibCapture {
 };
 
 struct CmdStereoCalibrate {
+    /// left_cam_id <video::CameraId>: 左camera識別子。
     video::CameraId left_cam_id;
+
+    /// right_cam_id <video::CameraId>: 右camera識別子。
     video::CameraId right_cam_id;
+
+    /// left_dir <std::string>: stereo calibration左画像directory。
     std::string left_dir;
+
+    /// right_dir <std::string>: stereo calibration右画像directory。
     std::string right_dir;
-    std::string output_file = "calibration_result.yml"; // 結果保存先
+
+    /// output_file <std::string>: stereo calibration結果の保存先file path。
+    std::string output_file = "calibration_result.yml";
+
+    /// left_role <std::string>: sidecar response/eventへ返す左camera role名。
+    std::string left_role;
+
+    /// right_role <std::string>: sidecar response/eventへ返す右camera role名。
+    std::string right_role;
 };
 
 struct CmdReconstruct {
