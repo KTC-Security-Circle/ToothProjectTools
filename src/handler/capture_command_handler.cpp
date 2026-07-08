@@ -2,7 +2,7 @@
 
 #include "capture/capture_result.hpp"
 #include "capture/capture_service.hpp"
-#include "handler/capture_command_result_mapper.hpp"
+#include "command_result_mapper/capture_command_result_mapper.hpp"
 #include "logger/logger_macros.hpp"
 #include "runtime/handler_context.hpp"
 
@@ -42,7 +42,7 @@ common::CommandResult handle(runtime::CaptureHandlerContext& ctx, const cmd::Com
                 {
                     logCaptureError(*capture_result.error);
                 }
-                return toCommandResult(
+                return command_result_mapper::capture::toCommandResult(
                     capture_result,
                     {{"path", capture_result.output_path.string()}});
             }
@@ -54,7 +54,7 @@ common::CommandResult handle(runtime::CaptureHandlerContext& ctx, const cmd::Com
                 {
                     logCaptureError(*capture_result.error);
                 }
-                return toCommandResult(
+                return command_result_mapper::capture::toCommandResult(
                     capture_result,
                     {
                         {"left_path", capture_result.left_output_path.string()},

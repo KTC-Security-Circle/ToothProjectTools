@@ -6,7 +6,7 @@
 #include <map>
 #include <string>
 
-namespace handler::capture
+namespace command_result_mapper::capture
 {
 
 /// @brief CaptureResultをCommandResultへ変換する。
@@ -33,4 +33,4 @@ common::CommandResult toCommandResult(
     const ::capture::CaptureStereoResult& result,
     std::map<std::string, std::string> values);
 
-} // namespace handler::capture
+} // namespace command_result_mapper::capture

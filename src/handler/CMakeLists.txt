@@ -5,7 +5,6 @@ add_library(handler STATIC
     scan_command_handler.cpp
     calibration_command_handler.cpp
     capture_command_handler.cpp
-    capture_command_result_mapper.cpp
     stereo_calibration_command_handler.cpp
     reconstruction_command_handler.cpp
 )
@@ -21,6 +20,7 @@ target_link_libraries(handler
   PUBLIC
     cmd
     common
+    command_result_mapper
   PRIVATE
     runtime
     window
