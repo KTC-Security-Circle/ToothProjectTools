@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr-dev \
     x11-xserver-utils \
     cppcheck \
+    v4l-utils \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # devcontainer 用の作業ディレクトリ
