@@ -2,6 +2,7 @@
 
 #include "capture/capture_result.hpp"
 #include "capture/capture_service.hpp"
+#include "command_result_mapper/capture_command_result_mapper.hpp"
 #include "logger/logger_macros.hpp"
 #include "runtime/handler_context.hpp"
 
@@ -27,38 +28,45 @@ void logCaptureError(const ::capture::CaptureError& error)
 
 } // namespace
 
-bool handle(runtime::CaptureHandlerContext& ctx, const cmd::Command& command)
+common::CommandResult handle(runtime::CaptureHandlerContext& ctx, const cmd::Command& command)
 {
-    bool handled = false;
-
-    std::visit(
-        [&](auto&& c)
+    return std::visit(
+        [&](auto&& c) -> common::CommandResult
         {
             using T = std::decay_t<decltype(c)>;
 
             if constexpr (std::is_same_v<T, cmd::CmdCaptureFrame>)
             {
-                const auto result = ctx.capture_service.captureFrame(c.camera_id, c.output_path);
-                if (!result.ok && result.error)
+                const auto capture_result = ctx.capture_service.captureFrame(c.camera_id, c.output_path);
+                if (!capture_result.ok && capture_result.error)
                 {
-                    logCaptureError(*result.error);
+                    logCaptureError(*capture_result.error);
                 }
-                handled = true;
+                return command_result_mapper::capture::toCommandResult(
+                    capture_result,
+                    {{"path", capture_result.output_path.string()}});
             }
             else if constexpr (std::is_same_v<T, cmd::CmdCaptureStereo>)
             {
-                const auto result = ctx.capture_service.captureStereo(
+                const auto capture_result = ctx.capture_service.captureStereo(
                     c.left_camera_id, c.right_camera_id, c.left_output_path, c.right_output_path);
-                if (!result.ok && result.error)
+                if (!capture_result.ok && capture_result.error)
                 {
-                    logCaptureError(*result.error);
+                    logCaptureError(*capture_result.error);
                 }
-                handled = true;
+                return command_result_mapper::capture::toCommandResult(
+                    capture_result,
+                    {
+                        {"left_path", capture_result.left_output_path.string()},
+                        {"right_path", capture_result.right_output_path.string()},
+                    });
+            }
+            else
+            {
+                return common::notHandled();
             }
         },
         command);
-
-    return handled;
 }
 
 } // namespace handler::capture

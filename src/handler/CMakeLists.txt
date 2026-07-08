@@ -19,6 +19,8 @@ target_include_directories(handler
 target_link_libraries(handler
   PUBLIC
     cmd
+    common
+    command_result_mapper
   PRIVATE
     runtime
     window

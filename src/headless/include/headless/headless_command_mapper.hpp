@@ -1,8 +1,7 @@
 #pragma once
 
-#include "headless/headless_command_result.hpp"
-
 #include "cmd/commands.hpp"
+#include "common/command_result.hpp"
 
 #include <optional>
 
@@ -27,8 +26,8 @@ struct CommandMapResult
     /// command <std::optional<cmd::Command>>: 変換成功時のcommand。
     std::optional<cmd::Command> command;
 
-    /// error <std::optional<HeadlessCommandError>>: 変換失敗時のerror情報。
-    std::optional<HeadlessCommandError> error;
+    /// error <std::optional<common::CommandError>>: 変換失敗時のerror情報。
+    std::optional<common::CommandError> error;
 };
 
 class HeadlessCommandMapper

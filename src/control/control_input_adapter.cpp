@@ -1,6 +1,7 @@
 #include "control/control_input_adapter.hpp"
 
 #include "control/json_line_writer.hpp"
+#include "control/control_response_adapter.hpp"
 #include "service/sidecar_service.hpp"
 
 #include <cstdint>
@@ -119,34 +120,22 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message) {
     if (!map_result.ok) {
       writeHeadlessFailure(
           id,
-          map_result.error.value_or(headless::HeadlessCommandError{
+          map_result.error.value_or(common::CommandError{
               "invalid_command",
               "failed to map capture_frame command"}));
       return AdapterResult::continue_running;
     }
 
     const auto result = headless_dispatcher_.execute(*map_result.command);
-    if (!result.handled) {
-      writer_.writeResponse(ControlResponse::failure(
-          id, "invalid_command", "headless dispatcher did not handle capture_frame"));
-      return AdapterResult::continue_running;
-    }
-    if (!result.ok) {
-      writeHeadlessFailure(
-          id,
-          result.error.value_or(headless::HeadlessCommandError{
-              "capture_failed",
-              "failed to capture frame"}));
-      return AdapterResult::continue_running;
-    }
+    writer_.writeResponse(toControlResponse(id, result));
 
     const auto path_it = result.values.find("path");
     const auto path = path_it != result.values.end() ? path_it->second : std::string{};
-    writer_.writeResponse(ControlResponse::success(
-        id, {{"path", path}}));
-    writer_.writeEvent(ControlEvent{
-        "frame_saved",
-        {{"role", *message.role}, {"path", path}}});
+    if (result.handled && result.ok) {
+      writer_.writeEvent(ControlEvent{
+          "frame_saved",
+          {{"role", *message.role}, {"path", path}}});
+    }
     return AdapterResult::continue_running;
   }
 
@@ -178,7 +167,7 @@ void ControlInputAdapter::writeServiceFailure(
 
 void ControlInputAdapter::writeHeadlessFailure(
     const std::string& id,
-    const headless::HeadlessCommandError& error) {
+    const common::CommandError& error) {
   writer_.writeResponse(ControlResponse::failure(id, error.code, error.message));
 }
 

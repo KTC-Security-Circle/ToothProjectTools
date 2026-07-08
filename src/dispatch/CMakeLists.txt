@@ -17,6 +17,7 @@ target_link_libraries(dispatch
         structured_light
         calibration
         runtime
+        common
     PRIVATE
         handler
         logger

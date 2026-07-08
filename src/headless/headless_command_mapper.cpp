@@ -12,7 +12,7 @@ namespace headless
 namespace
 {
 
-/// @brief HeadlessCommandError付きのCommandMapResult失敗値を作成する。
+/// @brief CommandError付きのCommandMapResult失敗値を作成する。
 ///
 /// Args:
 ///   code <std::string>: sidecar responseへ返すerror code。
@@ -23,7 +23,7 @@ namespace
 CommandMapResult mapFailure(std::string code, std::string message)
 {
     CommandMapResult result;
-    result.error = HeadlessCommandError{std::move(code), std::move(message)};
+    result.error = common::CommandError{std::move(code), std::move(message)};
     return result;
 }
 

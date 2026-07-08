@@ -1,5 +1,6 @@
 add_library(sidecar_control STATIC
   control_input_adapter.cpp
+  control_response_adapter.cpp
   control_message.cpp
   json_line_reader.cpp
   json_line_writer.cpp
@@ -14,6 +15,7 @@ target_link_libraries(sidecar_control
   PUBLIC
     headless_dispatch
     sidecar_service
+    common
   PRIVATE
     cv_lib
 )
