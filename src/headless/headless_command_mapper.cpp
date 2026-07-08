@@ -63,6 +63,19 @@ std::optional<video::CameraId> resolveCameraId(
     return sidecar_service.resolveCameraId(role);
 }
 
+
+/// @brief pathを存在確認なしで比較用に正規化する。
+///
+/// Args:
+///   path <const std::filesystem::path&>: 正規化対象のpath。
+///
+/// Return:
+///   <std::filesystem::path>: absolute化してlexically_normalした比較用path。
+std::filesystem::path normalizeOutputPathForCompare(const std::filesystem::path& path)
+{
+    return std::filesystem::absolute(path).lexically_normal();
+}
+
 } // namespace
 
 HeadlessCommandMapper::HeadlessCommandMapper(service::SidecarService& sidecar_service)
@@ -131,13 +144,30 @@ CommandMapResult HeadlessCommandMapper::mapCaptureStereo(const control::ControlM
         return mapFailure("camera_not_open", "role is not opened: " + *message.right_role);
     }
 
+    if (*left_camera_id == *right_camera_id)
+    {
+        return mapFailure(
+            "invalid_command",
+            "left_role and right_role must resolve to different cameras");
+    }
+
+    const auto left_output_path = std::filesystem::path{*message.left_output};
+    const auto right_output_path = std::filesystem::path{*message.right_output};
+    if (normalizeOutputPathForCompare(left_output_path) ==
+        normalizeOutputPathForCompare(right_output_path))
+    {
+        return mapFailure(
+            "invalid_command",
+            "left_output and right_output must be different paths");
+    }
+
     CommandMapResult result;
     result.ok = true;
     result.command = cmd::CmdCaptureStereo{
         *left_camera_id,
         *right_camera_id,
-        std::filesystem::path{*message.left_output},
-        std::filesystem::path{*message.right_output},
+        left_output_path,
+        right_output_path,
     };
     return result;
 }
