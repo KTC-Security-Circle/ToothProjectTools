@@ -1,6 +1,9 @@
 #pragma once
 
 #include "capture/capture_service.hpp"
+#include "calibration/calibrator.hpp"
+#include "calibration/stereo_calibrator.hpp"
+#include "calibration/stereo_data.hpp"
 #include "video/camera_manager.hpp"
 
 #include <map>
@@ -126,6 +129,42 @@ class SidecarService
     ///   <capture::CaptureService&>: sidecar camera群へcaptureを実行するdomain service。
     capture::CaptureService& captureService();
 
+    /// @brief sidecarが所有するCameraManagerを取得する。
+    ///
+    /// Args:
+    ///   none <void>: 引数なし。
+    ///
+    /// Return:
+    ///   <video::CameraManager&>: sidecar camera群を管理するmanager。
+    video::CameraManager& cameraManager();
+
+    /// @brief sidecarが所有するmono calibration計算器を取得する。
+    ///
+    /// Args:
+    ///   none <void>: 引数なし。
+    ///
+    /// Return:
+    ///   <calib::Calibrator*>: mono calibration計算器。
+    calib::Calibrator* calibrator();
+
+    /// @brief sidecarが所有するstereo calibration計算器を取得する。
+    ///
+    /// Args:
+    ///   none <void>: 引数なし。
+    ///
+    /// Return:
+    ///   <calib::StereoCalibrator*>: stereo calibration計算器。
+    calib::StereoCalibrator* stereoCalibrator();
+
+    /// @brief sidecarが所有するstereo calibration結果を取得する。
+    ///
+    /// Args:
+    ///   none <void>: 引数なし。
+    ///
+    /// Return:
+    ///   <calib::StereoData&>: stereo calibration結果の保存先。
+    calib::StereoData& stereoData();
+
     /// @brief sidecar serviceを停止し、cameraとstreamを解放する。
     ///
     /// Args:
@@ -152,6 +191,16 @@ class SidecarService
     video::CameraManager cameras_;
     /// capture_service_ <capture::CaptureService>: sidecar所有camera群を使うcapture用domain service。
     capture::CaptureService capture_service_{cameras_};
+
+    /// calibrator_ <calib::Calibrator>: sidecar用mono calibration計算器。
+    calib::Calibrator calibrator_;
+
+    /// stereo_calibrator_ <calib::StereoCalibrator>: sidecar用stereo calibration計算器。
+    calib::StereoCalibrator stereo_calibrator_;
+
+    /// stereo_data_ <calib::StereoData>: sidecar用stereo calibration結果。
+    calib::StereoData stereo_data_;
+
     std::map<std::string, CameraBinding> bindings_;
 };
 
