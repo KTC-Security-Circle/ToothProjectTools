@@ -78,6 +78,25 @@ class HeadlessCommandMapper
     ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
     CommandMapResult mapCalibrationCaptureStereo(const control::ControlMessage& message);
 
+
+    /// @brief mono_calibrate用ControlMessageをCmdCalibrateへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapMonoCalibrate(const control::ControlMessage& message);
+
+    /// @brief stereo_calibrate用ControlMessageをCmdStereoCalibrateへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapStereoCalibrate(const control::ControlMessage& message);
+
   private:
     /// sidecar_service_ <service::SidecarService&>: role bindingを保持するsidecar service。
     service::SidecarService& sidecar_service_;

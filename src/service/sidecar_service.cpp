@@ -195,6 +195,22 @@ capture::CaptureService& SidecarService::captureService() {
   return capture_service_;
 }
 
+video::CameraManager& SidecarService::cameraManager() {
+  return cameras_;
+}
+
+calib::Calibrator* SidecarService::calibrator() {
+  return &calibrator_;
+}
+
+calib::StereoCalibrator* SidecarService::stereoCalibrator() {
+  return &stereo_calibrator_;
+}
+
+calib::StereoData& SidecarService::stereoData() {
+  return stereo_data_;
+}
+
 void SidecarService::shutdown() {
   for (auto& [role, binding] : bindings_) {
     if (binding.publisher) {

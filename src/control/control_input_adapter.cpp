@@ -44,7 +44,12 @@ ControlInputAdapter::ControlInputAdapter(
     : service_(service),
       writer_(writer),
       headless_mapper_(service),
-      headless_dispatcher_(service.captureService())
+      headless_dispatcher_(
+          service.captureService(),
+          service.cameraManager(),
+          service.calibrator(),
+          service.stereoCalibrator(),
+          service.stereoData())
 {
 }
 
@@ -152,6 +157,14 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message) {
     return handleCaptureStereoCommand(id, message, true);
   }
 
+  if (*message.cmd == "mono_calibrate") {
+    return handleCalibrationCommand(id, message, false);
+  }
+
+  if (*message.cmd == "stereo_calibrate") {
+    return handleCalibrationCommand(id, message, true);
+  }
+
   if (*message.cmd == "shutdown") {
     writer_.writeResponse(ControlResponse::success(id));
     return AdapterResult::shutdown;
@@ -226,6 +239,45 @@ AdapterResult ControlInputAdapter::handleCaptureStereoCommand(
          {"right_role", *message.right_role},
          {"left_path", left_path},
          {"right_path", right_path}}});
+  }
+  return AdapterResult::continue_running;
+}
+
+
+AdapterResult ControlInputAdapter::handleCalibrationCommand(
+    const std::string& id,
+    const ControlMessage& message,
+    bool stereo) {
+  const auto map_result = stereo
+      ? headless_mapper_.mapStereoCalibrate(message)
+      : headless_mapper_.mapMonoCalibrate(message);
+  if (!map_result.ok) {
+    writeHeadlessFailure(
+        id,
+        map_result.error.value_or(common::CommandError{
+            "invalid_command",
+            stereo ? "failed to map stereo_calibrate command" : "failed to map mono_calibrate command"}));
+    return AdapterResult::continue_running;
+  }
+
+  const auto result = headless_dispatcher_.execute(*map_result.command);
+  writer_.writeResponse(toControlResponse(id, result));
+
+  if (result.handled && result.ok) {
+    if (stereo) {
+      writer_.writeEvent(ControlEvent{
+          "stereo_calibration_finished",
+          {{"left_role", valueOrEmpty(result, "left_role")},
+           {"right_role", valueOrEmpty(result, "right_role")},
+           {"output_file", valueOrEmpty(result, "output_file")},
+           {"rms", valueOrEmpty(result, "rms")}}});
+    } else {
+      writer_.writeEvent(ControlEvent{
+          "mono_calibration_finished",
+          {{"role", valueOrEmpty(result, "role")},
+           {"output_file", valueOrEmpty(result, "output_file")},
+           {"rms", valueOrEmpty(result, "rms")}}});
+    }
   }
   return AdapterResult::continue_running;
 }

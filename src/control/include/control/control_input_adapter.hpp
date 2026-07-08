@@ -73,6 +73,21 @@ private:
       const ControlMessage& message,
       bool calibration);
 
+
+  /// @brief calibration計算commandをmapper/dispatcher経由で実行する。
+  ///
+  /// Args:
+  ///   id <const std::string&>: responseへ設定するrequest id。
+  ///   message <const ControlMessage&>: JSON Linesからparseされたcontrol message。
+  ///   stereo <bool>: stereo calibration commandとして処理するか。
+  ///
+  /// Return:
+  ///   <AdapterResult>: serve loopを継続するかshutdownするかの指示。
+  AdapterResult handleCalibrationCommand(
+      const std::string& id,
+      const ControlMessage& message,
+      bool stereo);
+
   /// @brief SidecarService由来の失敗をControlResponseへ変換して書き出す。
   ///
   /// Args:

@@ -37,6 +37,18 @@ struct ControlMessage {
   /// right_output <std::optional<std::string>>: stereo capture右画像の保存先path。
   std::optional<std::string> right_output;
 
+  /// image_folder <std::optional<std::string>>: mono calibration用画像directory。
+  std::optional<std::string> image_folder;
+
+  /// left_dir <std::optional<std::string>>: stereo calibration左画像directory。
+  std::optional<std::string> left_dir;
+
+  /// right_dir <std::optional<std::string>>: stereo calibration右画像directory。
+  std::optional<std::string> right_dir;
+
+  /// output_file <std::optional<std::string>>: calibration結果の保存先file path。
+  std::optional<std::string> output_file;
+
   /// camera_id <std::optional<int>>: open_cameraで使用するcamera識別子。
   std::optional<int> camera_id;
 };

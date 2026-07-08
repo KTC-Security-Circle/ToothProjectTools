@@ -85,6 +85,10 @@ ReadResult JsonLineReader::read() {
         !readString(root, "right_role", message.right_role, error_message) ||
         !readString(root, "left_output", message.left_output, error_message) ||
         !readString(root, "right_output", message.right_output, error_message) ||
+        !readString(root, "image_folder", message.image_folder, error_message) ||
+        !readString(root, "left_dir", message.left_dir, error_message) ||
+        !readString(root, "right_dir", message.right_dir, error_message) ||
+        !readString(root, "output_file", message.output_file, error_message) ||
         !readInteger(root, "camera_id", message.camera_id, error_message)) {
       return ReadResult{
           ReadStatus::invalid,

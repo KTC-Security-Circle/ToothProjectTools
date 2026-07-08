@@ -75,11 +75,11 @@ void install_default_bindings(
       if (cfg.scan_cam_left != video::kInvalidCameraId) 
           cmd_que.push_back(
               {cmd::TargetCamera{cfg.scan_cam_left},
-               cmd::CmdCalibrate{cfg.scan_cam_left, cfg.dir_mono_left}});
+               cmd::CmdCalibrate{cfg.scan_cam_left, cfg.dir_mono_left, cfg.dir_mono_left + ".yml", ""}});
       if (cfg.scan_cam_right != video::kInvalidCameraId) 
           cmd_que.push_back(
               {cmd::TargetCamera{cfg.scan_cam_right},
-               cmd::CmdCalibrate{cfg.scan_cam_right, cfg.dir_mono_right}});
+               cmd::CmdCalibrate{cfg.scan_cam_right, cfg.dir_mono_right, cfg.dir_mono_right + ".yml", ""}});
   });
 
   // --- B. Stereo (ステレオ) ---
@@ -115,7 +115,9 @@ void install_default_bindings(
               cmd::CmdStereoCalibrate{
                   cfg.scan_cam_left, cfg.scan_cam_right,
                   cfg.dir_stereo_left, cfg.dir_stereo_right, // stereoフォルダを使う
-                  "calibration_stereo.yml"
+                  "calibration_stereo.yml",
+                  "",
+                  ""
               }
           });
       }
