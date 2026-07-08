@@ -3,9 +3,21 @@
 #include "cmd/commands.hpp"
 #include "common/command_result.hpp"
 
+namespace calib
+{
+class Calibrator;
+class StereoCalibrator;
+struct StereoData;
+}
+
 namespace capture
 {
 class CaptureService;
+}
+
+namespace video
+{
+class CameraManager;
 }
 
 namespace headless
@@ -14,14 +26,23 @@ namespace headless
 class HeadlessDispatcher
 {
   public:
-    /// @brief CaptureServiceを参照してHeadlessDispatcherを構築する。
+    /// @brief GUI非依存serviceを参照してHeadlessDispatcherを構築する。
     ///
     /// Args:
-    ///   capture_service <capture::CaptureService&>: GUIに依存しないcapture commandを実行するdomain service。
+    ///   capture_service <capture::CaptureService&>: capture commandを実行するdomain service。
+    ///   cameras <video::CameraManager&>: calibration対象cameraを取得するmanager。
+    ///   calibrator <calib::Calibrator*>: mono calibration計算器。
+    ///   stereo_calibrator <calib::StereoCalibrator*>: stereo calibration計算器。
+    ///   stereo_data <calib::StereoData&>: stereo calibration計算結果の保存先。
     ///
     /// Return:
-    ///   <HeadlessDispatcher>: CaptureService参照を保持するheadless dispatcher。
-    explicit HeadlessDispatcher(capture::CaptureService& capture_service);
+    ///   <HeadlessDispatcher>: GUI非依存handler contextを保持するdispatcher。
+    HeadlessDispatcher(
+        capture::CaptureService& capture_service,
+        video::CameraManager& cameras,
+        calib::Calibrator* calibrator,
+        calib::StereoCalibrator* stereo_calibrator,
+        calib::StereoData& stereo_data);
 
     /// @brief headlessで実行可能なcommandを実行する。
     ///
@@ -35,6 +56,18 @@ class HeadlessDispatcher
   private:
     /// capture_service_ <capture::CaptureService&>: capture系domain commandを実行するservice。
     capture::CaptureService& capture_service_;
+
+    /// cameras_ <video::CameraManager&>: calibration対象cameraを取得するmanager。
+    video::CameraManager& cameras_;
+
+    /// calibrator_ <calib::Calibrator*>: mono calibration計算器。
+    calib::Calibrator* calibrator_;
+
+    /// stereo_calibrator_ <calib::StereoCalibrator*>: stereo calibration計算器。
+    calib::StereoCalibrator* stereo_calibrator_;
+
+    /// stereo_data_ <calib::StereoData&>: stereo calibration計算結果の保存先。
+    calib::StereoData& stereo_data_;
 };
 
 } // namespace headless
