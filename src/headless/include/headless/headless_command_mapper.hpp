@@ -42,6 +42,24 @@ class HeadlessCommandMapper
     ///   <HeadlessCommandMapper>: SidecarService参照を保持するmapper。
     explicit HeadlessCommandMapper(service::SidecarService& sidecar_service);
 
+    /// @brief open_camera用ControlMessageをCmdOpenCameraへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapOpenCamera(const control::ControlMessage& message);
+
+    /// @brief close_camera用ControlMessageをCmdCloseCameraへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapCloseCamera(const control::ControlMessage& message);
+
     /// @brief capture_frame用ControlMessageをCmdCaptureFrameへ変換する。
     ///
     /// Args:

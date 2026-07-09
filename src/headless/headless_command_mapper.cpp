@@ -94,6 +94,40 @@ HeadlessCommandMapper::HeadlessCommandMapper(service::SidecarService& sidecar_se
 {
 }
 
+CommandMapResult HeadlessCommandMapper::mapOpenCamera(const control::ControlMessage& message)
+{
+    if (!message.camera_id)
+    {
+        return mapFailure("missing_field", "missing required field: camera_id");
+    }
+    if (auto failure = requireString(message.role, "role"))
+    {
+        return *failure;
+    }
+    if (*message.camera_id < 0)
+    {
+        return mapFailure("invalid_command", "camera_id must be non-negative");
+    }
+
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdOpenCamera{static_cast<video::CameraId>(*message.camera_id), *message.role};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapCloseCamera(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.role, "role"))
+    {
+        return *failure;
+    }
+
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdCloseCamera{*message.role};
+    return result;
+}
+
 CommandMapResult HeadlessCommandMapper::mapCaptureFrame(const control::ControlMessage& message)
 {
     if (auto failure = requireString(message.role, "role"))

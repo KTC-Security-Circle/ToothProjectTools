@@ -20,6 +20,11 @@ namespace video
 class CameraManager;
 }
 
+namespace service
+{
+class SidecarService;
+}
+
 namespace headless
 {
 
@@ -29,6 +34,7 @@ class HeadlessDispatcher
     /// @brief GUI非依存serviceを参照してHeadlessDispatcherを構築する。
     ///
     /// Args:
+    ///   sidecar_service <service::SidecarService&>: camera open/closeを実行する暫定service。
     ///   capture_service <capture::CaptureService&>: capture commandを実行するdomain service。
     ///   cameras <video::CameraManager&>: calibration対象cameraを取得するmanager。
     ///   calibrator <calib::Calibrator*>: mono calibration計算器。
@@ -38,6 +44,7 @@ class HeadlessDispatcher
     /// Return:
     ///   <HeadlessDispatcher>: GUI非依存handler contextを保持するdispatcher。
     HeadlessDispatcher(
+        service::SidecarService& sidecar_service,
         capture::CaptureService& capture_service,
         video::CameraManager& cameras,
         calib::Calibrator* calibrator,
@@ -54,6 +61,9 @@ class HeadlessDispatcher
     common::CommandResult execute(const cmd::Command& command);
 
   private:
+    /// sidecar_service_ <service::SidecarService&>: camera resource commandを実行する暫定service。
+    service::SidecarService& sidecar_service_;
+
     /// capture_service_ <capture::CaptureService&>: capture系domain commandを実行するservice。
     capture::CaptureService& capture_service_;
 
