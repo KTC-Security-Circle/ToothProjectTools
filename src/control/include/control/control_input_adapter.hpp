@@ -27,7 +27,7 @@ public:
   /// @brief SidecarServiceとJsonLineWriterを参照してControlInputAdapterを構築する。
   ///
   /// Args:
-  ///   service <service::SidecarService&>: sidecar lifecycle処理とrole bindingを担当するservice。
+  ///   service <service::SidecarService&>: sidecar固有のstreamとprocess lifecycleを担当するservice。
   ///   writer <JsonLineWriter&>: responseとeventを書き出すJSON Lines writer。
   ///
   /// Return:
@@ -123,7 +123,7 @@ private:
       const std::string& id,
       const common::CommandError& error);
 
-  /// service_ <service::SidecarService&>: lifecycle commandとrole bindingを担当するservice。
+  /// service_ <service::SidecarService&>: streamとprocess lifecycleを担当するservice。
   service::SidecarService& service_;
 
   /// writer_ <JsonLineWriter&>: responseとeventを書き出すJSON Lines writer。

@@ -8,7 +8,7 @@ namespace calib
 class Calibrator;
 class StereoCalibrator;
 struct StereoData;
-}
+} // namespace calib
 
 namespace capture
 {
@@ -22,8 +22,11 @@ class CameraManager;
 
 namespace service
 {
-class SidecarService;
+namespace camera
+{
+class CameraService;
 }
+} // namespace service
 
 namespace headless
 {
@@ -34,7 +37,7 @@ class HeadlessDispatcher
     /// @brief GUI非依存serviceを参照してHeadlessDispatcherを構築する。
     ///
     /// Args:
-    ///   sidecar_service <service::SidecarService&>: camera open/closeを実行する暫定service。
+    ///   camera_service <service::camera::CameraService&>: camera open/closeを実行するdomain service。
     ///   capture_service <capture::CaptureService&>: capture commandを実行するdomain service。
     ///   cameras <video::CameraManager&>: calibration対象cameraを取得するmanager。
     ///   calibrator <calib::Calibrator*>: mono calibration計算器。
@@ -43,13 +46,9 @@ class HeadlessDispatcher
     ///
     /// Return:
     ///   <HeadlessDispatcher>: GUI非依存handler contextを保持するdispatcher。
-    HeadlessDispatcher(
-        service::SidecarService& sidecar_service,
-        capture::CaptureService& capture_service,
-        video::CameraManager& cameras,
-        calib::Calibrator* calibrator,
-        calib::StereoCalibrator* stereo_calibrator,
-        calib::StereoData& stereo_data);
+    HeadlessDispatcher(service::camera::CameraService& camera_service, capture::CaptureService& capture_service,
+                       video::CameraManager& cameras, calib::Calibrator* calibrator,
+                       calib::StereoCalibrator* stereo_calibrator, calib::StereoData& stereo_data);
 
     /// @brief headlessで実行可能なcommandを実行する。
     ///
@@ -61,8 +60,8 @@ class HeadlessDispatcher
     common::CommandResult execute(const cmd::Command& command);
 
   private:
-    /// sidecar_service_ <service::SidecarService&>: camera resource commandを実行する暫定service。
-    service::SidecarService& sidecar_service_;
+    /// camera_service_ <service::camera::CameraService&>: camera resource commandを実行するservice。
+    service::camera::CameraService& camera_service_;
 
     /// capture_service_ <capture::CaptureService&>: capture系domain commandを実行するservice。
     capture::CaptureService& capture_service_;

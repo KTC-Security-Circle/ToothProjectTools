@@ -30,6 +30,7 @@ target_link_libraries(handler
     calibration
     service
     capture
+    camera_service
     cv_lib
     logger
 )

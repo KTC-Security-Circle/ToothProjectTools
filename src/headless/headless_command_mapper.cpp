@@ -1,7 +1,7 @@
 #include "headless/headless_command_mapper.hpp"
 
 #include "control/control_message.hpp"
-#include "service/sidecar_service.hpp"
+#include "service/camera_service.hpp"
 
 #include <filesystem>
 #include <optional>
@@ -36,9 +36,7 @@ CommandMapResult mapFailure(std::string code, std::string message)
 ///
 /// Return:
 ///   <std::optional<CommandMapResult>>: field不足時の失敗結果。成功時はstd::nullopt。
-std::optional<CommandMapResult> requireString(
-    const std::optional<std::string>& value,
-    const std::string& field_name)
+std::optional<CommandMapResult> requireString(const std::optional<std::string>& value, const std::string& field_name)
 {
     if (!value || value->empty())
     {
@@ -51,16 +49,14 @@ std::optional<CommandMapResult> requireString(
 /// @brief role名からcamera_idを解決する。
 ///
 /// Args:
-///   sidecar_service <service::SidecarService&>: role bindingを保持するsidecar service。
+///   camera_service <service::camera::CameraService&>: role bindingを保持するdomain service。
 ///   role <const std::string&>: 解決対象のcamera role名。
 ///
 /// Return:
 ///   <std::optional<video::CameraId>>: role登録済みならcamera_id、未登録ならstd::nullopt。
-std::optional<video::CameraId> resolveCameraId(
-    service::SidecarService& sidecar_service,
-    const std::string& role)
+std::optional<video::CameraId> resolveCameraId(service::camera::CameraService& camera_service, const std::string& role)
 {
-    return sidecar_service.resolveCameraId(role);
+    return camera_service.resolveCameraId(role);
 }
 
 /// @brief pathを存在確認なしで比較用に正規化する。
@@ -89,8 +85,8 @@ std::string defaultMonoCalibrationOutputFile(const std::string& role)
 
 } // namespace
 
-HeadlessCommandMapper::HeadlessCommandMapper(service::SidecarService& sidecar_service)
-    : sidecar_service_(sidecar_service)
+HeadlessCommandMapper::HeadlessCommandMapper(service::camera::CameraService& camera_service)
+    : camera_service_(camera_service)
 {
 }
 
@@ -140,7 +136,7 @@ CommandMapResult HeadlessCommandMapper::mapCaptureFrame(const control::ControlMe
         return *failure;
     }
 
-    const auto camera_id = resolveCameraId(sidecar_service_, *message.role);
+    const auto camera_id = resolveCameraId(camera_service_, *message.role);
     if (!camera_id)
     {
         return mapFailure("camera_not_open", "role is not opened: " + *message.role);
@@ -177,13 +173,13 @@ CommandMapResult HeadlessCommandMapper::mapCaptureStereo(const control::ControlM
         return *failure;
     }
 
-    const auto left_camera_id = resolveCameraId(sidecar_service_, *message.left_role);
+    const auto left_camera_id = resolveCameraId(camera_service_, *message.left_role);
     if (!left_camera_id)
     {
         return mapFailure("camera_not_open", "role is not opened: " + *message.left_role);
     }
 
-    const auto right_camera_id = resolveCameraId(sidecar_service_, *message.right_role);
+    const auto right_camera_id = resolveCameraId(camera_service_, *message.right_role);
     if (!right_camera_id)
     {
         return mapFailure("camera_not_open", "role is not opened: " + *message.right_role);
@@ -191,19 +187,14 @@ CommandMapResult HeadlessCommandMapper::mapCaptureStereo(const control::ControlM
 
     if (*left_camera_id == *right_camera_id)
     {
-        return mapFailure(
-            "invalid_command",
-            "left_role and right_role must resolve to different cameras");
+        return mapFailure("invalid_command", "left_role and right_role must resolve to different cameras");
     }
 
     const auto left_output_path = std::filesystem::path{*message.left_output};
     const auto right_output_path = std::filesystem::path{*message.right_output};
-    if (normalizeOutputPathForCompare(left_output_path) ==
-        normalizeOutputPathForCompare(right_output_path))
+    if (normalizeOutputPathForCompare(left_output_path) == normalizeOutputPathForCompare(right_output_path))
     {
-        return mapFailure(
-            "invalid_command",
-            "left_output and right_output must be different paths");
+        return mapFailure("invalid_command", "left_output and right_output must be different paths");
     }
 
     CommandMapResult result;
@@ -239,7 +230,7 @@ CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlM
         return *failure;
     }
 
-    const auto camera_id = resolveCameraId(sidecar_service_, *message.role);
+    const auto camera_id = resolveCameraId(camera_service_, *message.role);
     if (!camera_id)
     {
         return mapFailure("camera_not_open", "role is not opened: " + *message.role);
@@ -283,13 +274,13 @@ CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::Contro
         return *failure;
     }
 
-    const auto left_camera_id = resolveCameraId(sidecar_service_, *message.left_role);
+    const auto left_camera_id = resolveCameraId(camera_service_, *message.left_role);
     if (!left_camera_id)
     {
         return mapFailure("camera_not_open", "role is not opened: " + *message.left_role);
     }
 
-    const auto right_camera_id = resolveCameraId(sidecar_service_, *message.right_role);
+    const auto right_camera_id = resolveCameraId(camera_service_, *message.right_role);
     if (!right_camera_id)
     {
         return mapFailure("camera_not_open", "role is not opened: " + *message.right_role);
@@ -297,9 +288,7 @@ CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::Contro
 
     if (*left_camera_id == *right_camera_id)
     {
-        return mapFailure(
-            "invalid_command",
-            "left_role and right_role must resolve to different cameras");
+        return mapFailure("invalid_command", "left_role and right_role must resolve to different cameras");
     }
 
     const auto left_dir = std::filesystem::path{*message.left_dir};
@@ -312,13 +301,8 @@ CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::Contro
     CommandMapResult result;
     result.ok = true;
     result.command = cmd::CmdStereoCalibrate{
-        *left_camera_id,
-        *right_camera_id,
-        left_dir.string(),
-        right_dir.string(),
-        *message.output_file,
-        *message.left_role,
-        *message.right_role,
+        *left_camera_id,      *right_camera_id,   left_dir.string(),   right_dir.string(),
+        *message.output_file, *message.left_role, *message.right_role,
     };
     return result;
 }

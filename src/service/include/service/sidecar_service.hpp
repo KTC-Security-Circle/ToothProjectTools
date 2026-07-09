@@ -1,10 +1,10 @@
 #pragma once
 
-#include "capture/capture_service.hpp"
 #include "calibration/calibrator.hpp"
 #include "calibration/stereo_calibrator.hpp"
 #include "calibration/stereo_data.hpp"
-#include "service/camera_result.hpp"
+#include "capture/capture_service.hpp"
+#include "service/camera_service.hpp"
 #include "video/camera_manager.hpp"
 
 #include <map>
@@ -73,9 +73,7 @@ class SidecarService
     ///
     /// Return:
     ///   <SidecarResult>: openとrole bindingの成否。
-    service::camera::CameraResult openCamera(
-        video::CameraId device_index,
-        const std::string& role);
+    service::camera::CameraResult openCamera(video::CameraId device_index, const std::string& role);
 
     /// @brief sidecar roleに紐づくcameraをcloseする。
     ///
@@ -130,6 +128,16 @@ class SidecarService
     ///
     /// Return:
     ///   <capture::CaptureService&>: sidecar camera群へcaptureを実行するdomain service。
+    /// @brief camera resource commandを実行するdomain serviceを取得する。
+    /// Return:
+    ///   <service::camera::CameraService&>: sidecar所有CameraManagerを使うcamera service。
+    service::camera::CameraService& cameraService();
+
+    ///  sidecarが所有するCameraManagerを参照するCaptureServiceを取得する。
+    /// Args:
+    ///   none <void>: 引数なし。
+    /// Return:
+    ///   <capture::CaptureService&>: sidecar camera群へcaptureを実行するdomain service。
     capture::CaptureService& captureService();
 
     /// @brief sidecarが所有するCameraManagerを取得する。
@@ -178,20 +186,26 @@ class SidecarService
     void shutdown();
 
   private:
+    ///  roleごとのMJPEG publisherを保持するsidecar固有binding。
     struct CameraBinding
     {
-        int device_index{-1};
-        video::CameraId camera_id{video::kInvalidCameraId};
+        /// publisher <std::unique_ptr<stream::FramePublisher>>: roleのframe配信worker。
         std::unique_ptr<stream::FramePublisher> publisher;
     };
 
-    bool validRole(const std::string& role) const;
+    ///  role用MJPEG stream URLを生成する。
+    /// Args:
+    ///   role <const std::string&>: URLへ埋め込むcamera role名。
+    /// Return:
+    ///   <std::string>: role用MJPEG stream URL。
     std::string streamUrl(const std::string& role) const;
 
     std::string mjpeg_host_;
     int mjpeg_port_;
     stream::StreamRegistry& streams_;
     video::CameraManager cameras_;
+    /// camera_service_ <service::camera::CameraService>: camera resourceとrole bindingを管理するdomain service。
+    camera::CameraService camera_service_{cameras_};
     /// capture_service_ <capture::CaptureService>: sidecar所有camera群を使うcapture用domain service。
     capture::CaptureService capture_service_{cameras_};
 
@@ -204,6 +218,7 @@ class SidecarService
     /// stereo_data_ <calib::StereoData>: sidecar用stereo calibration結果。
     calib::StereoData stereo_data_;
 
+    /// bindings_ <std::map<std::string, CameraBinding>>: roleごとのMJPEG publisherを保持するsidecar binding。
     std::map<std::string, CameraBinding> bindings_;
 };
 

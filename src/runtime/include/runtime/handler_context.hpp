@@ -10,7 +10,7 @@ namespace calib
 class Calibrator;
 class StereoCalibrator;
 struct StereoData;
-}
+} // namespace calib
 
 namespace sl
 {
@@ -29,8 +29,11 @@ class CaptureService;
 
 namespace service
 {
-class SidecarService;
+namespace camera
+{
+class CameraService;
 }
+} // namespace service
 
 namespace win
 {
@@ -100,8 +103,8 @@ struct CaptureHandlerContext
 /// @brief camera resource操作をhandlerへ渡す暫定runtime context。
 struct CameraHandlerContext
 {
-    /// sidecar_service <service::SidecarService&>: camera role bindingとopen/closeを持つ暫定service。将来CameraServiceへ分離する。
-    service::SidecarService& sidecar_service;
+    /// camera_service <service::camera::CameraService&>: camera open/closeを実行するdomain service。
+    service::camera::CameraService& camera_service;
 };
 
 struct StereoCalibrationHandlerContext

@@ -295,7 +295,9 @@ Web UIはsidecarが返したURLをそのまま利用する。
 
 ## Dispatch integration
 
-`open_camera` / `close_camera` は `CmdOpenCamera` / `CmdCloseCamera` として `HeadlessCommandMapper` で変換され、`HeadlessDispatcher` とcamera handlerを経由して実行される。Sidecar側はJSON Linesのresponse/event出力と、close前のstream publisher停止などprocess統合処理を担当する。
+`open_camera` / `close_camera` は `CmdOpenCamera` / `CmdCloseCamera` として `HeadlessCommandMapper` で変換され、`HeadlessDispatcher` へ渡され、`CameraHandler` から `CameraService` を呼び出して実行する。
+
+`SidecarService` はcamera open/closeの本体を持たず、MJPEG publisher、stream URL、process lifecycle、close前のstream停止などsidecar固有の統合処理だけを担当する。
 
 GUI向けの既存 `dispatch::execute` は `runtime::AppContext` とwindow targetへ強く依存するため、sidecarではGUI非依存の `HeadlessDispatcher` を利用する。
 
@@ -307,7 +309,8 @@ JSON Lines
   -> HeadlessCommandMapper
   -> HeadlessDispatcher
   -> CameraHandler
-  -> SidecarService（将来CameraServiceへ分離）
+  -> CameraService
+  -> CameraManager
 ```
 
 この統合でもcamera deviceとstreamの所有者はC++のままとする。
