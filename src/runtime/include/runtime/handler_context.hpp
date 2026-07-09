@@ -27,6 +27,11 @@ namespace capture
 class CaptureService;
 }
 
+namespace service
+{
+class SidecarService;
+}
+
 namespace win
 {
 class WindowManager;
@@ -90,6 +95,13 @@ struct CaptureHandlerContext
 {
     /// capture_service <capture::CaptureService&>: Capture commandを実行するdomain service。
     capture::CaptureService& capture_service;
+};
+
+/// @brief camera resource操作をhandlerへ渡す暫定runtime context。
+struct CameraHandlerContext
+{
+    /// sidecar_service <service::SidecarService&>: camera role bindingとopen/closeを持つ暫定service。将来CameraServiceへ分離する。
+    service::SidecarService& sidecar_service;
 };
 
 struct StereoCalibrationHandlerContext

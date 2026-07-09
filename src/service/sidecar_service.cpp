@@ -15,6 +15,20 @@
 
 namespace service {
 
+camera::CameraResult camera::CameraResult::success(
+    video::CameraId camera_id,
+    std::string role) {
+  return CameraResult{true, camera_id, std::move(role), std::nullopt};
+}
+
+camera::CameraResult camera::CameraResult::failure(
+    video::CameraId camera_id,
+    std::string role,
+    std::string code,
+    std::string message) {
+  return CameraResult{false, camera_id, std::move(role), CameraError{std::move(code), std::move(message)}};
+}
+
 SidecarResult SidecarResult::success(std::string value) {
   return SidecarResult{true, std::nullopt, std::move(value)};
 }
@@ -64,12 +78,12 @@ std::string_view toString(SidecarErrorCode code) {
   return "internal_error";
 }
 
-SidecarResult SidecarService::openCamera(int device_index, const std::string& role) {
+camera::CameraResult SidecarService::openCamera(video::CameraId device_index, const std::string& role) {
   if (device_index < 0) {
-    return SidecarResult::failure(SidecarErrorCode::CameraOpenFailed, toString(SidecarErrorCode::CameraOpenFailed).data());
+    return camera::CameraResult::failure(device_index, role, "invalid_command", "camera_id must be non-negative");
   }
   if (!validRole(role)) {
-    return SidecarResult::failure(SidecarErrorCode::InvalidRole, toString(SidecarErrorCode::InvalidRole).data());
+    return camera::CameraResult::failure(device_index, role, "invalid_command", "invalid camera role: " + role);
   }
 
   if (bindings_.contains(role)) {
@@ -82,7 +96,7 @@ SidecarResult SidecarService::openCamera(int device_index, const std::string& ro
   if (camera_id == video::kInvalidCameraId) {
     std::ostringstream message;
     message << "failed to open camera " << device_index;
-    return SidecarResult::failure(SidecarErrorCode::CameraOpenFailed, message.str());
+    return camera::CameraResult::failure(device_index, role, "camera_open_failed", message.str());
   }
 
   CameraBinding binding;
@@ -90,15 +104,16 @@ SidecarResult SidecarService::openCamera(int device_index, const std::string& ro
   binding.camera_id = camera_id;
   bindings_.emplace(role, std::move(binding));
   streams_.registerRole(role, camera_id, streamUrl(role));
-  return SidecarResult::success();
+  return camera::CameraResult::success(device_index, role);
 }
 
-SidecarResult SidecarService::closeCamera(const std::string& role) {
+camera::CameraResult SidecarService::closeCamera(const std::string& role) {
   auto it = bindings_.find(role);
   if (it == bindings_.end()) {
-    return SidecarResult::failure(SidecarErrorCode::CameraNotOpen, toString(SidecarErrorCode::CameraNotOpen).data());
+    return camera::CameraResult::failure(video::kInvalidCameraId, role, "camera_not_open", "camera_not_open");
   }
 
+  const auto device_index = it->second.device_index;
   if (it->second.publisher) {
     it->second.publisher->stop();
     it->second.publisher.reset();
@@ -107,7 +122,7 @@ SidecarResult SidecarService::closeCamera(const std::string& role) {
   streams_.removeRole(role);
   cameras_.remove(it->second.camera_id);
   bindings_.erase(it);
-  return SidecarResult::success();
+  return camera::CameraResult::success(device_index, role);
 }
 
 SidecarResult SidecarService::startStream(const std::string& role) {

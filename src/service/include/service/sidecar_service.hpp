@@ -4,6 +4,7 @@
 #include "calibration/calibrator.hpp"
 #include "calibration/stereo_calibrator.hpp"
 #include "calibration/stereo_data.hpp"
+#include "service/camera_result.hpp"
 #include "video/camera_manager.hpp"
 
 #include <map>
@@ -67,12 +68,14 @@ class SidecarService
     /// @brief cameraをopenしてsidecar roleへ紐づける。
     ///
     /// Args:
-    ///   device_index <int>: open対象のdevice index。
+    ///   device_index <video::CameraId>: open対象のdevice index。
     ///   role <const std::string&>: sidecar上でcameraに紐づけるrole名。
     ///
     /// Return:
     ///   <SidecarResult>: openとrole bindingの成否。
-    SidecarResult openCamera(int device_index, const std::string& role);
+    service::camera::CameraResult openCamera(
+        video::CameraId device_index,
+        const std::string& role);
 
     /// @brief sidecar roleに紐づくcameraをcloseする。
     ///
@@ -81,7 +84,7 @@ class SidecarService
     ///
     /// Return:
     ///   <SidecarResult>: closeの成否。
-    SidecarResult closeCamera(const std::string& role);
+    service::camera::CameraResult closeCamera(const std::string& role);
 
     /// @brief sidecar roleに紐づくcameraのMJPEG streamを開始する。
     ///
