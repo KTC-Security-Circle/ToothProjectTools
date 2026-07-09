@@ -26,6 +26,21 @@ struct CmdCapturePush {
   std::string            tag{};        // 任意ラベル（保存名等に使う想定）
 };
 
+/// @brief camera deviceをopenし、runtime上のcamera roleへbindするcommand。
+struct CmdOpenCamera {
+  /// camera_id <video::CameraId>: OpenCVへ渡すcamera device index。
+  video::CameraId camera_id{video::kInvalidCameraId};
+
+  /// role <std::string>: sidecar / runtime内でcameraを参照するrole名。
+  std::string role;
+};
+
+/// @brief runtime上のcamera roleに紐づくcameraをcloseするcommand。
+struct CmdCloseCamera {
+  /// role <std::string>: close対象のcamera role名。
+  std::string role;
+};
+
 /// @brief 指定cameraからframeを取得して画像ファイルに保存するcommand。
 struct CmdCaptureFrame {
   /// camera_id <video::CameraId>: Capture対象のcamera識別子。
@@ -126,6 +141,8 @@ using Command = std::variant<
   CmdQuit,
   CmdFocusNext,
   CmdCapturePush,
+  CmdOpenCamera,
+  CmdCloseCamera,
   CmdCaptureFrame,
   CmdCaptureStereo,
   CmdShowPattern,
