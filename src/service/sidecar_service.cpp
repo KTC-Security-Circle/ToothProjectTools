@@ -74,7 +74,7 @@ camera::CameraResult SidecarService::openCamera(video::CameraId device_index, co
 
 camera::CameraResult SidecarService::closeCamera(const std::string& role)
 {
-    stopStream(role);
+    stopStreamIfRunning(role);
     streams_.removeRole(role);
     bindings_.erase(role);
     return camera_service_.closeCamera(role);
@@ -117,6 +117,15 @@ SidecarResult SidecarService::startStream(const std::string& role)
 
 SidecarResult SidecarService::stopStream(const std::string& role)
 {
+    stopStreamIfRunning(role);
+    return camera_service_.resolveCameraId(role)
+               ? SidecarResult::success()
+               : SidecarResult::failure(SidecarErrorCode::CameraNotOpen,
+                                        toString(SidecarErrorCode::CameraNotOpen).data());
+}
+
+void SidecarService::stopStreamIfRunning(const std::string& role)
+{
     auto it = bindings_.find(role);
     if (it != bindings_.end() && it->second.publisher)
     {
@@ -125,10 +134,6 @@ SidecarResult SidecarService::stopStream(const std::string& role)
     }
     streams_.setStreaming(role, false);
     streams_.removeRole(role);
-    return camera_service_.resolveCameraId(role)
-               ? SidecarResult::success()
-               : SidecarResult::failure(SidecarErrorCode::CameraNotOpen,
-                                        toString(SidecarErrorCode::CameraNotOpen).data());
 }
 
 SidecarResult SidecarService::captureFrame(const std::string& role, const std::string& output)

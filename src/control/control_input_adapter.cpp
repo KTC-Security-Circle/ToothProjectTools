@@ -168,9 +168,9 @@ AdapterResult ControlInputAdapter::handleCameraCommand(const std::string& id, co
         return AdapterResult::continue_running;
     }
 
-    if (close || service_.cameraService().resolveCameraId(*message.role))
+    if (close)
     {
-        service_.stopStream(*message.role);
+        service_.stopStreamIfRunning(*message.role);
     }
 
     const auto result = headless_dispatcher_.execute(*map_result.command);

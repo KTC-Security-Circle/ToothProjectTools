@@ -102,6 +102,15 @@ class SidecarService
     ///   <SidecarResult>: stream停止の成否。
     SidecarResult stopStream(const std::string& role);
 
+    /// @brief 起動中ならsidecar roleに紐づくMJPEG streamを停止する。
+    ///
+    /// Args:
+    ///   role <const std::string&>: stream停止対象cameraに紐づくrole名。
+    ///
+    /// Return:
+    ///   <void>: 未起動streamは成功扱いとして無視する。
+    void stopStreamIfRunning(const std::string& role);
+
     /// @brief sidecar roleに紐づくcameraからframeを保存する。
     ///
     /// Args:
@@ -121,21 +130,20 @@ class SidecarService
     ///   <std::optional<video::CameraId>>: roleに対応するcamera_id。未登録時はstd::nullopt。
     std::optional<video::CameraId> resolveCameraId(const std::string& role) const;
 
+    /// @brief camera resource commandを実行するdomain serviceを取得する。
+    ///
+    /// Args:
+    ///   none <void>: 引数なし。
+    ///
+    /// Return:
+    ///   <service::camera::CameraService&>: sidecar所有CameraManagerを使うcamera service。
+    service::camera::CameraService& cameraService();
+
     /// @brief sidecarが所有するCameraManagerを参照するCaptureServiceを取得する。
     ///
     /// Args:
     ///   none <void>: 引数なし。
     ///
-    /// Return:
-    ///   <capture::CaptureService&>: sidecar camera群へcaptureを実行するdomain service。
-    /// @brief camera resource commandを実行するdomain serviceを取得する。
-    /// Return:
-    ///   <service::camera::CameraService&>: sidecar所有CameraManagerを使うcamera service。
-    service::camera::CameraService& cameraService();
-
-    ///  sidecarが所有するCameraManagerを参照するCaptureServiceを取得する。
-    /// Args:
-    ///   none <void>: 引数なし。
     /// Return:
     ///   <capture::CaptureService&>: sidecar camera群へcaptureを実行するdomain service。
     capture::CaptureService& captureService();
@@ -186,14 +194,14 @@ class SidecarService
     void shutdown();
 
   private:
-    ///  roleごとのMJPEG publisherを保持するsidecar固有binding。
+    /// @brief roleごとのMJPEG publisherを保持するsidecar固有binding。
     struct CameraBinding
     {
         /// publisher <std::unique_ptr<stream::FramePublisher>>: roleのframe配信worker。
         std::unique_ptr<stream::FramePublisher> publisher;
     };
 
-    ///  role用MJPEG stream URLを生成する。
+    /// @brief role用MJPEG stream URLを生成する。
     /// Args:
     ///   role <const std::string&>: URLへ埋め込むcamera role名。
     /// Return:
