@@ -27,7 +27,7 @@ public:
   /// @brief SidecarServiceとJsonLineWriterを参照してControlInputAdapterを構築する。
   ///
   /// Args:
-  ///   service <service::SidecarService&>: sidecar lifecycle処理とrole bindingを担当するservice。
+  ///   service <service::SidecarService&>: sidecar固有のstreamとprocess lifecycleを担当するservice。
   ///   writer <JsonLineWriter&>: responseとeventを書き出すJSON Lines writer。
   ///
   /// Return:
@@ -44,6 +44,17 @@ public:
   AdapterResult handle(const ControlMessage& message);
 
 private:
+
+  /// @brief camera resource commandをmapper/dispatcher経由で実行する。
+  ///
+  /// Args:
+  ///   id <const std::string&>: responseへ設定するrequest id。
+  ///   message <const ControlMessage&>: JSON Linesからparseされたcontrol message。
+  ///   close <bool>: close_cameraとしてstream停止を先行するか。
+  ///
+  /// Return:
+  ///   <AdapterResult>: serve loopを継続する指示。
+  AdapterResult handleCameraCommand(const std::string& id, const ControlMessage& message, bool close);
 
   /// @brief capture_frame系commandをmapper/dispatcher経由で実行する。
   ///
@@ -112,7 +123,7 @@ private:
       const std::string& id,
       const common::CommandError& error);
 
-  /// service_ <service::SidecarService&>: lifecycle commandとrole bindingを担当するservice。
+  /// service_ <service::SidecarService&>: streamとprocess lifecycleを担当するservice。
   service::SidecarService& service_;
 
   /// writer_ <JsonLineWriter&>: responseとeventを書き出すJSON Lines writer。

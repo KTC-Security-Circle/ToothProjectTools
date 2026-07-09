@@ -12,8 +12,11 @@ struct ControlMessage;
 
 namespace service
 {
-class SidecarService;
+namespace camera
+{
+class CameraService;
 }
+} // namespace service
 
 namespace headless
 {
@@ -33,14 +36,32 @@ struct CommandMapResult
 class HeadlessCommandMapper
 {
   public:
-    /// @brief SidecarServiceのrole bindingを参照してHeadlessCommandMapperを構築する。
+    /// @brief CameraServiceのrole bindingを参照してHeadlessCommandMapperを構築する。
     ///
     /// Args:
-    ///   sidecar_service <service::SidecarService&>: roleからcamera_idを解決するsidecar service。
+    ///   camera_service <service::camera::CameraService&>: roleからcamera_idを解決するdomain service。
     ///
     /// Return:
-    ///   <HeadlessCommandMapper>: SidecarService参照を保持するmapper。
-    explicit HeadlessCommandMapper(service::SidecarService& sidecar_service);
+    ///   <HeadlessCommandMapper>: CameraService参照を保持するmapper。
+    explicit HeadlessCommandMapper(service::camera::CameraService& camera_service);
+
+    /// @brief open_camera用ControlMessageをCmdOpenCameraへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapOpenCamera(const control::ControlMessage& message);
+
+    /// @brief close_camera用ControlMessageをCmdCloseCameraへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapCloseCamera(const control::ControlMessage& message);
 
     /// @brief capture_frame用ControlMessageをCmdCaptureFrameへ変換する。
     ///
@@ -78,7 +99,6 @@ class HeadlessCommandMapper
     ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
     CommandMapResult mapCalibrationCaptureStereo(const control::ControlMessage& message);
 
-
     /// @brief mono_calibrate用ControlMessageをCmdCalibrateへ変換する。
     ///
     /// Args:
@@ -98,8 +118,8 @@ class HeadlessCommandMapper
     CommandMapResult mapStereoCalibrate(const control::ControlMessage& message);
 
   private:
-    /// sidecar_service_ <service::SidecarService&>: role bindingを保持するsidecar service。
-    service::SidecarService& sidecar_service_;
+    /// camera_service_ <service::camera::CameraService&>: role bindingを保持するdomain service。
+    service::camera::CameraService& camera_service_;
 };
 
 } // namespace headless

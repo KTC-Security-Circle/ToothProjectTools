@@ -18,7 +18,7 @@ target_link_libraries(headless_dispatch
   PRIVATE
     handler
     runtime
-    sidecar_service
+    camera_service
     logger
 )
 

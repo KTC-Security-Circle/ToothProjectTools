@@ -1,4 +1,5 @@
 add_library(command_result_mapper STATIC
+    camera_command_result_mapper.cpp
     capture_command_result_mapper.cpp
     calibration_command_result_mapper.cpp
     stereo_calibration_command_result_mapper.cpp

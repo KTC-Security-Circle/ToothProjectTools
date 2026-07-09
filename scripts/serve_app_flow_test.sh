@@ -350,6 +350,13 @@ run_flow_test() {
 
 
   echo "[FLOW] calibration command validation" >&2
+  request_error "camera-missing-id" "missing_field" \
+    '{"id":"camera-missing-id","cmd":"open_camera","role":"left"}'
+  request_error "camera-missing-role" "missing_field" \
+    '{"id":"camera-missing-role","cmd":"open_camera","camera_id":0}'
+  request_error "close-missing-role" "missing_field" \
+    '{"id":"close-missing-role","cmd":"close_camera"}'
+
   request_error "30" "missing_field"     '{"id":"30","cmd":"mono_calibrate","role":"left"}'
   request_error "31" "missing_field"     '{"id":"31","cmd":"stereo_calibrate","left_role":"left","right_role":"right"}'
   request_error "32" "invalid_command"     '{"id":"32","cmd":"stereo_calibrate","left_role":"left","right_role":"right","left_dir":"./data/calib/same","right_dir":"./data/calib/same","output_file":"./data/calib/stereo.yml"}'

@@ -21,6 +21,14 @@ target_link_libraries(service
     logger
 )
 
+add_library(camera_service STATIC
+  camera_service.cpp
+)
+
+target_include_directories(camera_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(camera_service PUBLIC video)
+target_compile_features(camera_service PUBLIC cxx_std_20)
+
 add_library(sidecar_service STATIC
   sidecar_service.cpp
 )
@@ -32,6 +40,7 @@ target_include_directories(sidecar_service
 
 target_link_libraries(sidecar_service
   PUBLIC
+    camera_service
     capture
     calibration
     mjpeg_stream
