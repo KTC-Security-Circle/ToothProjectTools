@@ -45,6 +45,7 @@ ControlInputAdapter::ControlInputAdapter(
       writer_(writer),
       headless_mapper_(service),
       headless_dispatcher_(
+          service,
           service.captureService(),
           service.cameraManager(),
           service.calibrator(),
@@ -73,40 +74,11 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message) {
   }
 
   if (*message.cmd == "open_camera") {
-    if (!message.camera_id) {
-      writer_.writeResponse(missingField(id, "camera_id"));
-      return AdapterResult::continue_running;
-    }
-    if (!message.role || message.role->empty()) {
-      writer_.writeResponse(missingField(id, "role"));
-      return AdapterResult::continue_running;
-    }
-
-    const auto result = service_.openCamera(*message.camera_id, *message.role);
-    if (!result.ok) {
-      writeServiceFailure(id, result);
-      return AdapterResult::continue_running;
-    }
-    writer_.writeResponse(ControlResponse::success(id));
-    writer_.writeEvent(ControlEvent{
-        "camera_opened",
-        {{"camera_id", static_cast<std::int64_t>(*message.camera_id)},
-         {"role", *message.role}}});
-    return AdapterResult::continue_running;
+    return handleCameraCommand(id, message, false);
   }
 
   if (*message.cmd == "close_camera") {
-    if (!message.role || message.role->empty()) {
-      writer_.writeResponse(missingField(id, "role"));
-      return AdapterResult::continue_running;
-    }
-    const auto result = service_.closeCamera(*message.role);
-    if (!result.ok) {
-      writeServiceFailure(id, result);
-    } else {
-      writer_.writeResponse(ControlResponse::success(id));
-    }
-    return AdapterResult::continue_running;
+    return handleCameraCommand(id, message, true);
   }
 
   if (*message.cmd == "start_stream") {
@@ -174,6 +146,39 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message) {
   // このcommand mappingを既存dispatch::execute経由へ移行する。
   writer_.writeResponse(ControlResponse::failure(
       id, "invalid_command", "unknown command: " + *message.cmd));
+  return AdapterResult::continue_running;
+}
+
+AdapterResult ControlInputAdapter::handleCameraCommand(
+    const std::string& id,
+    const ControlMessage& message,
+    bool close) {
+  const auto map_result = close
+      ? headless_mapper_.mapCloseCamera(message)
+      : headless_mapper_.mapOpenCamera(message);
+  if (!map_result.ok) {
+    writeHeadlessFailure(
+        id,
+        map_result.error.value_or(common::CommandError{
+            "invalid_command",
+            "failed to map camera command"}));
+    return AdapterResult::continue_running;
+  }
+
+  if (close) {
+    service_.stopStream(*message.role);
+  }
+
+  const auto result = headless_dispatcher_.execute(*map_result.command);
+  auto response_result = result;
+  response_result.values.clear();
+  writer_.writeResponse(toControlResponse(id, response_result));
+  if (!close && result.handled && result.ok) {
+    writer_.writeEvent(ControlEvent{
+        "camera_opened",
+        {{"camera_id", static_cast<std::int64_t>(*message.camera_id)},
+         {"role", *message.role}}});
+  }
   return AdapterResult::continue_running;
 }
 

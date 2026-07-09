@@ -295,17 +295,19 @@ Web UIはsidecarが返したURLをそのまま利用する。
 
 ## Dispatch integration
 
-MVPでは `ControlInputAdapter` がJSON commandをsidecar専用serviceへ変換する。既存 `dispatch::execute` はGUIの `runtime::AppContext` とwindow targetへ強く依存しているため、sidecarからは直接利用しない。
+`open_camera` / `close_camera` は `CmdOpenCamera` / `CmdCloseCamera` として `HeadlessCommandMapper` で変換され、`HeadlessDispatcher` とcamera handlerを経由して実行される。Sidecar側はJSON Linesのresponse/event出力と、close前のstream publisher停止などprocess統合処理を担当する。
 
-後続作業ではheadless用contextとcamera command型を定義し、次の経路へ統合する。
+GUI向けの既存 `dispatch::execute` は `runtime::AppContext` とwindow targetへ強く依存するため、sidecarではGUI非依存の `HeadlessDispatcher` を利用する。
+
+現在のcamera resource commandは次の経路で処理する。
 
 ```text
 JSON Lines
   -> ControlInputAdapter
-  -> DispatchCmd
-  -> Dispatcher
-  -> Handler
-  -> Service
+  -> HeadlessCommandMapper
+  -> HeadlessDispatcher
+  -> CameraHandler
+  -> SidecarService（将来CameraServiceへ分離）
 ```
 
 この統合でもcamera deviceとstreamの所有者はC++のままとする。

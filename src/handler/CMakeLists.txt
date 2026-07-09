@@ -1,4 +1,5 @@
 add_library(handler STATIC
+    camera_command_handler.cpp
     global_command_handler.cpp
     window_command_handler.cpp
     pattern_command_handler.cpp
