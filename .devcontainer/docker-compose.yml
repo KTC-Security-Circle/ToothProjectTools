@@ -6,7 +6,7 @@ services:
 
     user: "vscode"
     group_add: 
-      - "${VIDEO_GID}"
+      - "${VIDEO_GID-983}"
 
     # GUI（X11）
     environment:
