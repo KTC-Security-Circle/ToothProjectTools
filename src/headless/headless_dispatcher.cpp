@@ -4,6 +4,7 @@
 #include "handler/calibration_command_handler.hpp"
 #include "handler/camera_command_handler.hpp"
 #include "handler/capture_command_handler.hpp"
+#include "handler/window_resource_command_handler.hpp"
 #include "handler/stereo_calibration_command_handler.hpp"
 #include "runtime/handler_context.hpp"
 
@@ -11,11 +12,12 @@ namespace headless
 {
 
 HeadlessDispatcher::HeadlessDispatcher(service::camera::CameraService& camera_service,
+                                       service::window::WindowService& window_service,
                                        capture::CaptureService& capture_service, video::CameraManager& cameras,
                                        calib::Calibrator* calibrator, calib::StereoCalibrator* stereo_calibrator,
                                        calib::StereoData& stereo_data)
-    : camera_service_(camera_service), capture_service_(capture_service), cameras_(cameras), calibrator_(calibrator),
-      stereo_calibrator_(stereo_calibrator), stereo_data_(stereo_data)
+    : camera_service_(camera_service), window_service_(window_service), capture_service_(capture_service),
+      cameras_(cameras), calibrator_(calibrator), stereo_calibrator_(stereo_calibrator), stereo_data_(stereo_data)
 {
 }
 
@@ -26,6 +28,13 @@ common::CommandResult HeadlessDispatcher::execute(const cmd::Command& command)
     if (camera_result.handled)
     {
         return camera_result;
+    }
+
+    runtime::WindowResourceHandlerContext window_ctx{window_service_};
+    const auto window_result = handler::window_resource::handle(window_ctx, command);
+    if (window_result.handled)
+    {
+        return window_result;
     }
 
     runtime::CaptureHandlerContext capture_ctx{capture_service_};

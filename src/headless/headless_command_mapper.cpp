@@ -124,6 +124,59 @@ CommandMapResult HeadlessCommandMapper::mapCloseCamera(const control::ControlMes
     return result;
 }
 
+CommandMapResult HeadlessCommandMapper::mapOpenWindow(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.window_role, "window_role"))
+    {
+        return *failure;
+    }
+    if (!message.width)
+    {
+        return mapFailure("missing_field", "missing required field: width");
+    }
+    if (!message.height)
+    {
+        return mapFailure("missing_field", "missing required field: height");
+    }
+    if (*message.width <= 0)
+    {
+        return mapFailure("invalid_command", "width must be positive");
+    }
+    if (*message.height <= 0)
+    {
+        return mapFailure("invalid_command", "height must be positive");
+    }
+    if (message.monitor_index && *message.monitor_index < 0)
+    {
+        return mapFailure("invalid_command", "monitor_index must be non-negative");
+    }
+
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdOpenWindow{
+        *message.window_role,
+        message.title.value_or(*message.window_role),
+        *message.width,
+        *message.height,
+        message.monitor_index,
+        message.fullscreen.value_or(false),
+    };
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapCloseWindow(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.window_role, "window_role"))
+    {
+        return *failure;
+    }
+
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdCloseWindow{*message.window_role};
+    return result;
+}
+
 CommandMapResult HeadlessCommandMapper::mapCaptureFrame(const control::ControlMessage& message)
 {
     if (auto failure = requireString(message.role, "role"))

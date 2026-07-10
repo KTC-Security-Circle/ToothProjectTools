@@ -19,6 +19,7 @@ target_link_libraries(headless_dispatch
     handler
     runtime
     camera_service
+    window_service
     logger
 )
 

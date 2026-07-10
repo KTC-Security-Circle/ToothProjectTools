@@ -33,6 +33,10 @@ namespace camera
 {
 class CameraService;
 }
+namespace window
+{
+class WindowService;
+}
 } // namespace service
 
 namespace win
@@ -105,6 +109,12 @@ struct CameraHandlerContext
 {
     /// camera_service <service::camera::CameraService&>: camera open/closeを実行するdomain service。
     service::camera::CameraService& camera_service;
+};
+
+struct WindowResourceHandlerContext
+{
+    /// window_service <service::window::WindowService&>: window open/closeを実行するruntime service。
+    service::window::WindowService& window_service;
 };
 
 struct StereoCalibrationHandlerContext

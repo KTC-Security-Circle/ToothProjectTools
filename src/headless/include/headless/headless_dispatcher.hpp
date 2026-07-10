@@ -26,6 +26,10 @@ namespace camera
 {
 class CameraService;
 }
+namespace window
+{
+class WindowService;
+}
 } // namespace service
 
 namespace headless
@@ -39,6 +43,7 @@ class HeadlessDispatcher
     /// Args:
     ///   camera_service <service::camera::CameraService&>: camera open/closeを実行するdomain service。
     ///   capture_service <capture::CaptureService&>: capture commandを実行するdomain service。
+    ///   window_service <service::window::WindowService&>: window open/closeを実行するdomain service。
     ///   cameras <video::CameraManager&>: calibration対象cameraを取得するmanager。
     ///   calibrator <calib::Calibrator*>: mono calibration計算器。
     ///   stereo_calibrator <calib::StereoCalibrator*>: stereo calibration計算器。
@@ -46,8 +51,8 @@ class HeadlessDispatcher
     ///
     /// Return:
     ///   <HeadlessDispatcher>: GUI非依存handler contextを保持するdispatcher。
-    HeadlessDispatcher(service::camera::CameraService& camera_service, capture::CaptureService& capture_service,
-                       video::CameraManager& cameras, calib::Calibrator* calibrator,
+    HeadlessDispatcher(service::camera::CameraService& camera_service, service::window::WindowService& window_service,
+                       capture::CaptureService& capture_service, video::CameraManager& cameras, calib::Calibrator* calibrator,
                        calib::StereoCalibrator* stereo_calibrator, calib::StereoData& stereo_data);
 
     /// @brief headlessで実行可能なcommandを実行する。
@@ -62,6 +67,9 @@ class HeadlessDispatcher
   private:
     /// camera_service_ <service::camera::CameraService&>: camera resource commandを実行するservice。
     service::camera::CameraService& camera_service_;
+
+    /// window_service_ <service::window::WindowService&>: window resource commandを実行するservice。
+    service::window::WindowService& window_service_;
 
     /// capture_service_ <capture::CaptureService&>: capture系domain commandを実行するservice。
     capture::CaptureService& capture_service_;
