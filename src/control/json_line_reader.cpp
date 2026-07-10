@@ -40,6 +40,28 @@ bool readInteger(
   return true;
 }
 
+bool readBool(
+    const cv::FileNode& root,
+    const char* name,
+    std::optional<bool>& value,
+    std::string& error_message) {
+  const auto node = root[name];
+  if (node.empty()) {
+    return true;
+  }
+  if (!node.isInt()) {
+    error_message = std::string("field must be a boolean: ") + name;
+    return false;
+  }
+  const auto raw = static_cast<int>(node);
+  if (raw != 0 && raw != 1) {
+    error_message = std::string("field must be a boolean: ") + name;
+    return false;
+  }
+  value = raw != 0;
+  return true;
+}
+
 } // namespace
 
 JsonLineReader::JsonLineReader(std::istream& input) : input_(input) {}
@@ -89,7 +111,13 @@ ReadResult JsonLineReader::read() {
         !readString(root, "left_dir", message.left_dir, error_message) ||
         !readString(root, "right_dir", message.right_dir, error_message) ||
         !readString(root, "output_file", message.output_file, error_message) ||
-        !readInteger(root, "camera_id", message.camera_id, error_message)) {
+        !readInteger(root, "camera_id", message.camera_id, error_message) ||
+        !readString(root, "window_role", message.window_role, error_message) ||
+        !readString(root, "title", message.title, error_message) ||
+        !readInteger(root, "width", message.width, error_message) ||
+        !readInteger(root, "height", message.height, error_message) ||
+        !readInteger(root, "monitor_index", message.monitor_index, error_message) ||
+        !readBool(root, "fullscreen", message.fullscreen, error_message)) {
       return ReadResult{
           ReadStatus::invalid,
           {},

@@ -43,8 +43,9 @@ std::string valueOrEmpty(const common::CommandResult& result, const std::string&
 
 ControlInputAdapter::ControlInputAdapter(service::SidecarService& service, JsonLineWriter& writer)
     : service_(service), writer_(writer), headless_mapper_(service.cameraService()),
-      headless_dispatcher_(service.cameraService(), service.captureService(), service.cameraManager(),
-                           service.calibrator(), service.stereoCalibrator(), service.stereoData())
+      headless_dispatcher_(service.cameraService(), service.windowService(), service.captureService(),
+                           service.cameraManager(), service.calibrator(), service.stereoCalibrator(),
+                           service.stereoData())
 {
 }
 
@@ -77,6 +78,16 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
     if (*message.cmd == "close_camera")
     {
         return handleCameraCommand(id, message, true);
+    }
+
+    if (*message.cmd == "open_window")
+    {
+        return handleWindowCommand(id, message, false);
+    }
+
+    if (*message.cmd == "close_window")
+    {
+        return handleWindowCommand(id, message, true);
     }
 
     if (*message.cmd == "start_stream")
@@ -181,6 +192,38 @@ AdapterResult ControlInputAdapter::handleCameraCommand(const std::string& id, co
     {
         writer_.writeEvent(ControlEvent{
             "camera_opened", {{"camera_id", static_cast<std::int64_t>(*message.camera_id)}, {"role", *message.role}}});
+    }
+    return AdapterResult::continue_running;
+}
+
+AdapterResult ControlInputAdapter::handleWindowCommand(const std::string& id, const ControlMessage& message, bool close)
+{
+    const auto map_result = close ? headless_mapper_.mapCloseWindow(message) : headless_mapper_.mapOpenWindow(message);
+    if (!map_result.ok)
+    {
+        writeHeadlessFailure(
+            id, map_result.error.value_or(common::CommandError{"invalid_command", "failed to map window command"}));
+        return AdapterResult::continue_running;
+    }
+
+    const auto result = headless_dispatcher_.execute(*map_result.command);
+    writer_.writeResponse(toControlResponse(id, result));
+    if (result.handled && result.ok)
+    {
+        if (close)
+        {
+            writer_.writeEvent(ControlEvent{"window_closed",
+                                            {{"window_role", valueOrEmpty(result, "window_role")},
+                                             {"window_id", valueOrEmpty(result, "window_id")}}});
+        }
+        else
+        {
+            writer_.writeEvent(ControlEvent{"window_opened",
+                                            {{"window_role", valueOrEmpty(result, "window_role")},
+                                             {"window_id", valueOrEmpty(result, "window_id")},
+                                             {"width", valueOrEmpty(result, "width")},
+                                             {"height", valueOrEmpty(result, "height")}}});
+        }
     }
     return AdapterResult::continue_running;
 }

@@ -51,6 +51,24 @@ struct ControlMessage {
 
   /// camera_id <std::optional<int>>: open_cameraで使用するcamera識別子。
   std::optional<int> camera_id;
+
+  /// window_role <std::optional<std::string>>: open/close対象のwindow role名。
+  std::optional<std::string> window_role;
+
+  /// title <std::optional<std::string>>: 作成するwindowのtitle。
+  std::optional<std::string> title;
+
+  /// width <std::optional<int>>: 作成するwindowの横幅。
+  std::optional<int> width;
+
+  /// height <std::optional<int>>: 作成するwindowの縦幅。
+  std::optional<int> height;
+
+  /// monitor_index <std::optional<int>>: 表示先monitor index。
+  std::optional<int> monitor_index;
+
+  /// fullscreen <std::optional<bool>>: fullscreenでwindowを開くか。
+  std::optional<bool> fullscreen;
 };
 
 struct ControlError {

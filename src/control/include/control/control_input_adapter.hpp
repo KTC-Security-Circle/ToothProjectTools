@@ -56,6 +56,17 @@ private:
   ///   <AdapterResult>: serve loopを継続する指示。
   AdapterResult handleCameraCommand(const std::string& id, const ControlMessage& message, bool close);
 
+  /// @brief window resource commandをmapper/dispatcher経由で実行する。
+  ///
+  /// Args:
+  ///   id <const std::string&>: responseへ設定するrequest id。
+  ///   message <const ControlMessage&>: JSON Linesからparseされたcontrol message。
+  ///   close <bool>: close_windowとして処理するか。
+  ///
+  /// Return:
+  ///   <AdapterResult>: serve loopを継続する指示。
+  AdapterResult handleWindowCommand(const std::string& id, const ControlMessage& message, bool close);
+
   /// @brief capture_frame系commandをmapper/dispatcher経由で実行する。
   ///
   /// Args:

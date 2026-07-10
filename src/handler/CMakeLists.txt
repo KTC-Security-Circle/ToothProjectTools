@@ -2,6 +2,7 @@ add_library(handler STATIC
     camera_command_handler.cpp
     global_command_handler.cpp
     window_command_handler.cpp
+    window_resource_command_handler.cpp
     pattern_command_handler.cpp
     scan_command_handler.cpp
     calibration_command_handler.cpp
@@ -31,6 +32,7 @@ target_link_libraries(handler
     service
     capture
     camera_service
+    window_service
     cv_lib
     logger
 )
