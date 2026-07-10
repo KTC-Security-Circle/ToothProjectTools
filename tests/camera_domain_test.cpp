@@ -268,10 +268,26 @@ void testWindowServiceValidation()
                                             });
     assert(!duplicate.ok && duplicate.error->code == "window_already_open");
 
+    const auto duplicate_title = runWindowRequest(service, [&]
+                                                 {
+                                                     return service.openWindow(service::window::WindowOpenConfig{
+                                                         "projector2", "projector", 640, 480, std::nullopt, false});
+                                                 });
+    assert(!duplicate_title.ok && duplicate_title.error->code == "window_already_open");
+
     const auto close = runWindowRequest(service, [&]
                                         { return service.closeWindow("projector"); });
     assert(close.ok);
     assert(!service.resolveWindowId("projector"));
+
+    const auto reopen_same_title = runWindowRequest(service, [&]
+                                                    {
+                                                        return service.openWindow(service::window::WindowOpenConfig{
+                                                            "projector2", "projector", 640, 480, std::nullopt, false});
+                                                    });
+    assert(reopen_same_title.ok);
+    assert(runWindowRequest(service, [&]
+                            { return service.closeWindow("projector2"); }).ok);
 
     assert(runWindowRequest(service, [&]
                             {

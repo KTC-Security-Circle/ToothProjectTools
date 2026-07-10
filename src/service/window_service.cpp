@@ -356,6 +356,8 @@ void WindowService::closeAllOnMainThread()
         (void)backend_.closeWindow(window_id);
     }
     role_to_window_id_.clear();
+    role_to_window_title_.clear();
+    title_to_window_role_.clear();
     backend_.pollEvents(1);
 }
 
@@ -386,6 +388,12 @@ WindowResult WindowService::executeOpenWindow(OpenWindowRequest& request)
     }
 
     const auto title = config.title.empty() ? config.role : config.title;
+    if (const auto title_it = title_to_window_role_.find(title); title_it != title_to_window_role_.end())
+    {
+        return WindowResult::failure(config.role, "window_already_open",
+                                     "window title is already used by role: " + title_it->second);
+    }
+
     try
     {
         const auto window_id = backend_.openWindow(title, config.width, config.height, config.monitor_index,
@@ -395,6 +403,8 @@ WindowResult WindowService::executeOpenWindow(OpenWindowRequest& request)
             return WindowResult::failure(config.role, "window_open_failed", "window backend returned invalid id");
         }
         role_to_window_id_[config.role] = window_id;
+        role_to_window_title_[config.role] = title;
+        title_to_window_role_[title] = config.role;
         return WindowResult::success(config.role, window_id, config.width, config.height);
     }
     catch (const std::exception& error)
@@ -422,6 +432,11 @@ WindowResult WindowService::executeCloseWindow(CloseWindowRequest& request)
         {
             return WindowResult::failure(request.role, "window_close_failed",
                                          "window backend could not close id: " + std::to_string(window_id));
+        }
+        if (const auto title_it = role_to_window_title_.find(request.role); title_it != role_to_window_title_.end())
+        {
+            title_to_window_role_.erase(title_it->second);
+            role_to_window_title_.erase(title_it);
         }
         role_to_window_id_.erase(it);
         return WindowResult::success(request.role, window_id, 0, 0);

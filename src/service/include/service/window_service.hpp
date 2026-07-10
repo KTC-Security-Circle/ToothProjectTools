@@ -252,6 +252,12 @@ class WindowService
     /// role_to_window_id_ <std::unordered_map<std::string, win::WindowId>>: roleからWindowIdへのbinding。
     std::unordered_map<std::string, win::WindowId> role_to_window_id_;
 
+    /// role_to_window_title_ <std::unordered_map<std::string, std::string>>: roleからHighGUI window名へのbinding。
+    std::unordered_map<std::string, std::string> role_to_window_title_;
+
+    /// title_to_window_role_ <std::unordered_map<std::string, std::string>>: HighGUI window名からroleへのbinding。
+    std::unordered_map<std::string, std::string> title_to_window_role_;
+
     /// queue_mutex_ <std::mutex>: request queueのpush/popだけを保護するmutex。
     mutable std::mutex queue_mutex_;
 
