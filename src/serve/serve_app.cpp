@@ -1,6 +1,7 @@
 #include "serve/serve_app.hpp"
 
 #include "logger/logger_macros.hpp"
+#include "service/scan_event.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -9,6 +10,20 @@
 #include <utility>
 
 namespace serve {
+namespace
+{
+
+control::ControlEvent toControlEvent(const service::scan::ScanEvent& scan_event)
+{
+  control::ControlFields fields;
+  fields.reserve(scan_event.values.size());
+  for (const auto& [key, value] : scan_event.values) {
+    fields.emplace_back(key, value);
+  }
+  return control::ControlEvent{scan_event.event, std::move(fields)};
+}
+
+} // namespace
 
 ServeApp::ServeApp(
     ServeOptions options,
@@ -40,7 +55,29 @@ int ServeApp::run() {
     if (service_.windowService().hasOpenWindows()) {
       service_.windowService().pollEvents(1);
     }
+    for (const auto& event : service_.scanEventQueue().drain()) {
+      writer_.writeEvent(toControlEvent(event));
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+
+  (void)service_.scanService().stopScan();
+  for (int attempt = 0; attempt < 200; ++attempt) {
+    service_.windowService().processPendingRequests();
+    for (const auto& event : service_.scanEventQueue().drain()) {
+      writer_.writeEvent(toControlEvent(event));
+    }
+    const auto status = service_.scanService().scanStatus();
+    if (!status.ok || status.status == service::scan::ScanState::idle ||
+        status.status == service::scan::ScanState::completed || status.status == service::scan::ScanState::failed ||
+        status.status == service::scan::ScanState::stopped) {
+      break;
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+  service_.scanService().shutdown();
+  for (const auto& event : service_.scanEventQueue().drain()) {
+    writer_.writeEvent(toControlEvent(event));
   }
 
   service_.windowService().processPendingRequests();
@@ -53,6 +90,9 @@ int ServeApp::run() {
   }
 
   service_.shutdown();
+  for (const auto& event : service_.scanEventQueue().drain()) {
+    writer_.writeEvent(toControlEvent(event));
+  }
   mjpeg_server_.stop();
   return 0;
 }
