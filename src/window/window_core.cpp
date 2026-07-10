@@ -121,12 +121,6 @@ void Window::create(int create_flags) {
     cv::resizeWindow(name_, size_.width, size_.height);
   }
 
-  #if CV_VERSION_MAJOR >= 4 && defined(HAVE_OPENCV_HIGHGUI)
-    cv::pollKey(); 
-  #else
-    cv::waitKey(1);
-  #endif
-
   move(pos_);
 
   // 初期プロパティの適用

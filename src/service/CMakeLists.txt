@@ -35,7 +35,7 @@ add_library(window_service STATIC
 )
 
 target_include_directories(window_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(window_service PUBLIC window)
+target_link_libraries(window_service PUBLIC window PRIVATE logger)
 target_compile_features(window_service PUBLIC cxx_std_20)
 
 add_library(sidecar_service STATIC

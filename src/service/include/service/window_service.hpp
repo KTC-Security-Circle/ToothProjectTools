@@ -2,7 +2,9 @@
 
 #include "service/window_result.hpp"
 
-#include <atomic>
+#include <condition_variable>
+#include <deque>
+#include <future>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -105,7 +107,7 @@ class WindowService
     ///   <WindowService>: backend参照を保持するwindow service。
     explicit WindowService(WindowBackend& backend);
 
-    /// @brief WindowServiceを破棄し、所有backendを解放する。
+    /// @brief WindowServiceを破棄する。
     ///
     /// Args:
     ///   なし。
@@ -114,7 +116,7 @@ class WindowService
     ///   <void>: なし。
     ~WindowService();
 
-    /// @brief windowを作成してroleへbindする。
+    /// @brief window作成requestをmain threadへenqueueして結果を待つ。
     ///
     /// Args:
     ///   config <const WindowOpenConfig&>: window作成設定。
@@ -123,7 +125,7 @@ class WindowService
     ///   <WindowResult>: window作成結果。
     WindowResult openWindow(const WindowOpenConfig& config);
 
-    /// @brief roleに紐づくwindowをcloseする。
+    /// @brief window close requestをmain threadへenqueueして結果を待つ。
     ///
     /// Args:
     ///   role <const std::string&>: close対象window role名。
@@ -141,7 +143,7 @@ class WindowService
     ///   <std::optional<win::WindowId>>: bind済みならWindowId。
     std::optional<win::WindowId> resolveWindowId(const std::string& role) const;
 
-    /// @brief WindowServiceが所有するwindowをすべてcloseする。
+    /// @brief WindowServiceが所有するwindowをすべてmain threadでcloseするrequestをenqueueして結果を待つ。
     ///
     /// Args:
     ///   なし。
@@ -150,7 +152,16 @@ class WindowService
     ///   <void>: なし。
     void closeAll();
 
-    /// @brief window event処理を最小限進める。
+    /// @brief queueされたwindow requestをmain thread上で処理する。
+    ///
+    /// Args:
+    ///   なし。
+    ///
+    /// Return:
+    ///   <void>: なし。
+    void processPendingRequests();
+
+    /// @brief HighGUI eventをmain thread上で進める。
     ///
     /// Args:
     ///   delay_ms <int>: event pump待機時間ms。
@@ -159,26 +170,75 @@ class WindowService
     ///   <void>: なし。
     void pollEvents(int delay_ms = 1);
 
+    /// @brief open中のwindowが存在するか返す。
+    ///
+    /// Args:
+    ///   なし。
+    ///
+    /// Return:
+    ///   <bool>: open中windowがあればtrue。
+    bool hasOpenWindows() const;
+
+    /// @brief main thread上で全windowを即時closeする。
+    ///
+    /// Args:
+    ///   なし。
+    ///
+    /// Return:
+    ///   <void>: なし。
+    void closeAllOnMainThread();
+
   private:
-    /// @brief window event pump workerを開始する。
-    ///
-    /// Args:
-    ///   なし。
-    ///
-    /// Return:
-    ///   <void>: なし。
-    void startEventPump();
-
-    /// @brief window event pump workerを停止する。
-    ///
-    /// Args:
-    ///   なし。
-    ///
-    /// Return:
-    ///   <void>: なし。
-    void stopEventPump();
-
+    struct WindowRequest;
+    struct OpenWindowRequest;
+    struct CloseWindowRequest;
+    struct CloseAllWindowsRequest;
     class WindowManagerBackend;
+
+    /// @brief main thread専用API呼び出し元を検証する。
+    ///
+    /// Args:
+    ///   operation <const char*>: 検証対象操作名。
+    ///
+    /// Return:
+    ///   <bool>: main threadから呼ばれた場合はtrue。
+    bool ensureGuiThread(const char* operation) const;
+
+    /// @brief window requestをqueueへ追加する。
+    ///
+    /// Args:
+    ///   request <std::shared_ptr<WindowRequest>>: main threadで処理するrequest。
+    ///
+    /// Return:
+    ///   <void>: なし。
+    void enqueue(std::shared_ptr<WindowRequest> request);
+
+    /// @brief open requestをmain thread上で実行する。
+    ///
+    /// Args:
+    ///   request <OpenWindowRequest&>: 処理対象request。
+    ///
+    /// Return:
+    ///   <WindowResult>: window open結果。
+    WindowResult executeOpenWindow(OpenWindowRequest& request);
+
+    /// @brief close requestをmain thread上で実行する。
+    ///
+    /// Args:
+    ///   request <CloseWindowRequest&>: 処理対象request。
+    ///
+    /// Return:
+    ///   <WindowResult>: window close結果。
+    WindowResult executeCloseWindow(CloseWindowRequest& request);
+
+    /// @brief close all requestをmain thread上で実行する。
+    ///
+    /// Args:
+    ///   request <CloseAllWindowsRequest&>: 処理対象request。
+    ///
+    /// Return:
+    ///   <WindowResult>: window close all結果。
+    WindowResult executeCloseAllWindows(CloseAllWindowsRequest& request);
 
     /// owned_backend_ <std::unique_ptr<WindowManagerBackend>>: WindowManager adapterの所有領域。
     std::unique_ptr<WindowManagerBackend> owned_backend_;
@@ -186,17 +246,17 @@ class WindowService
     /// backend_ <WindowBackend&>: window resourceを管理するbackend。
     WindowBackend& backend_;
 
+    /// gui_thread_id_ <std::thread::id>: HighGUI操作を実行するprocess main thread id。
+    std::thread::id gui_thread_id_;
+
     /// role_to_window_id_ <std::unordered_map<std::string, win::WindowId>>: roleからWindowIdへのbinding。
     std::unordered_map<std::string, win::WindowId> role_to_window_id_;
 
-    /// mutex_ <std::mutex>: backend操作とrole bindingを保護するmutex。
-    mutable std::mutex mutex_;
+    /// queue_mutex_ <std::mutex>: request queueのpush/popだけを保護するmutex。
+    mutable std::mutex queue_mutex_;
 
-    /// pump_running_ <std::atomic_bool>: event pump workerの実行状態。
-    std::atomic_bool pump_running_{false};
-
-    /// pump_thread_ <std::thread>: stdin待機中もHighGUI eventを進めるworker。
-    std::thread pump_thread_;
+    /// requests_ <std::deque<std::shared_ptr<WindowRequest>>>: main threadで処理するwindow request queue。
+    std::deque<std::shared_ptr<WindowRequest>> requests_;
 };
 
 } // namespace service::window

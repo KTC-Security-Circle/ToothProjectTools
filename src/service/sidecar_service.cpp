@@ -235,7 +235,6 @@ void SidecarService::shutdown()
         streams_.removeRole(role);
     }
     bindings_.clear();
-    window_service_.closeAll();
     cameras_.clear();
 }
 
