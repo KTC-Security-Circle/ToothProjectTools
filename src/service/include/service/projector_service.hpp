@@ -4,6 +4,7 @@
 #include "service/projector_result.hpp"
 
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -239,6 +240,7 @@ class ProjectorService
     static ProjectorSurface computeSurface(const service::monitor::MonitorInfo& monitor, int requested_width,
                                            int requested_height, std::optional<int> requested_x,
                                            std::optional<int> requested_y, ProjectorPlacement placement);
+    ProjectorResult showPatternLocked(const std::string& projector_role, int index);
     static cv::Mat composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface);
 
     /// window_service_ <service::window::WindowService&>: pattern表示先window service。
@@ -246,6 +248,9 @@ class ProjectorService
 
     /// monitor_service_ <service::monitor::MonitorService&>: monitor情報取得service。
     service::monitor::MonitorService& monitor_service_;
+
+    /// mutex_ <std::mutex>: projector session mapとsession状態を保護するmutex。
+    mutable std::mutex mutex_;
 
     /// sessions_ <std::unordered_map<std::string, ProjectorSession>>: projector roleごとのsession。
     std::unordered_map<std::string, ProjectorSession> sessions_;

@@ -3,6 +3,8 @@
 #include "cmd/commands.hpp"
 #include "common/command_result.hpp"
 
+#include <optional>
+
 namespace calib
 {
 class Calibrator;
@@ -75,6 +77,8 @@ class HeadlessDispatcher
     common::CommandResult execute(const cmd::Command& command);
 
   private:
+    std::optional<common::CommandResult> rejectIfScanResourceBusy(const cmd::Command& command) const;
+
     /// camera_service_ <service::camera::CameraService&>: camera resource commandを実行するservice。
     service::camera::CameraService& camera_service_;
 

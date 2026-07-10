@@ -33,6 +33,7 @@ ProjectorService::~ProjectorService() = default;
 
 ProjectorResult ProjectorService::openProjector(const ProjectorOpenConfig& config)
 {
+    std::lock_guard lock(mutex_);
     if (!isValidProjectorRole(config.projector_role))
     {
         return ProjectorResult::failure(config.projector_role, "invalid_projector_role",
@@ -77,6 +78,7 @@ ProjectorResult ProjectorService::listMonitors()
 
 ProjectorResult ProjectorService::configureSurface(const ProjectorSurfaceRequest& request)
 {
+    std::lock_guard lock(mutex_);
     auto* session = findSession(request.projector_role);
     if (!session)
     {
@@ -143,6 +145,7 @@ ProjectorResult ProjectorService::configureSurface(const ProjectorSurfaceRequest
 
 ProjectorResult ProjectorService::closeProjector(const std::string& projector_role)
 {
+    std::lock_guard lock(mutex_);
     auto it = sessions_.find(projector_role);
     if (it == sessions_.end())
     {
@@ -155,6 +158,7 @@ ProjectorResult ProjectorService::closeProjector(const std::string& projector_ro
 
 ProjectorResult ProjectorService::generatePatterns(const std::string& projector_role)
 {
+    std::lock_guard lock(mutex_);
     auto* session = findSession(projector_role);
     if (!session)
     {
@@ -191,6 +195,12 @@ ProjectorResult ProjectorService::generatePatterns(const std::string& projector_
 }
 
 ProjectorResult ProjectorService::showPattern(const std::string& projector_role, int index)
+{
+    std::lock_guard lock(mutex_);
+    return showPatternLocked(projector_role, index);
+}
+
+ProjectorResult ProjectorService::showPatternLocked(const std::string& projector_role, int index)
 {
     auto* session = findSession(projector_role);
     if (!session)
@@ -233,6 +243,7 @@ ProjectorResult ProjectorService::showPattern(const std::string& projector_role,
 
 ProjectorResult ProjectorService::nextPattern(const std::string& projector_role)
 {
+    std::lock_guard lock(mutex_);
     auto* session = findSession(projector_role);
     if (!session)
     {
@@ -243,11 +254,12 @@ ProjectorResult ProjectorService::nextPattern(const std::string& projector_role)
         return ProjectorResult::failure(projector_role, "pattern_not_generated", "patterns are not generated");
     }
     const auto count = static_cast<int>(session->structured_light->getPatternCount());
-    return showPattern(projector_role, (session->current_index + 1) % count);
+    return showPatternLocked(projector_role, (session->current_index + 1) % count);
 }
 
 ProjectorResult ProjectorService::prevPattern(const std::string& projector_role)
 {
+    std::lock_guard lock(mutex_);
     auto* session = findSession(projector_role);
     if (!session)
     {
@@ -258,11 +270,12 @@ ProjectorResult ProjectorService::prevPattern(const std::string& projector_role)
         return ProjectorResult::failure(projector_role, "pattern_not_generated", "patterns are not generated");
     }
     const auto count = static_cast<int>(session->structured_light->getPatternCount());
-    return showPattern(projector_role, (session->current_index + count - 1) % count);
+    return showPatternLocked(projector_role, (session->current_index + count - 1) % count);
 }
 
 std::optional<ProjectorScanSnapshot> ProjectorService::scanSnapshot(const std::string& projector_role) const
 {
+    std::lock_guard lock(mutex_);
     const auto* session = findSession(projector_role);
     if (!session)
     {
@@ -280,6 +293,7 @@ std::optional<ProjectorScanSnapshot> ProjectorService::scanSnapshot(const std::s
 
 void ProjectorService::closeAll()
 {
+    std::lock_guard lock(mutex_);
     sessions_.clear();
 }
 

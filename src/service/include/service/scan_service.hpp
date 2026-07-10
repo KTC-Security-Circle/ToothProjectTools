@@ -71,6 +71,18 @@ class ScanService
     /// @brief shutdown時にscan workerを停止する。
     void shutdown();
 
+    /// @brief scanがrunning/stopping状態か返す。
+    bool isScanActive() const;
+
+    /// @brief scan中のprojector roleか返す。
+    bool isProjectorRoleBusy(const std::string& projector_role) const;
+
+    /// @brief scan中のcamera roleか返す。
+    bool isCameraRoleBusy(const std::string& camera_role) const;
+
+    /// @brief scan中のwindow roleか返す。
+    bool isWindowRoleBusy(const std::string& window_role) const;
+
   private:
     void workerLoop(std::stop_token stop_token, ScanStartConfig config, std::string scan_id, int pattern_count);
     ScanResult snapshotLocked() const;
@@ -92,6 +104,8 @@ class ScanService
     ScanState state_{ScanState::idle};
     std::string active_scan_id_;
     ScanStartConfig active_config_;
+    /// active_window_role_ <std::string>: scan中projectorの表示先window role。
+    std::string active_window_role_;
     int pattern_count_{0};
     int captured_count_{0};
     int current_index_{-1};

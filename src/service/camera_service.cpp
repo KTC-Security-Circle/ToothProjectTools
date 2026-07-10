@@ -22,12 +22,17 @@ CameraService::CameraService(video::CameraManager& cameras) : cameras_(cameras) 
 
 CameraResult CameraService::openCamera(video::CameraId camera_id, const std::string& role)
 {
+    std::lock_guard lock(mutex_);
     if (camera_id < 0)
         return CameraResult::failure(camera_id, role, "invalid_command", "camera_id must be non-negative");
     if (!validRole(role))
         return CameraResult::failure(camera_id, role, "invalid_command", "invalid camera role: " + role);
-    if (role_to_camera_id_.contains(role))
-        closeCamera(role);
+    if (const auto existing = role_to_camera_id_.find(role); existing != role_to_camera_id_.end())
+    {
+        cameras_.remove(existing->second);
+        role_to_camera_id_.erase(existing);
+        role_to_device_index_.erase(role);
+    }
     video::CameraOptions options;
     options.device_index = camera_id;
     const auto managed_id = cameras_.createCamera(options, "Sidecar-" + role);
@@ -44,6 +49,7 @@ CameraResult CameraService::openCamera(video::CameraId camera_id, const std::str
 
 CameraResult CameraService::closeCamera(const std::string& role)
 {
+    std::lock_guard lock(mutex_);
     const auto camera_it = role_to_camera_id_.find(role);
     if (camera_it == role_to_camera_id_.end())
         return CameraResult::failure(video::kInvalidCameraId, role, "camera_not_open", "camera_not_open");
@@ -57,6 +63,7 @@ CameraResult CameraService::closeCamera(const std::string& role)
 
 std::optional<video::CameraId> CameraService::resolveCameraId(const std::string& role) const
 {
+    std::lock_guard lock(mutex_);
     const auto it = role_to_camera_id_.find(role);
     return it == role_to_camera_id_.end() ? std::nullopt : std::optional<video::CameraId>{it->second};
 }

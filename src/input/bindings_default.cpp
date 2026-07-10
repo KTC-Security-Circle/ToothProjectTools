@@ -148,7 +148,7 @@ void install_default_bindings(
       // Ctrl+Z が効かない環境のため Space に割り当て
       handler.bind(32, [&, projector_id]{
         LOG_INFO("自動スキャン開始");
-        cmd_que.push_back(DispatchCmd{cmd::TargetWindow{projector_id}, cmd::CmdStartScan{500}});
+        cmd_que.push_back(DispatchCmd{cmd::TargetWindow{projector_id}, cmd::CmdStartScan{std::nullopt, "projector", "left", "right", "./data/scan/default", 500}});
       });
   }
   

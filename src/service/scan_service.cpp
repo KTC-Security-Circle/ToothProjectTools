@@ -169,6 +169,7 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
         std::lock_guard lock(mutex_);
         active_scan_id_ = scan_id;
         active_config_ = worker_config;
+        active_window_role_ = snapshot->window_role;
         state_ = ScanState::running;
         pattern_count_ = snapshot->pattern_count;
         captured_count_ = 0;
@@ -248,6 +249,42 @@ void ScanService::shutdown()
     }
 }
 
+bool ScanService::isScanActive() const
+{
+    std::lock_guard lock(mutex_);
+    return state_ == ScanState::running || state_ == ScanState::stopping;
+}
+
+bool ScanService::isProjectorRoleBusy(const std::string& projector_role) const
+{
+    std::lock_guard lock(mutex_);
+    if (state_ != ScanState::running && state_ != ScanState::stopping)
+    {
+        return false;
+    }
+    return active_config_.projector_role == projector_role;
+}
+
+bool ScanService::isCameraRoleBusy(const std::string& camera_role) const
+{
+    std::lock_guard lock(mutex_);
+    if (state_ != ScanState::running && state_ != ScanState::stopping)
+    {
+        return false;
+    }
+    return active_config_.left_role == camera_role || active_config_.right_role == camera_role;
+}
+
+bool ScanService::isWindowRoleBusy(const std::string& window_role) const
+{
+    std::lock_guard lock(mutex_);
+    if (state_ != ScanState::running && state_ != ScanState::stopping)
+    {
+        return false;
+    }
+    return active_window_role_ == window_role;
+}
+
 void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config, std::string scan_id, int pattern_count)
 {
     pushEvent("scan_started", {{"scan_id", scan_id},
@@ -261,13 +298,23 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
     const auto right_id = camera_service_.resolveCameraId(config.right_role);
     if (!left_id || !right_id)
     {
-        std::lock_guard lock(mutex_);
-        state_ = ScanState::failed;
-        last_error_code_ = "camera_not_open";
-        last_error_message_ = "left or right camera role is not open";
-        pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                   {"error_message", last_error_message_}, {"captured_count", std::to_string(captured_count_)},
-                                   {"current_index", std::to_string(current_index_)}});
+        int captured = 0;
+        int current = -1;
+        std::string error_code;
+        std::string error_message;
+        {
+            std::lock_guard lock(mutex_);
+            state_ = ScanState::failed;
+            last_error_code_ = "camera_not_open";
+            last_error_message_ = "left or right camera role is not open";
+            captured = captured_count_;
+            current = current_index_;
+            error_code = last_error_code_;
+            error_message = last_error_message_;
+        }
+        pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", error_code},
+                                   {"error_message", error_message}, {"captured_count", std::to_string(captured)},
+                                   {"current_index", std::to_string(current)}});
         return;
     }
 
@@ -275,10 +322,16 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
     {
         if (stop_token.stop_requested())
         {
-            std::lock_guard lock(mutex_);
-            state_ = ScanState::stopped;
-            pushEvent("scan_stopped", {{"scan_id", scan_id}, {"captured_count", std::to_string(captured_count_)},
-                                        {"current_index", std::to_string(current_index_)}});
+            int captured = 0;
+            int current = -1;
+            {
+                std::lock_guard lock(mutex_);
+                state_ = ScanState::stopped;
+                captured = captured_count_;
+                current = current_index_;
+            }
+            pushEvent("scan_stopped", {{"scan_id", scan_id}, {"captured_count", std::to_string(captured)},
+                                        {"current_index", std::to_string(current)}});
             return;
         }
         {
@@ -289,13 +342,23 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         const auto show_result = projector_service_.showPattern(config.projector_role, index);
         if (!show_result.ok)
         {
-            std::lock_guard lock(mutex_);
-            state_ = ScanState::failed;
-            last_error_code_ = show_result.error ? show_result.error->code : std::string{"pattern_show_failed"};
-            last_error_message_ = show_result.error ? show_result.error->message : std::string{"failed to show pattern"};
-            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                       {"error_message", last_error_message_}, {"captured_count", std::to_string(captured_count_)},
-                                       {"current_index", std::to_string(current_index_)}});
+            int captured = 0;
+            int current = -1;
+            std::string error_code;
+            std::string error_message;
+            {
+                std::lock_guard lock(mutex_);
+                state_ = ScanState::failed;
+                last_error_code_ = show_result.error ? show_result.error->code : std::string{"pattern_show_failed"};
+                last_error_message_ = show_result.error ? show_result.error->message : std::string{"failed to show pattern"};
+                captured = captured_count_;
+                current = current_index_;
+                error_code = last_error_code_;
+                error_message = last_error_message_;
+            }
+            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", error_code},
+                                       {"error_message", error_message}, {"captured_count", std::to_string(captured)},
+                                       {"current_index", std::to_string(current)}});
             return;
         }
 
@@ -313,13 +376,23 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         }
         if (!capture_result.ok)
         {
-            std::lock_guard lock(mutex_);
-            state_ = ScanState::failed;
-            last_error_code_ = captureCode(capture_result);
-            last_error_message_ = captureMessage(capture_result);
-            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                       {"error_message", last_error_message_}, {"captured_count", std::to_string(captured_count_)},
-                                       {"current_index", std::to_string(current_index_)}});
+            int captured = 0;
+            int current = -1;
+            std::string error_code;
+            std::string error_message;
+            {
+                std::lock_guard lock(mutex_);
+                state_ = ScanState::failed;
+                last_error_code_ = captureCode(capture_result);
+                last_error_message_ = captureMessage(capture_result);
+                captured = captured_count_;
+                current = current_index_;
+                error_code = last_error_code_;
+                error_message = last_error_message_;
+            }
+            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", error_code},
+                                       {"error_message", error_message}, {"captured_count", std::to_string(captured)},
+                                       {"current_index", std::to_string(current)}});
             return;
         }
 
@@ -337,13 +410,15 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                                            {"right_path", right_path.string()}});
     }
 
+    int captured = 0;
     {
         std::lock_guard lock(mutex_);
         state_ = ScanState::completed;
         current_index_ = pattern_count > 0 ? pattern_count - 1 : -1;
+        captured = captured_count_;
     }
     pushEvent("scan_completed", {{"scan_id", scan_id},
-                                  {"captured_count", std::to_string(pattern_count)},
+                                  {"captured_count", std::to_string(captured)},
                                   {"pattern_count", std::to_string(pattern_count)},
                                   {"output_dir", config.output_dir.string()}});
 }
