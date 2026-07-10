@@ -3,6 +3,7 @@ add_library(handler STATIC
     global_command_handler.cpp
     window_command_handler.cpp
     window_resource_command_handler.cpp
+    projector_command_handler.cpp
     pattern_command_handler.cpp
     scan_command_handler.cpp
     calibration_command_handler.cpp
@@ -33,6 +34,7 @@ target_link_libraries(handler
     capture
     camera_service
     window_service
+    projector_service
     cv_lib
     logger
 )

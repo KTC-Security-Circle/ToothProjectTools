@@ -43,8 +43,8 @@ std::string valueOrEmpty(const common::CommandResult& result, const std::string&
 
 ControlInputAdapter::ControlInputAdapter(service::SidecarService& service, JsonLineWriter& writer)
     : service_(service), writer_(writer), headless_mapper_(service.cameraService()),
-      headless_dispatcher_(service.cameraService(), service.windowService(), service.captureService(),
-                           service.cameraManager(), service.calibrator(), service.stereoCalibrator(),
+      headless_dispatcher_(service.cameraService(), service.windowService(), service.projectorService(),
+                           service.captureService(), service.cameraManager(), service.calibrator(), service.stereoCalibrator(),
                            service.stereoData())
 {
 }
@@ -88,6 +88,36 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
     if (*message.cmd == "close_window")
     {
         return handleWindowCommand(id, message, true);
+    }
+
+    if (*message.cmd == "open_projector")
+    {
+        return handleProjectorCommand(id, message, ProjectorCommandKind::open);
+    }
+
+    if (*message.cmd == "close_projector")
+    {
+        return handleProjectorCommand(id, message, ProjectorCommandKind::close);
+    }
+
+    if (*message.cmd == "generate_patterns")
+    {
+        return handleProjectorCommand(id, message, ProjectorCommandKind::generate);
+    }
+
+    if (*message.cmd == "show_pattern")
+    {
+        return handleProjectorCommand(id, message, ProjectorCommandKind::show);
+    }
+
+    if (*message.cmd == "next_pattern")
+    {
+        return handleProjectorCommand(id, message, ProjectorCommandKind::next);
+    }
+
+    if (*message.cmd == "prev_pattern")
+    {
+        return handleProjectorCommand(id, message, ProjectorCommandKind::prev);
     }
 
     if (*message.cmd == "start_stream")
@@ -223,6 +253,75 @@ AdapterResult ControlInputAdapter::handleWindowCommand(const std::string& id, co
                                              {"window_id", valueOrEmpty(result, "window_id")},
                                              {"width", valueOrEmpty(result, "width")},
                                              {"height", valueOrEmpty(result, "height")}}});
+        }
+    }
+    return AdapterResult::continue_running;
+}
+
+
+AdapterResult ControlInputAdapter::handleProjectorCommand(const std::string& id, const ControlMessage& message,
+                                                          ProjectorCommandKind kind)
+{
+    headless::CommandMapResult map_result;
+    switch (kind)
+    {
+    case ProjectorCommandKind::open:
+        map_result = headless_mapper_.mapOpenProjector(message);
+        break;
+    case ProjectorCommandKind::close:
+        map_result = headless_mapper_.mapCloseProjector(message);
+        break;
+    case ProjectorCommandKind::generate:
+        map_result = headless_mapper_.mapGeneratePatterns(message);
+        break;
+    case ProjectorCommandKind::show:
+        map_result = headless_mapper_.mapProjectorShowPattern(message);
+        break;
+    case ProjectorCommandKind::next:
+        map_result = headless_mapper_.mapProjectorNextPattern(message);
+        break;
+    case ProjectorCommandKind::prev:
+        map_result = headless_mapper_.mapProjectorPrevPattern(message);
+        break;
+    }
+
+    if (!map_result.ok)
+    {
+        writeHeadlessFailure(
+            id, map_result.error.value_or(common::CommandError{"invalid_command", "failed to map projector command"}));
+        return AdapterResult::continue_running;
+    }
+
+    const auto result = headless_dispatcher_.execute(*map_result.command);
+    writer_.writeResponse(toControlResponse(id, result));
+    if (result.handled && result.ok)
+    {
+        if (kind == ProjectorCommandKind::open)
+        {
+            writer_.writeEvent(ControlEvent{"projector_opened",
+                                            {{"projector_role", valueOrEmpty(result, "projector_role")},
+                                             {"window_role", valueOrEmpty(result, "window_role")},
+                                             {"width", valueOrEmpty(result, "width")},
+                                             {"height", valueOrEmpty(result, "height")}}});
+        }
+        else if (kind == ProjectorCommandKind::close)
+        {
+            writer_.writeEvent(ControlEvent{"projector_closed",
+                                            {{"projector_role", valueOrEmpty(result, "projector_role")}}});
+        }
+        else if (kind == ProjectorCommandKind::generate)
+        {
+            writer_.writeEvent(ControlEvent{"patterns_generated",
+                                            {{"projector_role", valueOrEmpty(result, "projector_role")},
+                                             {"pattern_count", valueOrEmpty(result, "pattern_count")},
+                                             {"width", valueOrEmpty(result, "width")},
+                                             {"height", valueOrEmpty(result, "height")}}});
+        }
+        else
+        {
+            writer_.writeEvent(ControlEvent{"pattern_shown",
+                                            {{"projector_role", valueOrEmpty(result, "projector_role")},
+                                             {"pattern_index", valueOrEmpty(result, "pattern_index")}}});
         }
     }
     return AdapterResult::continue_running;

@@ -44,6 +44,7 @@ int ServeApp::run() {
   }
 
   service_.windowService().processPendingRequests();
+  service_.projectorService().closeAll();
   service_.windowService().closeAllOnMainThread();
 
   control_thread.request_stop();

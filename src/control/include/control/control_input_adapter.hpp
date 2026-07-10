@@ -44,6 +44,15 @@ public:
   AdapterResult handle(const ControlMessage& message);
 
 private:
+  enum class ProjectorCommandKind
+  {
+    open,
+    close,
+    generate,
+    show,
+    next,
+    prev,
+  };
 
   /// @brief camera resource commandをmapper/dispatcher経由で実行する。
   ///
@@ -66,6 +75,17 @@ private:
   /// Return:
   ///   <AdapterResult>: serve loopを継続する指示。
   AdapterResult handleWindowCommand(const std::string& id, const ControlMessage& message, bool close);
+
+  /// @brief projector commandをmapper/dispatcher経由で実行する。
+  ///
+  /// Args:
+  ///   id <const std::string&>: responseへ設定するrequest id。
+  ///   message <const ControlMessage&>: JSON Linesからparseされたcontrol message。
+  ///   kind <ProjectorCommandKind>: projector command種別。
+  ///
+  /// Return:
+  ///   <AdapterResult>: serve loopを継続する指示。
+  AdapterResult handleProjectorCommand(const std::string& id, const ControlMessage& message, ProjectorCommandKind kind);
 
   /// @brief capture_frame系commandをmapper/dispatcher経由で実行する。
   ///
