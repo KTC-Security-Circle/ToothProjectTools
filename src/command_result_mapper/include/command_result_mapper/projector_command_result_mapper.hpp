@@ -20,4 +20,7 @@ namespace command_result_mapper::projector
 common::CommandResult toCommandResult(const service::projector::ProjectorResult& result, bool include_window_role,
                                       bool include_size, bool include_pattern_count, bool include_pattern_index);
 
+/// @brief list_monitors結果をCommandResultへ変換する。
+common::CommandResult toMonitorListCommandResult(const service::projector::ProjectorResult& result);
+
 } // namespace command_result_mapper::projector

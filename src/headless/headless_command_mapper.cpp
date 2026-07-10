@@ -178,6 +178,69 @@ CommandMapResult HeadlessCommandMapper::mapCloseWindow(const control::ControlMes
 }
 
 
+
+CommandMapResult HeadlessCommandMapper::mapListMonitors(const control::ControlMessage& message)
+{
+    (void)message;
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdListMonitors{};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapConfigureProjectorSurface(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.projector_role, "projector_role"))
+    {
+        return *failure;
+    }
+    if (!message.monitor_index)
+    {
+        return mapFailure("missing_field", "missing required field: monitor_index");
+    }
+    if (!message.width)
+    {
+        return mapFailure("missing_field", "missing required field: width");
+    }
+    if (!message.height)
+    {
+        return mapFailure("missing_field", "missing required field: height");
+    }
+    if (*message.monitor_index < 0)
+    {
+        return mapFailure("invalid_command", "monitor_index must be non-negative");
+    }
+    if (*message.width <= 0)
+    {
+        return mapFailure("invalid_command", "width must be positive");
+    }
+    if (*message.height <= 0)
+    {
+        return mapFailure("invalid_command", "height must be positive");
+    }
+
+    const auto placement = message.placement.value_or("center");
+    if (placement != "center" && placement != "custom")
+    {
+        return mapFailure("invalid_command", "placement must be center or custom");
+    }
+    if (placement == "custom" && !message.x)
+    {
+        return mapFailure("missing_field", "missing required field: x");
+    }
+    if (placement == "custom" && !message.y)
+    {
+        return mapFailure("missing_field", "missing required field: y");
+    }
+
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdConfigureProjectorSurface{*message.projector_role, *message.monitor_index,
+                                                       *message.width, *message.height, message.x, message.y,
+                                                       placement};
+    return result;
+}
+
 CommandMapResult HeadlessCommandMapper::mapOpenProjector(const control::ControlMessage& message)
 {
     if (auto failure = requireString(message.projector_role, "projector_role"))

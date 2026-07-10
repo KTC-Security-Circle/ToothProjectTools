@@ -67,6 +67,15 @@ struct ControlMessage {
   /// monitor_index <std::optional<int>>: 表示先monitor index。
   std::optional<int> monitor_index;
 
+  /// x <std::optional<int>>: surface内またはdesktop上のX座標。
+  std::optional<int> x;
+
+  /// y <std::optional<int>>: surface内またはdesktop上のY座標。
+  std::optional<int> y;
+
+  /// placement <std::optional<std::string>>: "center" または "custom"。
+  std::optional<std::string> placement;
+
   /// fullscreen <std::optional<bool>>: fullscreenでwindowを開くか。
   std::optional<bool> fullscreen;
 
