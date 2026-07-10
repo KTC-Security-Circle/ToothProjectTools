@@ -5,6 +5,7 @@
 #include "handler/camera_command_handler.hpp"
 #include "handler/capture_command_handler.hpp"
 #include "handler/projector_command_handler.hpp"
+#include "handler/scan_command_handler.hpp"
 #include "handler/window_resource_command_handler.hpp"
 #include "handler/stereo_calibration_command_handler.hpp"
 #include "runtime/handler_context.hpp"
@@ -15,11 +16,12 @@ namespace headless
 HeadlessDispatcher::HeadlessDispatcher(service::camera::CameraService& camera_service,
                                        service::window::WindowService& window_service,
                                        service::projector::ProjectorService& projector_service,
-                                       capture::CaptureService& capture_service, video::CameraManager& cameras,
+                                       service::scan::ScanService& scan_service, capture::CaptureService& capture_service,
+                                       video::CameraManager& cameras,
                                        calib::Calibrator* calibrator, calib::StereoCalibrator* stereo_calibrator,
                                        calib::StereoData& stereo_data)
     : camera_service_(camera_service), window_service_(window_service), projector_service_(projector_service),
-      capture_service_(capture_service), cameras_(cameras), calibrator_(calibrator),
+      scan_service_(scan_service), capture_service_(capture_service), cameras_(cameras), calibrator_(calibrator),
       stereo_calibrator_(stereo_calibrator), stereo_data_(stereo_data)
 {
 }
@@ -45,6 +47,13 @@ common::CommandResult HeadlessDispatcher::execute(const cmd::Command& command)
     if (projector_result.handled)
     {
         return projector_result;
+    }
+
+    runtime::ScanHandlerContext scan_ctx{scan_service_};
+    const auto scan_result = handler::scan::handle(scan_ctx, command);
+    if (scan_result.handled)
+    {
+        return scan_result;
     }
 
     runtime::CaptureHandlerContext capture_ctx{capture_service_};

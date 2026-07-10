@@ -34,6 +34,10 @@ namespace projector
 {
 class ProjectorService;
 }
+namespace scan
+{
+class ScanService;
+}
 } // namespace service
 
 namespace headless
@@ -56,7 +60,8 @@ class HeadlessDispatcher
     /// Return:
     ///   <HeadlessDispatcher>: GUI非依存handler contextを保持するdispatcher。
     HeadlessDispatcher(service::camera::CameraService& camera_service, service::window::WindowService& window_service,
-                       service::projector::ProjectorService& projector_service, capture::CaptureService& capture_service,
+                       service::projector::ProjectorService& projector_service, service::scan::ScanService& scan_service,
+                       capture::CaptureService& capture_service,
                        video::CameraManager& cameras, calib::Calibrator* calibrator,
                        calib::StereoCalibrator* stereo_calibrator, calib::StereoData& stereo_data);
 
@@ -78,6 +83,9 @@ class HeadlessDispatcher
 
     /// projector_service_ <service::projector::ProjectorService&>: projector commandを実行するservice。
     service::projector::ProjectorService& projector_service_;
+
+    /// scan_service_ <service::scan::ScanService&>: scan commandを実行するservice。
+    service::scan::ScanService& scan_service_;
 
     /// capture_service_ <capture::CaptureService&>: capture系domain commandを実行するservice。
     capture::CaptureService& capture_service_;
