@@ -36,6 +36,7 @@ std::vector<MonitorInfo> defaultMonitorProvider()
             rect.height,
             index == 0,
             "monitor-" + std::to_string(index),
+            false,
         });
     }
 
@@ -45,7 +46,7 @@ std::vector<MonitorInfo> defaultMonitorProvider()
     }
 
     LOG_DEBUG("MonitorService fallback monitor used: 1920x1080 default");
-    return {MonitorInfo{0, 0, 0, 1920, 1080, true, "default"}};
+    return {MonitorInfo{0, 0, 0, 1920, 1080, true, "default", true}};
 }
 
 } // namespace

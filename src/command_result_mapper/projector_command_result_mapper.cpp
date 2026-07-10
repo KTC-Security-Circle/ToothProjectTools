@@ -43,7 +43,8 @@ std::string monitorsJson(const std::vector<service::monitor::MonitorInfo>& monit
         stream << "{\"monitor_index\":" << monitor.monitor_index << ",\"x\":" << monitor.x
                << ",\"y\":" << monitor.y << ",\"width\":" << monitor.width
                << ",\"height\":" << monitor.height << ",\"primary\":"
-               << (monitor.primary ? "true" : "false") << ",\"name\":\"" << jsonEscape(monitor.name) << "\"}";
+               << (monitor.primary ? "true" : "false") << ",\"name\":\"" << jsonEscape(monitor.name)
+               << "\",\"fallback\":" << (monitor.fallback ? "true" : "false") << "}";
     }
     stream << ']';
     return stream.str();
@@ -87,6 +88,8 @@ common::CommandResult toCommandResult(const service::projector::ProjectorResult&
     if (result.surface_width > 0)
     {
         values.emplace("monitor_index", std::to_string(result.monitor_index));
+        values.emplace("monitor_x", std::to_string(result.monitor_x));
+        values.emplace("monitor_y", std::to_string(result.monitor_y));
         values.emplace("monitor_width", std::to_string(result.monitor_width));
         values.emplace("monitor_height", std::to_string(result.monitor_height));
         values.emplace("surface_width", std::to_string(result.surface_width));

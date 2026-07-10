@@ -380,6 +380,9 @@ void testMonitorService()
     const auto existing = service.getMonitor(1);
     assert(existing && existing->width == 1920);
     assert(!service.getMonitor(99));
+
+    service::monitor::MonitorService empty_service{[] { return std::vector<service::monitor::MonitorInfo>{}; }};
+    assert(empty_service.listMonitors().empty());
 }
 
 void testWindowHandler()
@@ -651,6 +654,20 @@ void testProjectorSurfaceConfiguration()
     result = projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
         "projector", 99, 640, 480, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
     assert(!result.ok && result.error->code == "monitor_not_found");
+
+    service::monitor::MonitorService invalid_monitor_service{[]
+                                                            {
+                                                                return std::vector<service::monitor::MonitorInfo>{
+                                                                    {0, 0, 0, 0, 1080, true, "invalid", false},
+                                                                };
+                                                            }};
+    service::projector::ProjectorService invalid_projector_service{window_service, invalid_monitor_service};
+    assert(invalid_projector_service.openProjector(service::projector::ProjectorOpenConfig{
+               "invalid_projector", "projector_window", 16, 12})
+               .ok);
+    result = invalid_projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+        "invalid_projector", 0, 640, 480, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
+    assert(!result.ok && result.error->code == "invalid_monitor_size");
 
     const auto close_window = runWindowRequest(window_service, [&]
                                                { return window_service.closeWindow("projector_window"); });

@@ -35,7 +35,7 @@ struct WindowOpenConfig
     /// height <int>: 作成するwindowの縦幅。
     int height{0};
 
-    /// monitor_index <std::optional<int>>: 表示先monitor index。未指定時は既定monitorを使う。
+    /// monitor_index <std::optional<int>>: 表示先monitor index。public APIでは0-based。未指定時は既定monitorを使う。
     std::optional<int> monitor_index;
 
     /// fullscreen <bool>: fullscreen windowとして開くか。
@@ -47,7 +47,7 @@ struct WindowSurfaceConfig
     /// window_role <std::string>: 対象window role名。
     std::string window_role;
 
-    /// monitor_index <int>: 表示先monitor index。
+    /// monitor_index <int>: 表示先monitor index。public APIでは0-based。
     int monitor_index{0};
 
     /// x <int>: desktop座標上のwindow左上X座標。
@@ -231,7 +231,7 @@ class WindowService
     ///   <void>: なし。
     void pollEvents(int delay_ms = 1);
 
-    /// @brief open中のwindowが存在するか返す。
+    /// @brief open中windowがあるか返す。GUI thread専用。
     ///
     /// Args:
     ///   なし。
@@ -267,6 +267,9 @@ class WindowService
     /// Return:
     ///   <bool>: main threadから呼ばれた場合はtrue。
     bool ensureGuiThread(const char* operation) const;
+
+    /// @brief 呼び出し元がGUI threadか返す。
+    bool isGuiThread() const;
 
     /// @brief window requestをqueueへ追加する。
     ///

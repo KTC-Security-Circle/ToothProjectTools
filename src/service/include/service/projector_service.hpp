@@ -103,6 +103,7 @@ class ProjectorService
     ProjectorResult openProjector(const ProjectorOpenConfig& config);
 
     /// @brief 利用可能なmonitor一覧を返す。
+    /// TODO: list_monitorsは将来的にMonitorHandlerへ分離する。
     ProjectorResult listMonitors();
 
     /// @brief projector表示surfaceとactive pattern areaを設定する。

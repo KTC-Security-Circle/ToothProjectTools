@@ -41,15 +41,40 @@ struct ProjectorResult
     /// pattern_index <int>: 表示または選択されたpattern index。
     int pattern_index{-1};
 
+    /// monitor_index <int>: projector surfaceの対象monitor index。
     int monitor_index{0};
+
+    /// monitor_x <int>: desktop座標上のmonitor左上X座標。
+    int monitor_x{0};
+
+    /// monitor_y <int>: desktop座標上のmonitor左上Y座標。
+    int monitor_y{0};
+
+    /// monitor_width <int>: projector surface対象monitorの横幅。
     int monitor_width{0};
+
+    /// monitor_height <int>: projector surface対象monitorの縦幅。
     int monitor_height{0};
+
+    /// surface_width <int>: black canvasとして表示するsurface横幅。
     int surface_width{0};
+
+    /// surface_height <int>: black canvasとして表示するsurface縦幅。
     int surface_height{0};
+
+    /// pattern_width <int>: GrayCodePattern active area横幅。
     int pattern_width{0};
+
+    /// pattern_height <int>: GrayCodePattern active area縦幅。
     int pattern_height{0};
+
+    /// pattern_x <int>: surface内でactive patternを貼る左上X座標。
     int pattern_x{0};
+
+    /// pattern_y <int>: surface内でactive patternを貼る左上Y座標。
     int pattern_y{0};
+
+    /// clamped <bool>: requested値からclampされた場合true。
     bool clamped{false};
 
     /// monitors <std::vector<service::monitor::MonitorInfo>>: list_monitors結果。

@@ -8,6 +8,7 @@
 #include <exception>
 #include <memory>
 #include <opencv2/imgproc.hpp>
+#include <stdexcept>
 #include <utility>
 
 namespace service::projector
@@ -89,6 +90,11 @@ ProjectorResult ProjectorService::configureSurface(const ProjectorSurfaceRequest
         return ProjectorResult::failure(request.projector_role, "monitor_not_found",
                                         "monitor not found: " + std::to_string(request.monitor_index));
     }
+    if (monitor->width <= 0 || monitor->height <= 0)
+    {
+        return ProjectorResult::failure(request.projector_role, "invalid_monitor_size",
+                                        "monitor width and height must be positive");
+    }
     if (!window_service_.isWindowOpen(session->window_role))
     {
         return ProjectorResult::failure(request.projector_role, "projector_window_not_open",
@@ -120,8 +126,11 @@ ProjectorResult ProjectorService::configureSurface(const ProjectorSurfaceRequest
         });
         if (!window_result.ok)
         {
-            return ProjectorResult::failure(request.projector_role, "projector_window_not_open",
-                                            windowErrorMessage(window_result, "failed to configure projector window"));
+            const auto code = window_result.error ? window_result.error->code : std::string{};
+            return ProjectorResult::failure(
+                request.projector_role,
+                code == "window_not_open" ? "projector_window_not_open" : "projector_window_configure_failed",
+                windowErrorMessage(window_result, "failed to configure projector window"));
         }
     }
 
@@ -280,6 +289,8 @@ ProjectorResult ProjectorService::successFromSession(const ProjectorSession& ses
     auto result = ProjectorResult::success(session.projector_role, session.window_role, session.surface.pattern_width,
                                            session.surface.pattern_height, count, index);
     result.monitor_index = session.surface.monitor_index;
+    result.monitor_x = session.surface.monitor_x;
+    result.monitor_y = session.surface.monitor_y;
     result.monitor_width = session.surface.monitor_width;
     result.monitor_height = session.surface.monitor_height;
     result.surface_width = session.surface.surface_width;
@@ -294,7 +305,7 @@ ProjectorResult ProjectorService::successFromSession(const ProjectorSession& ses
 
 ProjectorSurface ProjectorService::makeDefaultSurface(int width, int height) const
 {
-    if (const auto monitor = monitor_service_.getMonitor(0))
+    if (const auto monitor = monitor_service_.getMonitor(0); monitor && monitor->width > 0 && monitor->height > 0)
     {
         return computeSurface(*monitor, width, height, 0, 0, ProjectorPlacement::custom);
     }
@@ -350,6 +361,18 @@ ProjectorSurface ProjectorService::computeSurface(const service::monitor::Monito
 
 cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface)
 {
+    if (pattern.cols != surface.pattern_width || pattern.rows != surface.pattern_height)
+    {
+        throw std::runtime_error("pattern size does not match projector surface active area");
+    }
+    if (surface.surface_width <= 0 || surface.surface_height <= 0 || surface.pattern_width <= 0 ||
+        surface.pattern_height <= 0 || surface.pattern_x < 0 || surface.pattern_y < 0 ||
+        surface.pattern_x + surface.pattern_width > surface.surface_width ||
+        surface.pattern_y + surface.pattern_height > surface.surface_height)
+    {
+        throw std::runtime_error("projector pattern ROI is outside surface");
+    }
+
     cv::Mat display_pattern;
     if (pattern.channels() == 1)
     {

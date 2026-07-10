@@ -30,6 +30,9 @@ struct MonitorInfo
 
     /// name <std::string>: 取得可能な場合のmonitor名。
     std::string name;
+
+    /// fallback <bool>: 実monitor情報ではなくfallback値ならtrue。
+    bool fallback{false};
 };
 
 class MonitorService
