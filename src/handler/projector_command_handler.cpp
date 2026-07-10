@@ -15,7 +15,28 @@ common::CommandResult handle(runtime::ProjectorHandlerContext& ctx, const cmd::C
         [&](const auto& projector_command) -> common::CommandResult
         {
             using CommandType = std::decay_t<decltype(projector_command)>;
-            if constexpr (std::is_same_v<CommandType, cmd::CmdOpenProjector>)
+            if constexpr (std::is_same_v<CommandType, cmd::CmdListMonitors>)
+            {
+                return command_result_mapper::projector::toMonitorListCommandResult(ctx.projector_service.listMonitors());
+            }
+            else if constexpr (std::is_same_v<CommandType, cmd::CmdConfigureProjectorSurface>)
+            {
+                const auto placement = projector_command.placement == "custom"
+                                           ? service::projector::ProjectorPlacement::custom
+                                           : service::projector::ProjectorPlacement::center;
+                return command_result_mapper::projector::toCommandResult(
+                    ctx.projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                        projector_command.projector_role,
+                        projector_command.monitor_index,
+                        projector_command.width,
+                        projector_command.height,
+                        projector_command.x,
+                        projector_command.y,
+                        placement,
+                    }),
+                    true, false, false, false);
+            }
+            else if constexpr (std::is_same_v<CommandType, cmd::CmdOpenProjector>)
             {
                 return command_result_mapper::projector::toCommandResult(
                     ctx.projector_service.openProjector(service::projector::ProjectorOpenConfig{

@@ -90,6 +90,16 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
         return handleWindowCommand(id, message, true);
     }
 
+    if (*message.cmd == "list_monitors")
+    {
+        return handleProjectorCommand(id, message, ProjectorCommandKind::list_monitors);
+    }
+
+    if (*message.cmd == "configure_projector_surface")
+    {
+        return handleProjectorCommand(id, message, ProjectorCommandKind::configure_surface);
+    }
+
     if (*message.cmd == "open_projector")
     {
         return handleProjectorCommand(id, message, ProjectorCommandKind::open);
@@ -265,6 +275,12 @@ AdapterResult ControlInputAdapter::handleProjectorCommand(const std::string& id,
     headless::CommandMapResult map_result;
     switch (kind)
     {
+    case ProjectorCommandKind::list_monitors:
+        map_result = headless_mapper_.mapListMonitors(message);
+        break;
+    case ProjectorCommandKind::configure_surface:
+        map_result = headless_mapper_.mapConfigureProjectorSurface(message);
+        break;
     case ProjectorCommandKind::open:
         map_result = headless_mapper_.mapOpenProjector(message);
         break;
@@ -296,7 +312,28 @@ AdapterResult ControlInputAdapter::handleProjectorCommand(const std::string& id,
     writer_.writeResponse(toControlResponse(id, result));
     if (result.handled && result.ok)
     {
-        if (kind == ProjectorCommandKind::open)
+        if (kind == ProjectorCommandKind::list_monitors)
+        {
+        }
+        else if (kind == ProjectorCommandKind::configure_surface)
+        {
+            writer_.writeEvent(ControlEvent{"projector_surface_configured",
+                                            {{"projector_role", valueOrEmpty(result, "projector_role")},
+                                             {"window_role", valueOrEmpty(result, "window_role")},
+                                             {"monitor_index", valueOrEmpty(result, "monitor_index")},
+                                             {"monitor_x", valueOrEmpty(result, "monitor_x")},
+                                             {"monitor_y", valueOrEmpty(result, "monitor_y")},
+                                             {"monitor_width", valueOrEmpty(result, "monitor_width")},
+                                             {"monitor_height", valueOrEmpty(result, "monitor_height")},
+                                             {"surface_width", valueOrEmpty(result, "surface_width")},
+                                             {"surface_height", valueOrEmpty(result, "surface_height")},
+                                             {"pattern_width", valueOrEmpty(result, "pattern_width")},
+                                             {"pattern_height", valueOrEmpty(result, "pattern_height")},
+                                             {"pattern_x", valueOrEmpty(result, "pattern_x")},
+                                             {"pattern_y", valueOrEmpty(result, "pattern_y")},
+                                             {"clamped", valueOrEmpty(result, "clamped")}}});
+        }
+        else if (kind == ProjectorCommandKind::open)
         {
             writer_.writeEvent(ControlEvent{"projector_opened",
                                             {{"projector_role", valueOrEmpty(result, "projector_role")},

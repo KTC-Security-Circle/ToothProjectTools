@@ -5,6 +5,7 @@
 #include "calibration/stereo_data.hpp"
 #include "capture/capture_service.hpp"
 #include "service/camera_service.hpp"
+#include "service/monitor_service.hpp"
 #include "service/window_service.hpp"
 #include "service/projector_service.hpp"
 #include "video/camera_manager.hpp"
@@ -151,6 +152,9 @@ class SidecarService
     ///   <service::window::WindowService&>: sidecar所有WindowManagerを使うwindow service。
     service::window::WindowService& windowService();
 
+    /// @brief monitor情報を取得するdomain serviceを取得する。
+    service::monitor::MonitorService& monitorService();
+
     /// @brief projector commandを実行するdomain serviceを取得する。
     ///
     /// Args:
@@ -243,8 +247,11 @@ class SidecarService
     /// window_service_ <service::window::WindowService>: window resourceとrole bindingを管理するdomain service。
     window::WindowService window_service_{window_manager_};
 
+    /// monitor_service_ <service::monitor::MonitorService>: monitor情報を取得するdomain service。
+    monitor::MonitorService monitor_service_;
+
     /// projector_service_ <service::projector::ProjectorService>: projector roleとpattern表示を管理するdomain service。
-    projector::ProjectorService projector_service_{window_service_};
+    projector::ProjectorService projector_service_{window_service_, monitor_service_};
 
     /// capture_service_ <capture::CaptureService>: sidecar所有camera群を使うcapture用domain service。
     capture::CaptureService capture_service_{cameras_};

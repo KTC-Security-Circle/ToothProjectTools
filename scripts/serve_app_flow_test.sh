@@ -315,6 +315,24 @@ test_calib_capture_stereo() {
 
 
 test_projector_validation() {
+  request_ok "list-monitors" \
+    '{"id":"list-monitors","cmd":"list_monitors"}'
+
+  request_error "surface-missing-projector" "missing_field" \
+    '{"id":"surface-missing-projector","cmd":"configure_projector_surface","monitor_index":0,"width":640,"height":480}'
+
+  request_error "surface-missing-monitor" "missing_field" \
+    '{"id":"surface-missing-monitor","cmd":"configure_projector_surface","projector_role":"projector","width":640,"height":480}'
+
+  request_error "surface-invalid-width" "invalid_command" \
+    '{"id":"surface-invalid-width","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":0,"width":0,"height":480}'
+
+  request_error "surface-invalid-placement" "invalid_command" \
+    '{"id":"surface-invalid-placement","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":0,"width":640,"height":480,"placement":"left"}'
+
+  request_error "surface-custom-missing-x" "missing_field" \
+    '{"id":"surface-custom-missing-x","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":0,"width":640,"height":480,"placement":"custom","y":0}'
+
   request_error "projector-missing-role" "missing_field" \
     '{"id":"projector-missing-role","cmd":"open_projector","window_role":"projector","width":640,"height":480}'
 
@@ -380,6 +398,15 @@ test_window_success_if_enabled() {
 
   expect_event "projector_opened" \
     '.event == "projector_opened" and .projector_role == "projector" and .window_role == "test"'
+
+  request_ok "surface-configure" \
+    '{"id":"surface-configure","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":0,"width":640,"height":480,"placement":"center"}'
+
+  assert_last_json '.projector_role == "projector" and .window_role == "test" and .pattern_width == "640" and .pattern_height == "480" and .clamped == "false"' \
+    "configure_projector_surface response"
+
+  expect_event "projector_surface_configured" \
+    '.event == "projector_surface_configured" and .projector_role == "projector" and .window_role == "test"'
 
   request_ok "patterns-generate" \
     '{"id":"patterns-generate","cmd":"generate_patterns","projector_role":"projector"}'

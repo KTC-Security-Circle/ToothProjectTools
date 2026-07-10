@@ -6,6 +6,7 @@
 #include "headless/headless_command_mapper.hpp"
 #include "runtime/handler_context.hpp"
 #include "service/camera_service.hpp"
+#include "service/monitor_service.hpp"
 #include "service/projector_service.hpp"
 #include "service/window_service.hpp"
 #include "video/camera_manager.hpp"
@@ -48,8 +49,23 @@ class FakeWindowBackend final : public service::window::WindowBackend
     {
         last_shown_id = window_id;
         last_shown_size = image.size();
+        last_image = image.clone();
         ++show_count;
         return show_result;
+    }
+
+    bool configureWindowSurface(win::WindowId window_id, int monitor_index, int x, int y, int width, int height,
+                                bool fullscreen) override
+    {
+        last_configured_id = window_id;
+        last_configured_monitor_index = monitor_index;
+        last_configured_x = x;
+        last_configured_y = y;
+        last_configured_width = width;
+        last_configured_height = height;
+        last_configured_fullscreen = fullscreen;
+        ++configure_count;
+        return configure_result;
     }
 
     void pollEvents(int delay_ms) override
@@ -61,6 +77,7 @@ class FakeWindowBackend final : public service::window::WindowBackend
     bool opened{false};
     bool close_result{true};
     bool show_result{true};
+    bool configure_result{true};
     std::string last_title;
     int last_width{0};
     int last_height{0};
@@ -69,8 +86,17 @@ class FakeWindowBackend final : public service::window::WindowBackend
     win::WindowId last_closed_id{win::kInvalidWindowId};
     win::WindowId last_shown_id{win::kInvalidWindowId};
     cv::Size last_shown_size{};
+    cv::Mat last_image;
+    win::WindowId last_configured_id{win::kInvalidWindowId};
+    int last_configured_monitor_index{0};
+    int last_configured_x{0};
+    int last_configured_y{0};
+    int last_configured_width{0};
+    int last_configured_height{0};
+    bool last_configured_fullscreen{false};
     int close_count{0};
     int show_count{0};
+    int configure_count{0};
     int last_delay_ms{0};
 };
 
@@ -91,6 +117,17 @@ auto runWindowRequest(service::window::WindowService& service, Function function
     }
     assert(false && "window request did not finish");
     return future.get();
+}
+
+service::monitor::MonitorService fakeMonitorService()
+{
+    return service::monitor::MonitorService{[]
+                                            {
+                                                return std::vector<service::monitor::MonitorInfo>{
+                                                    {0, 0, 0, 1920, 1080, true, "primary"},
+                                                    {1, 1920, 0, 1920, 1080, false, "projector"},
+                                                };
+                                            }};
 }
 
 control::ControlMessage messageWithId()
@@ -234,6 +271,70 @@ void testProjectorMapper()
     assert(result.ok && std::holds_alternative<cmd::CmdProjectorNextPattern>(*result.command));
     result = mapper.mapProjectorPrevPattern(message);
     assert(result.ok && std::holds_alternative<cmd::CmdProjectorPrevPattern>(*result.command));
+
+    message = messageWithId();
+    result = mapper.mapListMonitors(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdListMonitors>(*result.command));
+
+    message = messageWithId();
+    message.monitor_index = 0;
+    message.width = 640;
+    message.height = 480;
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.projector_role = "projector";
+    message.monitor_index.reset();
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.monitor_index = 0;
+    message.width.reset();
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.width = 640;
+    message.height.reset();
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.height = 480;
+    message.width = 0;
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.width = 640;
+    message.height = 0;
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.height = 480;
+    message.monitor_index = -1;
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.monitor_index = 0;
+    message.placement = "left";
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.placement = "custom";
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.x = 0;
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.y = 0;
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdConfigureProjectorSurface>(*result.command));
+
+    message.placement = "center";
+    message.x.reset();
+    message.y.reset();
+    result = mapper.mapConfigureProjectorSurface(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdConfigureProjectorSurface>(*result.command));
 }
 
 void testMapper()
@@ -268,6 +369,20 @@ void testMapper()
     message.role = "left";
     result = mapper.mapCloseCamera(message);
     assert(result.ok && std::holds_alternative<cmd::CmdCloseCamera>(*result.command));
+}
+
+void testMonitorService()
+{
+    auto service = fakeMonitorService();
+    const auto monitors = service.listMonitors();
+    assert(monitors.size() == 2);
+    assert(monitors[1].monitor_index == 1);
+    const auto existing = service.getMonitor(1);
+    assert(existing && existing->width == 1920);
+    assert(!service.getMonitor(99));
+
+    service::monitor::MonitorService empty_service{[] { return std::vector<service::monitor::MonitorInfo>{}; }};
+    assert(empty_service.listMonitors().empty());
 }
 
 void testWindowHandler()
@@ -401,7 +516,8 @@ void testProjectorServiceValidation()
 {
     FakeWindowBackend backend;
     service::window::WindowService window_service{backend};
-    service::projector::ProjectorService projector_service{window_service};
+    auto monitor_service = fakeMonitorService();
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
 
     auto result = runWindowRequest(window_service, [&]
                                    {
@@ -443,6 +559,8 @@ void testProjectorServiceValidation()
                               { return projector_service.showPattern("projector", 0); });
     assert(result.ok && result.pattern_index == 0);
     assert(backend.show_count == 1);
+    assert(backend.last_shown_size.width == result.surface_width);
+    assert(backend.last_shown_size.height == result.surface_height);
 
     result = runWindowRequest(window_service, [&]
                               { return projector_service.nextPattern("projector"); });
@@ -453,6 +571,7 @@ void testProjectorServiceValidation()
     assert(result.ok && result.pattern_index == 0);
 
     const auto close_count_before = backend.close_count;
+    (void)close_count_before;
     result = projector_service.closeProjector("projector");
     assert(result.ok);
     assert(backend.close_count == close_count_before);
@@ -461,11 +580,109 @@ void testProjectorServiceValidation()
     assert(!result.ok && result.error->code == "projector_not_open");
 }
 
+void testProjectorSurfaceConfiguration()
+{
+    FakeWindowBackend backend;
+    service::window::WindowService window_service{backend};
+    auto monitor_service = fakeMonitorService();
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
+
+    auto result = projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+        "projector", 0, 1280, 720, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
+    assert(!result.ok && result.error->code == "projector_not_open");
+
+    assert(runWindowRequest(window_service, [&]
+                            {
+                                return window_service.openWindow(service::window::WindowOpenConfig{
+                                    "projector_window", "Projector", 16, 12, std::nullopt, false});
+                            }).ok);
+    assert(runWindowRequest(window_service, [&]
+                            {
+                                return projector_service.openProjector(service::projector::ProjectorOpenConfig{
+                                    "projector", "projector_window", 16, 12});
+                            }).ok);
+
+    result = runWindowRequest(window_service, [&]
+                              {
+                                  return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                      "projector", 1, 1280, 720, std::nullopt, std::nullopt,
+                                      service::projector::ProjectorPlacement::center});
+                              });
+    assert(result.ok);
+    assert(result.pattern_width == 1280);
+    assert(result.pattern_height == 720);
+    assert(result.pattern_x == 320);
+    assert(result.pattern_y == 180);
+    assert(!result.clamped);
+    assert(result.surface_width == 1920 && result.surface_height == 1080);
+    assert(backend.configure_count == 1);
+
+    result = runWindowRequest(window_service, [&]
+                              {
+                                  return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                      "projector", 1, 3840, 2160, std::nullopt, std::nullopt,
+                                      service::projector::ProjectorPlacement::center});
+                              });
+    assert(result.ok && result.pattern_width == 1920 && result.pattern_height == 1080);
+    assert(result.pattern_x == 0 && result.pattern_y == 0 && result.clamped);
+
+    result = runWindowRequest(window_service, [&]
+                              {
+                                  return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                      "projector", 1, 640, 480, 100, 50,
+                                      service::projector::ProjectorPlacement::custom});
+                              });
+    assert(result.ok && result.pattern_x == 100 && result.pattern_y == 50);
+    assert(result.pattern_width == 640 && result.pattern_height == 480 && !result.clamped);
+
+    result = runWindowRequest(window_service, [&]
+                              {
+                                  return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                      "projector", 1, 1280, 480, 1000, 50,
+                                      service::projector::ProjectorPlacement::custom});
+                              });
+    assert(result.ok && result.pattern_width == 920 && result.clamped);
+
+    result = runWindowRequest(window_service, [&]
+                              {
+                                  return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                      "projector", 1, 640, 480, -10, -20,
+                                      service::projector::ProjectorPlacement::custom});
+                              });
+    assert(result.ok && result.pattern_x == 0 && result.pattern_y == 0 && result.clamped);
+
+    result = projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+        "projector", 99, 640, 480, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
+    assert(!result.ok && result.error->code == "monitor_not_found");
+
+    service::monitor::MonitorService invalid_monitor_service{[]
+                                                            {
+                                                                return std::vector<service::monitor::MonitorInfo>{
+                                                                    {0, 0, 0, 0, 1080, true, "invalid", false},
+                                                                };
+                                                            }};
+    service::projector::ProjectorService invalid_projector_service{window_service, invalid_monitor_service};
+    assert(invalid_projector_service.openProjector(service::projector::ProjectorOpenConfig{
+               "invalid_projector", "projector_window", 16, 12})
+               .ok);
+    result = invalid_projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+        "invalid_projector", 0, 640, 480, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
+    assert(!result.ok && result.error->code == "invalid_monitor_size");
+
+    const auto close_window = runWindowRequest(window_service, [&]
+                                               { return window_service.closeWindow("projector_window"); });
+    assert(close_window.ok);
+    result = projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+        "projector", 1, 640, 480, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
+    assert(!result.ok && result.error->code == "projector_window_not_open");
+}
+
 void testProjectorHandler()
 {
     FakeWindowBackend backend;
     service::window::WindowService window_service{backend};
-    service::projector::ProjectorService projector_service{window_service};
+    auto monitor_service = fakeMonitorService();
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
     runtime::ProjectorHandlerContext context{projector_service};
 
     assert(runWindowRequest(window_service, [&]
@@ -523,9 +740,11 @@ int main()
     testMapper();
     testWindowMapper();
     testProjectorMapper();
+    testMonitorService();
     testHandler();
     testWindowHandler();
     testProjectorHandler();
+    testProjectorSurfaceConfiguration();
     testServiceValidation();
     testWindowServiceValidation();
     testProjectorServiceValidation();

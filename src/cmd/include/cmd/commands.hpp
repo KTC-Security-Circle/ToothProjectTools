@@ -71,6 +71,34 @@ struct CmdCloseWindow
 };
 
 
+struct CmdListMonitors
+{
+};
+
+struct CmdConfigureProjectorSurface
+{
+    /// projector_role <std::string>: surface設定対象projector role名。
+    std::string projector_role;
+
+    /// monitor_index <int>: 照射先monitor index。
+    int monitor_index{0};
+
+    /// width <int>: requested active pattern width。
+    int width{0};
+
+    /// height <int>: requested active pattern height。
+    int height{0};
+
+    /// x <std::optional<int>>: custom placement時のrequested X。
+    std::optional<int> x;
+
+    /// y <std::optional<int>>: custom placement時のrequested Y。
+    std::optional<int> y;
+
+    /// placement <std::string>: "center" または "custom"。
+    std::string placement{"center"};
+};
+
 /// @brief projector roleをwindow roleへbindするcommand。
 struct CmdOpenProjector
 {
@@ -229,6 +257,8 @@ using Command = std::variant<
   CmdCloseCamera,
   CmdOpenWindow,
   CmdCloseWindow,
+  CmdListMonitors,
+  CmdConfigureProjectorSurface,
   CmdOpenProjector,
   CmdCloseProjector,
   CmdGeneratePatterns,

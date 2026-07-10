@@ -46,6 +46,8 @@ public:
 private:
   enum class ProjectorCommandKind
   {
+    list_monitors,
+    configure_surface,
     open,
     close,
     generate,

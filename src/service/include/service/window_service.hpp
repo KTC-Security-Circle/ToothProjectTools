@@ -35,11 +35,35 @@ struct WindowOpenConfig
     /// height <int>: 作成するwindowの縦幅。
     int height{0};
 
-    /// monitor_index <std::optional<int>>: 表示先monitor index。未指定時は既定monitorを使う。
+    /// monitor_index <std::optional<int>>: 表示先monitor index。public APIでは0-based。未指定時は既定monitorを使う。
     std::optional<int> monitor_index;
 
     /// fullscreen <bool>: fullscreen windowとして開くか。
     bool fullscreen{false};
+};
+
+struct WindowSurfaceConfig
+{
+    /// window_role <std::string>: 対象window role名。
+    std::string window_role;
+
+    /// monitor_index <int>: 表示先monitor index。public APIでは0-based。
+    int monitor_index{0};
+
+    /// x <int>: desktop座標上のwindow左上X座標。
+    int x{0};
+
+    /// y <int>: desktop座標上のwindow左上Y座標。
+    int y{0};
+
+    /// width <int>: window surface横幅。
+    int width{0};
+
+    /// height <int>: window surface縦幅。
+    int height{0};
+
+    /// fullscreen <bool>: fullscreen指定。
+    bool fullscreen{true};
 };
 
 class WindowBackend
@@ -86,6 +110,10 @@ class WindowBackend
     /// Return:
     ///   <bool>: 表示対象が存在し表示できた場合はtrue。
     virtual bool showImage(win::WindowId window_id, const cv::Mat& image) = 0;
+
+    /// @brief window surfaceを再設定する。
+    virtual bool configureWindowSurface(win::WindowId window_id, int monitor_index, int x, int y, int width,
+                                        int height, bool fullscreen) = 0;
 
     /// @brief window event処理を進める。
     ///
@@ -155,6 +183,9 @@ class WindowService
     ///   <WindowResult>: 表示結果。
     WindowResult showImage(const std::string& role, const cv::Mat& image);
 
+    /// @brief open済みwindowのsurfaceを再設定する。
+    WindowResult configureWindowSurface(const WindowSurfaceConfig& config);
+
     /// @brief window roleがopen済みかmain threadへ問い合わせる。
     ///
     /// Args:
@@ -200,7 +231,7 @@ class WindowService
     ///   <void>: なし。
     void pollEvents(int delay_ms = 1);
 
-    /// @brief open中のwindowが存在するか返す。
+    /// @brief open中windowがあるか返す。GUI thread専用。
     ///
     /// Args:
     ///   なし。
@@ -224,6 +255,7 @@ class WindowService
     struct CloseWindowRequest;
     struct CloseAllWindowsRequest;
     struct ShowImageRequest;
+    struct ConfigureWindowSurfaceRequest;
     struct CheckWindowOpenRequest;
     class WindowManagerBackend;
 
@@ -235,6 +267,9 @@ class WindowService
     /// Return:
     ///   <bool>: main threadから呼ばれた場合はtrue。
     bool ensureGuiThread(const char* operation) const;
+
+    /// @brief 呼び出し元がGUI threadか返す。
+    bool isGuiThread() const;
 
     /// @brief window requestをqueueへ追加する。
     ///
@@ -271,6 +306,9 @@ class WindowService
     /// Return:
     ///   <WindowResult>: window表示結果。
     WindowResult executeShowImage(ShowImageRequest& request);
+
+    /// @brief configure surface requestをmain thread上で実行する。
+    WindowResult executeConfigureWindowSurface(ConfigureWindowSurfaceRequest& request);
 
     /// @brief window open確認requestをmain thread上で実行する。
     ///

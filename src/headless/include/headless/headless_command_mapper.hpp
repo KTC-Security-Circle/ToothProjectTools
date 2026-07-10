@@ -81,6 +81,12 @@ class HeadlessCommandMapper
     ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
     CommandMapResult mapCloseWindow(const control::ControlMessage& message);
 
+    /// @brief list_monitors用ControlMessageをCmdListMonitorsへ変換する。
+    CommandMapResult mapListMonitors(const control::ControlMessage& message);
+
+    /// @brief configure_projector_surface用ControlMessageをCmdConfigureProjectorSurfaceへ変換する。
+    CommandMapResult mapConfigureProjectorSurface(const control::ControlMessage& message);
+
     /// @brief open_projector用ControlMessageをCmdOpenProjectorへ変換する。
     ///
     /// Args:

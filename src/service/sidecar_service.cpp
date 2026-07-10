@@ -197,6 +197,11 @@ window::WindowService& SidecarService::windowService()
     return window_service_;
 }
 
+monitor::MonitorService& SidecarService::monitorService()
+{
+    return monitor_service_;
+}
+
 projector::ProjectorService& SidecarService::projectorService()
 {
     return projector_service_;

@@ -1,11 +1,56 @@
 #include "command_result_mapper/projector_command_result_mapper.hpp"
 
 #include <map>
+#include <sstream>
 #include <string>
 #include <utility>
 
 namespace command_result_mapper::projector
 {
+namespace
+{
+
+std::string boolString(bool value)
+{
+    return value ? "true" : "false";
+}
+
+std::string jsonEscape(const std::string& value)
+{
+    std::string escaped;
+    for (const auto ch : value)
+    {
+        if (ch == '\\' || ch == '"')
+        {
+            escaped.push_back('\\');
+        }
+        escaped.push_back(ch);
+    }
+    return escaped;
+}
+
+std::string monitorsJson(const std::vector<service::monitor::MonitorInfo>& monitors)
+{
+    std::ostringstream stream;
+    stream << '[';
+    for (std::size_t index = 0; index < monitors.size(); ++index)
+    {
+        const auto& monitor = monitors[index];
+        if (index > 0)
+        {
+            stream << ',';
+        }
+        stream << "{\"monitor_index\":" << monitor.monitor_index << ",\"x\":" << monitor.x
+               << ",\"y\":" << monitor.y << ",\"width\":" << monitor.width
+               << ",\"height\":" << monitor.height << ",\"primary\":"
+               << (monitor.primary ? "true" : "false") << ",\"name\":\"" << jsonEscape(monitor.name)
+               << "\",\"fallback\":" << (monitor.fallback ? "true" : "false") << "}";
+    }
+    stream << ']';
+    return stream.str();
+}
+
+} // namespace
 
 common::CommandResult toCommandResult(const service::projector::ProjectorResult& result, bool include_window_role,
                                       bool include_size, bool include_pattern_count, bool include_pattern_index)
@@ -40,7 +85,39 @@ common::CommandResult toCommandResult(const service::projector::ProjectorResult&
     {
         values.emplace("pattern_index", std::to_string(result.pattern_index));
     }
+    if (result.surface_width > 0)
+    {
+        values.emplace("monitor_index", std::to_string(result.monitor_index));
+        values.emplace("monitor_x", std::to_string(result.monitor_x));
+        values.emplace("monitor_y", std::to_string(result.monitor_y));
+        values.emplace("monitor_width", std::to_string(result.monitor_width));
+        values.emplace("monitor_height", std::to_string(result.monitor_height));
+        values.emplace("surface_width", std::to_string(result.surface_width));
+        values.emplace("surface_height", std::to_string(result.surface_height));
+        values.emplace("pattern_width", std::to_string(result.pattern_width));
+        values.emplace("pattern_height", std::to_string(result.pattern_height));
+        values.emplace("pattern_x", std::to_string(result.pattern_x));
+        values.emplace("pattern_y", std::to_string(result.pattern_y));
+        values.emplace("clamped", boolString(result.clamped));
+    }
     return common::success(std::move(values));
+}
+
+common::CommandResult toMonitorListCommandResult(const service::projector::ProjectorResult& result)
+{
+    if (!result.ok)
+    {
+        if (result.error)
+        {
+            return common::failure(result.error->code, result.error->message);
+        }
+        return common::failure("internal_error", "monitor list command failed without error detail");
+    }
+
+    return common::success({
+        {"monitor_count", std::to_string(result.monitors.size())},
+        {"monitors_json", monitorsJson(result.monitors)},
+    });
 }
 
 } // namespace command_result_mapper::projector

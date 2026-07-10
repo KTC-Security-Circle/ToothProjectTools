@@ -2,6 +2,7 @@
 
 #include "logger/logger_macros.hpp"
 #include "window/window.hpp"
+#include "window/monitor.hpp"
 #include "window/window_manager.hpp"
 
 #include <algorithm>
@@ -46,7 +47,13 @@ bool isValidRole(const std::string& role)
 ///   <std::string>: backend名。取得APIがないOpenCVではunavailable。
 std::string highGuiBackendName()
 {
+#if CV_VERSION_MAJOR > 4
+    const auto backend = cv::currentUIFramework();
+    return backend.empty() ? std::string{"unavailable"} : backend;
+#else
+    // Some OpenCV 4 builds do not expose cv::currentUIFramework() in highgui headers.
     return "unavailable";
+#endif
 }
 
 /// @brief thread idをlog用文字列へ変換する。
@@ -74,6 +81,7 @@ struct WindowService::WindowRequest
         Close,
         CloseAll,
         ShowImage,
+        ConfigureSurface,
         CheckWindowOpen,
     };
 
@@ -169,6 +177,17 @@ struct WindowService::ShowImageRequest final : WindowRequest
     }
 };
 
+struct WindowService::ConfigureWindowSurfaceRequest final : WindowRequest
+{
+    /// config <WindowSurfaceConfig>: window surface設定。
+    WindowSurfaceConfig config;
+
+    explicit ConfigureWindowSurfaceRequest(WindowSurfaceConfig surface_config)
+        : WindowRequest(Kind::ConfigureSurface), config(std::move(surface_config))
+    {
+    }
+};
+
 struct WindowService::CheckWindowOpenRequest final : WindowRequest
 {
     /// role <std::string>: 確認対象window role名。
@@ -218,7 +237,7 @@ class WindowService::WindowManagerBackend final : public WindowBackend
         {
             if (monitor_index)
             {
-                window->setMonitorIndex(*monitor_index);
+                window->setMonitorIndex(toBackendMonitorIndex(*monitor_index));
             }
             window->resize(win::Size{width, height});
             if (fullscreen)
@@ -261,6 +280,34 @@ class WindowService::WindowManagerBackend final : public WindowBackend
         return true;
     }
 
+    bool configureWindowSurface(win::WindowId window_id, int monitor_index, int x, int y, int width, int height,
+                                bool fullscreen) override
+    {
+        auto* window = windows_.get(window_id);
+        if (!window)
+        {
+            return false;
+        }
+
+        if (window->fullscreen())
+        {
+            window->setFullscreen(false);
+        }
+        const auto backend_monitor_index = toBackendMonitorIndex(monitor_index);
+        window->setMonitorIndex(backend_monitor_index);
+        int local_x = x;
+        int local_y = y;
+        if (const auto rect = win::get_monitor_rect(backend_monitor_index))
+        {
+            local_x = x - rect->x;
+            local_y = y - rect->y;
+        }
+        window->move(win::Point{local_x, local_y});
+        window->resize(win::Size{width, height});
+        window->setFullscreen(fullscreen);
+        return true;
+    }
+
     /// @brief WindowManagerでwindow event処理を進める。
     ///
     /// Args:
@@ -274,6 +321,11 @@ class WindowService::WindowManagerBackend final : public WindowBackend
     }
 
   private:
+    static int toBackendMonitorIndex(int public_monitor_index)
+    {
+        return public_monitor_index + 1;
+    }
+
     /// windows_ <win::WindowManager&>: 実window管理backend。
     win::WindowManager& windows_;
 };
@@ -309,6 +361,12 @@ WindowResult WindowService::openWindow(const WindowOpenConfig& config)
         return WindowResult::failure(config.role, "invalid_monitor_index", "monitor_index must be non-negative");
     }
 
+    if (isGuiThread())
+    {
+        OpenWindowRequest request{config};
+        return executeOpenWindow(request);
+    }
+
     auto request = std::make_shared<OpenWindowRequest>(config);
     auto future = request->promise.get_future();
     enqueue(request);
@@ -317,6 +375,12 @@ WindowResult WindowService::openWindow(const WindowOpenConfig& config)
 
 WindowResult WindowService::closeWindow(const std::string& role)
 {
+    if (isGuiThread())
+    {
+        CloseWindowRequest request{role};
+        return executeCloseWindow(request);
+    }
+
     auto request = std::make_shared<CloseWindowRequest>(role);
     auto future = request->promise.get_future();
     enqueue(request);
@@ -325,7 +389,41 @@ WindowResult WindowService::closeWindow(const std::string& role)
 
 WindowResult WindowService::showImage(const std::string& role, const cv::Mat& image)
 {
+    if (isGuiThread())
+    {
+        ShowImageRequest request{role, image.clone()};
+        return executeShowImage(request);
+    }
+
     auto request = std::make_shared<ShowImageRequest>(role, image.clone());
+    auto future = request->promise.get_future();
+    enqueue(request);
+    return future.get();
+}
+
+WindowResult WindowService::configureWindowSurface(const WindowSurfaceConfig& config)
+{
+    if (!isValidRole(config.window_role))
+    {
+        return WindowResult::failure(config.window_role, "invalid_window_role",
+                                     "window_role must contain only [A-Za-z0-9_-]");
+    }
+    if (config.width <= 0 || config.height <= 0)
+    {
+        return WindowResult::failure(config.window_role, "invalid_window_size", "width and height must be positive");
+    }
+    if (config.monitor_index < 0)
+    {
+        return WindowResult::failure(config.window_role, "invalid_monitor_index", "monitor_index must be non-negative");
+    }
+
+    if (isGuiThread())
+    {
+        ConfigureWindowSurfaceRequest request{config};
+        return executeConfigureWindowSurface(request);
+    }
+
+    auto request = std::make_shared<ConfigureWindowSurfaceRequest>(config);
     auto future = request->promise.get_future();
     enqueue(request);
     return future.get();
@@ -333,6 +431,12 @@ WindowResult WindowService::showImage(const std::string& role, const cv::Mat& im
 
 bool WindowService::isWindowOpen(const std::string& role)
 {
+    if (isGuiThread())
+    {
+        CheckWindowOpenRequest request{role};
+        return executeCheckWindowOpen(request);
+    }
+
     auto request = std::make_shared<CheckWindowOpenRequest>(role);
     auto future = request->promise.get_future();
     enqueue(request);
@@ -341,9 +445,9 @@ bool WindowService::isWindowOpen(const std::string& role)
 
 std::optional<win::WindowId> WindowService::resolveWindowId(const std::string& role) const
 {
-    if (std::this_thread::get_id() != gui_thread_id_)
+    if (!ensureGuiThread("resolveWindowId"))
     {
-        LOG_DEBUG("resolveWindowId called from non-GUI thread; role={}", role);
+        return std::nullopt;
     }
 
     const auto it = role_to_window_id_.find(role);
@@ -356,6 +460,13 @@ std::optional<win::WindowId> WindowService::resolveWindowId(const std::string& r
 
 void WindowService::closeAll()
 {
+    if (isGuiThread())
+    {
+        CloseAllWindowsRequest request;
+        (void)executeCloseAllWindows(request);
+        return;
+    }
+
     auto request = std::make_shared<CloseAllWindowsRequest>();
     auto future = request->promise.get_future();
     enqueue(request);
@@ -395,6 +506,10 @@ void WindowService::processPendingRequests()
             case WindowRequest::Kind::ShowImage:
                 request->promise.set_value(executeShowImage(static_cast<ShowImageRequest&>(*request)));
                 break;
+            case WindowRequest::Kind::ConfigureSurface:
+                request->promise.set_value(
+                    executeConfigureWindowSurface(static_cast<ConfigureWindowSurfaceRequest&>(*request)));
+                break;
             case WindowRequest::Kind::CheckWindowOpen:
                 request->promise.set_value(executeCheckWindowOpen(static_cast<CheckWindowOpenRequest&>(*request))
                                                ? WindowResult::success(static_cast<CheckWindowOpenRequest&>(*request).role,
@@ -428,6 +543,10 @@ void WindowService::pollEvents(int delay_ms)
 
 bool WindowService::hasOpenWindows() const
 {
+    if (!ensureGuiThread("hasOpenWindows"))
+    {
+        return false;
+    }
     return !role_to_window_id_.empty();
 }
 
@@ -451,7 +570,7 @@ void WindowService::closeAllOnMainThread()
 
 bool WindowService::ensureGuiThread(const char* operation) const
 {
-    if (std::this_thread::get_id() == gui_thread_id_)
+    if (isGuiThread())
     {
         return true;
     }
@@ -459,6 +578,11 @@ bool WindowService::ensureGuiThread(const char* operation) const
     LOG_ERROR("HighGUI operation called from non-GUI thread: operation={}, gui_thread={}, current_thread={}", operation,
               threadIdToString(gui_thread_id_), threadIdToString(std::this_thread::get_id()));
     return false;
+}
+
+bool WindowService::isGuiThread() const
+{
+    return std::this_thread::get_id() == gui_thread_id_;
 }
 
 void WindowService::enqueue(std::shared_ptr<WindowRequest> request)
@@ -555,6 +679,25 @@ WindowResult WindowService::executeShowImage(ShowImageRequest& request)
         return WindowResult::failure(request.role, "window_show_failed", "failed to show image: " + request.role);
     }
     return WindowResult::success(request.role, it->second, request.image.cols, request.image.rows);
+}
+
+WindowResult WindowService::executeConfigureWindowSurface(ConfigureWindowSurfaceRequest& request)
+{
+    const auto& config = request.config;
+    const auto it = role_to_window_id_.find(config.window_role);
+    if (it == role_to_window_id_.end())
+    {
+        return WindowResult::failure(config.window_role, "window_not_open",
+                                     "window role is not open: " + config.window_role);
+    }
+
+    if (!backend_.configureWindowSurface(it->second, config.monitor_index, config.x, config.y, config.width,
+                                         config.height, config.fullscreen))
+    {
+        return WindowResult::failure(config.window_role, "window_configure_failed",
+                                     "failed to configure window surface: " + config.window_role);
+    }
+    return WindowResult::success(config.window_role, it->second, config.width, config.height);
 }
 
 bool WindowService::executeCheckWindowOpen(CheckWindowOpenRequest& request)
