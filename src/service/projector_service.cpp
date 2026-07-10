@@ -261,6 +261,23 @@ ProjectorResult ProjectorService::prevPattern(const std::string& projector_role)
     return showPattern(projector_role, (session->current_index + count - 1) % count);
 }
 
+std::optional<ProjectorScanSnapshot> ProjectorService::scanSnapshot(const std::string& projector_role) const
+{
+    const auto* session = findSession(projector_role);
+    if (!session)
+    {
+        return std::nullopt;
+    }
+
+    return ProjectorScanSnapshot{
+        session->projector_role,
+        session->window_role,
+        session->structured_light ? static_cast<int>(session->structured_light->getPatternCount()) : 0,
+        session->patterns_dirty,
+        session->surface,
+    };
+}
+
 void ProjectorService::closeAll()
 {
     sessions_.clear();
@@ -277,6 +294,12 @@ bool ProjectorService::isValidProjectorRole(const std::string& projector_role)
 }
 
 ProjectorService::ProjectorSession* ProjectorService::findSession(const std::string& projector_role)
+{
+    auto it = sessions_.find(projector_role);
+    return it == sessions_.end() ? nullptr : &it->second;
+}
+
+const ProjectorService::ProjectorSession* ProjectorService::findSession(const std::string& projector_role) const
 {
     auto it = sessions_.find(projector_role);
     return it == sessions_.end() ? nullptr : &it->second;

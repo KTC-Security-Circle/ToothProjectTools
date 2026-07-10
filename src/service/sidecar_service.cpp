@@ -212,6 +212,16 @@ capture::CaptureService& SidecarService::captureService()
     return capture_service_;
 }
 
+scan::ScanService& SidecarService::scanService()
+{
+    return scan_service_;
+}
+
+scan::ScanEventQueue& SidecarService::scanEventQueue()
+{
+    return scan_event_queue_;
+}
+
 video::CameraManager& SidecarService::cameraManager()
 {
     return cameras_;
@@ -234,6 +244,8 @@ calib::StereoData& SidecarService::stereoData()
 
 void SidecarService::shutdown()
 {
+    scan_service_.shutdown();
+
     for (auto& [role, binding] : bindings_)
     {
         if (binding.publisher)

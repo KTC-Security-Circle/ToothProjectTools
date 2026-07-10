@@ -56,6 +56,24 @@ struct ProjectorSurfaceRequest
     ProjectorPlacement placement{ProjectorPlacement::center};
 };
 
+struct ProjectorScanSnapshot
+{
+    /// projector_role <std::string>: projector role名。
+    std::string projector_role;
+
+    /// window_role <std::string>: 表示先window role名。
+    std::string window_role;
+
+    /// pattern_count <int>: 生成済みpattern数。
+    int pattern_count{0};
+
+    /// patterns_dirty <bool>: surface変更後に再生成が必要ならtrue。
+    bool patterns_dirty{false};
+
+    /// surface <ProjectorSurface>: 現在のprojector surface。
+    ProjectorSurface surface;
+};
+
 struct ProjectorOpenConfig
 {
     /// projector_role <std::string>: runtime内でprojectorを参照するrole名。
@@ -155,6 +173,9 @@ class ProjectorService
     ///   <ProjectorResult>: pattern表示結果。
     ProjectorResult prevPattern(const std::string& projector_role);
 
+    /// @brief scan開始前に必要なprojector状態snapshotを取得する。
+    std::optional<ProjectorScanSnapshot> scanSnapshot(const std::string& projector_role) const;
+
     /// @brief 全projector bindingを解除する。
     ///
     /// Args:
@@ -203,6 +224,7 @@ class ProjectorService
     /// Return:
     ///   <ProjectorSession*>: open済みならsession。未openならnullptr。
     ProjectorSession* findSession(const std::string& projector_role);
+    const ProjectorSession* findSession(const std::string& projector_role) const;
 
     /// @brief sessionの現在状態から成功resultを作成する。
     ///
