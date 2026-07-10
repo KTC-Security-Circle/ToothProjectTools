@@ -49,10 +49,30 @@ Window* WindowManager::getByName(const std::string& name) const {
   return nullptr;
 }
 
+bool WindowManager::closeWindow(WindowId id) {
+  auto it = std::find_if(windows_.begin(), windows_.end(),
+                         [id](const auto& w) { return w->id() == id; });
+
+  if (it == windows_.end()) {
+    return false;
+  }
+
+  if (*it) {
+    (*it)->destroy();
+  }
+  windows_.erase(it);
+  LOG_INFO("WindowManager: ウィンドウ破棄 id={}", id);
+  return true;
+}
+
 void WindowManager::forEach(std::function<void(Window&)> action) {
   for (auto& w : windows_) {
     if (w) action(*w);
   }
+}
+
+void WindowManager::pollEvents(int delay_ms) {
+  Window::pollEvents(delay_ms);
 }
 
 } // namespace win
