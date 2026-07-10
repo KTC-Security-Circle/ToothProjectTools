@@ -5,7 +5,9 @@
 #include "calibration/stereo_data.hpp"
 #include "capture/capture_service.hpp"
 #include "service/camera_service.hpp"
+#include "service/window_service.hpp"
 #include "video/camera_manager.hpp"
+#include "window/window_manager.hpp"
 
 #include <map>
 #include <memory>
@@ -139,6 +141,15 @@ class SidecarService
     ///   <service::camera::CameraService&>: sidecar所有CameraManagerを使うcamera service。
     service::camera::CameraService& cameraService();
 
+    /// @brief window resource commandを実行するdomain serviceを取得する。
+    ///
+    /// Args:
+    ///   none <void>: 引数なし。
+    ///
+    /// Return:
+    ///   <service::window::WindowService&>: sidecar所有WindowManagerを使うwindow service。
+    service::window::WindowService& windowService();
+
     /// @brief sidecarが所有するCameraManagerを参照するCaptureServiceを取得する。
     ///
     /// Args:
@@ -212,8 +223,15 @@ class SidecarService
     int mjpeg_port_;
     stream::StreamRegistry& streams_;
     video::CameraManager cameras_;
+
+    /// window_manager_ <win::WindowManager>: sidecar window resourceを管理するmanager。
+    win::WindowManager window_manager_;
+
     /// camera_service_ <service::camera::CameraService>: camera resourceとrole bindingを管理するdomain service。
     camera::CameraService camera_service_{cameras_};
+
+    /// window_service_ <service::window::WindowService>: window resourceとrole bindingを管理するdomain service。
+    window::WindowService window_service_{window_manager_};
     /// capture_service_ <capture::CaptureService>: sidecar所有camera群を使うcapture用domain service。
     capture::CaptureService capture_service_{cameras_};
 
