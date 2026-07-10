@@ -135,6 +135,18 @@ request_ok() {
   wait_json ".id == \"${id}\" and .ok == true" "ok response id=${id}"
 }
 
+request_ok_timeout() {
+  local id="$1"
+  local timeout_sec="$2"
+  local json="$3"
+  local old_timeout="${TIMEOUT_SEC}"
+
+  TIMEOUT_SEC="${timeout_sec}"
+  send_json "${json}"
+  wait_json ".id == \"${id}\" and .ok == true" "ok response id=${id} timeout=${timeout_sec}s"
+  TIMEOUT_SEC="${old_timeout}"
+}
+
 request_error() {
   local id="$1"
   local code="$2"
@@ -336,11 +348,29 @@ test_window_success_if_enabled() {
   expect_event "window_opened" \
     '.event == "window_opened" and .window_role == "test"'
 
-  request_ok "window-close" \
+  request_ok_timeout "window-close" 5 \
     '{"id":"window-close","cmd":"close_window","window_role":"test"}'
 
   assert_last_json '.window_role == "test" and .window_id != null' \
     "close_window response"
+
+  expect_event "window_closed" \
+    '.event == "window_closed" and .window_role == "test"'
+
+  request_ok "window-reopen" \
+    '{"id":"window-reopen","cmd":"open_window","window_role":"test","title":"Test","width":640,"height":480}'
+
+  assert_last_json '.window_role == "test" and .window_id != null and .width == "640" and .height == "480"' \
+    "reopen_window response"
+
+  expect_event "window_opened" \
+    '.event == "window_opened" and .window_role == "test"'
+
+  request_ok_timeout "window-reclose" 5 \
+    '{"id":"window-reclose","cmd":"close_window","window_role":"test"}'
+
+  assert_last_json '.window_role == "test" and .window_id != null' \
+    "reclose_window response"
 
   expect_event "window_closed" \
     '.event == "window_closed" and .window_role == "test"'

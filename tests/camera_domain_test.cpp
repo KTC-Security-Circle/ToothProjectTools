@@ -9,8 +9,11 @@
 #include "video/camera_manager.hpp"
 
 #include <cassert>
+#include <chrono>
+#include <future>
 #include <optional>
 #include <string>
+#include <thread>
 #include <variant>
 
 namespace
@@ -54,6 +57,25 @@ class FakeWindowBackend final : public service::window::WindowBackend
     win::WindowId last_closed_id{win::kInvalidWindowId};
     int last_delay_ms{0};
 };
+
+
+
+template <typename Function>
+auto runWindowRequest(service::window::WindowService& service, Function function)
+{
+    auto future = std::async(std::launch::async, std::move(function));
+    for (int attempt = 0; attempt < 200; ++attempt)
+    {
+        if (future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready)
+        {
+            return future.get();
+        }
+        service.processPendingRequests();
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    assert(false && "window request did not finish");
+    return future.get();
+}
 
 control::ControlMessage messageWithId()
 {
@@ -165,18 +187,27 @@ void testWindowHandler()
     service::window::WindowService service{backend};
     runtime::WindowResourceHandlerContext context{service};
 
-    const auto open = handler::window_resource::handle(
-        context, cmd::Command{cmd::CmdOpenWindow{"projector", "Projector", 640, 480, std::nullopt, false}});
+    const auto open = runWindowRequest(service, [&]
+                                       {
+                                           return handler::window_resource::handle(
+                                               context, cmd::Command{cmd::CmdOpenWindow{"projector", "Projector", 640, 480, std::nullopt, false}});
+                                       });
     assert(open.handled && open.ok);
     assert(open.values.at("window_role") == "projector");
     assert(open.values.at("width") == "640");
 
-    const auto close = handler::window_resource::handle(
-        context, cmd::Command{cmd::CmdCloseWindow{"projector"}});
+    const auto close = runWindowRequest(service, [&]
+                                        {
+                                            return handler::window_resource::handle(
+                                                context, cmd::Command{cmd::CmdCloseWindow{"projector"}});
+                                        });
     assert(close.handled && close.ok);
 
-    const auto failed = handler::window_resource::handle(
-        context, cmd::Command{cmd::CmdCloseWindow{"missing"}});
+    const auto failed = runWindowRequest(service, [&]
+                                         {
+                                             return handler::window_resource::handle(
+                                                 context, cmd::Command{cmd::CmdCloseWindow{"missing"}});
+                                         });
     assert(failed.handled && !failed.ok && failed.error->code == "window_not_open");
 
     const auto other = handler::window_resource::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
@@ -217,24 +248,46 @@ void testWindowServiceValidation()
     result = service.openWindow(service::window::WindowOpenConfig{"projector", "", 640, 480, -1, false});
     assert(!result.ok && result.error->code == "invalid_monitor_index");
 
-    result = service.closeWindow("projector");
+    result = runWindowRequest(service, [&]
+                              { return service.closeWindow("projector"); });
     assert(!result.ok && result.error->code == "window_not_open");
 
-    result = service.openWindow(service::window::WindowOpenConfig{"projector", "", 640, 480, std::nullopt, false});
+    result = runWindowRequest(service, [&]
+                              {
+                                  return service.openWindow(service::window::WindowOpenConfig{
+                                      "projector", "", 640, 480, std::nullopt, false});
+                              });
     assert(result.ok);
     assert(backend.last_title == "projector");
     assert(service.resolveWindowId("projector") == result.window_id);
 
-    const auto duplicate = service.openWindow(service::window::WindowOpenConfig{"projector", "", 640, 480, std::nullopt, false});
+    const auto duplicate = runWindowRequest(service, [&]
+                                            {
+                                                return service.openWindow(service::window::WindowOpenConfig{
+                                                    "projector", "", 640, 480, std::nullopt, false});
+                                            });
     assert(!duplicate.ok && duplicate.error->code == "window_already_open");
 
-    const auto close = service.closeWindow("projector");
+    const auto close = runWindowRequest(service, [&]
+                                        { return service.closeWindow("projector"); });
     assert(close.ok);
     assert(!service.resolveWindowId("projector"));
 
-    assert(service.openWindow(service::window::WindowOpenConfig{"one", "", 100, 100, std::nullopt, false}).ok);
-    assert(service.openWindow(service::window::WindowOpenConfig{"two", "", 100, 100, std::nullopt, false}).ok);
-    service.closeAll();
+    assert(runWindowRequest(service, [&]
+                            {
+                                return service.openWindow(service::window::WindowOpenConfig{
+                                    "one", "", 100, 100, std::nullopt, false});
+                            }).ok);
+    assert(runWindowRequest(service, [&]
+                            {
+                                return service.openWindow(service::window::WindowOpenConfig{
+                                    "two", "", 100, 100, std::nullopt, false});
+                            }).ok);
+    runWindowRequest(service, [&]
+                     {
+                         service.closeAll();
+                         return service::window::WindowResult::success({}, win::kInvalidWindowId, 0, 0);
+                     });
     assert(!service.resolveWindowId("one"));
     assert(!service.resolveWindowId("two"));
 }
