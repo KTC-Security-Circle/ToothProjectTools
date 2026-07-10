@@ -144,6 +144,61 @@ stream中のroleをcloseした場合はpublisherを停止してからcameraを�
 {"event":"window_closed","window_role":"projector","window_id":"1"}
 ```
 
+
+### open_projector
+
+```json
+{"id":"50","cmd":"open_projector","projector_role":"projector","window_role":"projector","width":1920,"height":1080}
+{"id":"50","ok":true,"projector_role":"projector","window_role":"projector","width":"1920","height":"1080"}
+{"event":"projector_opened","projector_role":"projector","window_role":"projector","width":"1920","height":"1080"}
+```
+
+`projector_role` はruntime内のprojector binding名。`window_role` は既存の `open_window` で作成済みの表示先window role。現段階ではwindow backendのみを利用し、DRM/KMSやHDMI直接制御は後続PRで扱う。
+
+### generate_patterns
+
+```json
+{"id":"51","cmd":"generate_patterns","projector_role":"projector"}
+{"id":"51","ok":true,"projector_role":"projector","pattern_count":"44","width":"1920","height":"1080"}
+{"event":"patterns_generated","projector_role":"projector","pattern_count":"44","width":"1920","height":"1080"}
+```
+
+ProjectorServiceはprojector解像度でGrayCodePatternを生成する。
+
+### show_pattern
+
+```json
+{"id":"52","cmd":"show_pattern","projector_role":"projector","index":0}
+{"id":"52","ok":true,"projector_role":"projector","pattern_index":"0"}
+{"event":"pattern_shown","projector_role":"projector","pattern_index":"0"}
+```
+
+表示は `WindowService::showImage` 経由で行う。ProjectorServiceはWindowManagerやHighGUIを直接操作しない。
+
+### next_pattern / prev_pattern
+
+```json
+{"id":"53","cmd":"next_pattern","projector_role":"projector"}
+{"id":"53","ok":true,"projector_role":"projector","pattern_index":"1"}
+{"event":"pattern_shown","projector_role":"projector","pattern_index":"1"}
+```
+
+```json
+{"id":"54","cmd":"prev_pattern","projector_role":"projector"}
+{"id":"54","ok":true,"projector_role":"projector","pattern_index":"0"}
+{"event":"pattern_shown","projector_role":"projector","pattern_index":"0"}
+```
+
+### close_projector
+
+```json
+{"id":"55","cmd":"close_projector","projector_role":"projector"}
+{"id":"55","ok":true,"projector_role":"projector"}
+{"event":"projector_closed","projector_role":"projector"}
+```
+
+`close_projector` はprojector bindingだけを解除し、window自体は閉じない。windowを閉じる場合は `close_window` を使う。
+
 ### start_stream
 
 ```json
@@ -316,6 +371,15 @@ Web UIはsidecarが返したURLをそのまま利用する。
 | `invalid_monitor_index` | monitor_indexが不正 |
 | `invalid_window_size` | window width/heightが不正 |
 | `invalid_window_role` | window_roleが空、または英数字、`_`、`-` 以外を含む |
+| `pattern_show_failed` | WindowService経由のpattern表示失敗 |
+| `pattern_index_out_of_range` | pattern indexが範囲外 |
+| `pattern_generate_failed` | GrayCodePattern生成失敗 |
+| `pattern_not_generated` | projector patternが未生成 |
+| `projector_window_not_open` | projector表示先window_roleがopenされていない |
+| `projector_not_open` | roleにopen済みprojectorがない |
+| `projector_already_open` | 指定projector_roleが既にopen済み |
+| `invalid_projector_size` | projector width/heightが不正 |
+| `invalid_projector_role` | projector_roleが空、または英数字、`_`、`-` 以外を含む |
 | `capture_failed` | capture詳細errorがない失敗 |
 | `calibration_failed` | mono calibration計算失敗 |
 | `stereo_calibration_failed` | stereo calibration計算失敗 |
@@ -384,3 +448,29 @@ HeadlessDispatcher
   -> WindowService
   -> WindowManager
 ```
+
+
+Projector commandは次の経路で処理する。
+
+```text
+JSON Lines ControlMessage
+  -> ControlInputAdapter
+  -> HeadlessCommandMapper
+  -> cmd::Projector系Command
+  -> HeadlessDispatcher
+  -> ProjectorHandler
+  -> ProjectorService
+  -> WindowService::showImage
+  -> WindowManager
+```
+
+ProjectorServiceはWindowManagerを直接触らず、表示は `WindowService::showImage` 経由で行う。現段階ではwindow backendのみを利用し、DRM/KMSやHDMI直接制御、monitor列挙は後続PRで扱う。
+
+| JSONL `cmd` | C++ command | Handler | Service | 備考 |
+| --- | --- | --- | --- | --- |
+| `open_projector` | `cmd::CmdOpenProjector` | `handler::projector` | `service::projector::ProjectorService` | projector_roleをwindow_roleへbindする |
+| `close_projector` | `cmd::CmdCloseProjector` | `handler::projector` | `service::projector::ProjectorService` | projector bindingを解除する。windowは閉じない |
+| `generate_patterns` | `cmd::CmdGeneratePatterns` | `handler::projector` | `service::projector::ProjectorService` | projector解像度でGrayCodePatternを生成する |
+| `show_pattern` | `cmd::CmdProjectorShowPattern` | `handler::projector` | `service::projector::ProjectorService` | 指定indexのpatternをWindowService経由で表示する |
+| `next_pattern` | `cmd::CmdProjectorNextPattern` | `handler::projector` | `service::projector::ProjectorService` | 次のpatternを表示する |
+| `prev_pattern` | `cmd::CmdProjectorPrevPattern` | `handler::projector` | `service::projector::ProjectorService` | 前のpatternを表示する |
