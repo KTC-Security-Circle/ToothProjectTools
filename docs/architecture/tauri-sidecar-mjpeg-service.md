@@ -270,7 +270,21 @@ output_dir/
     pattern_001.png
 ```
 
-`metadata.json` には `scan_id`, `created_at`, `version`, `projector_role`, `left_role`, `right_role`, `pattern_count`, `settle_ms`, `output_dir`, `surface` を保存する。GrayCode decode / reconstruct は今回行わない。scan中にsurface変更や `generate_patterns` を行うのは未定義。
+`metadata.json` には `scan_id`, `created_at`, `version`, `projector_role`, `left_role`, `right_role`, `pattern_count`, `settle_ms`, `output_dir`, `surface` を保存する。GrayCode decode / reconstruct は今回行わない。scan中にsurface変更や `generate_patterns` は行わない。
+
+scan中は、対象 `projector_role`、対象left/right camera role、対象projector window roleへの破壊的操作を拒否する。拒否されたcommandは `scan_resource_busy` を返す。
+
+拒否される例:
+
+- `close_projector`
+- `generate_patterns`
+- `configure_projector_surface`
+- `show_pattern` / `next_pattern` / `prev_pattern`
+- scan対象projector window roleへの `close_window` / `open_window`
+- scan対象left/right roleへの `open_camera` / `close_camera`
+- scan中のmanual capture / calibration capture command
+
+scan workerもcaptureを実行するため、scan中のmanual captureはframe取得順や保存結果を壊さないようdispatcherで拒否する。これによりscan workerの `captureStereo` 中に対象cameraがremoveされることを防ぐ。CameraManager自体の汎用thread safety強化は別PRで扱う。
 
 scan events:
 
@@ -492,6 +506,7 @@ Web UIはsidecarが返したURLをそのまま利用する。
 | `scan_start_failed` | scan開始準備に失敗 |
 | `scan_failed` | scan workerが失敗 |
 | `scan_stop_failed` | scan停止要求に失敗 |
+| `scan_resource_busy` | scan中のprojector/camera/window roleへ干渉するcommandを拒否した |
 | `calibration_failed` | mono calibration計算失敗 |
 | `stereo_calibration_failed` | stereo calibration計算失敗 |
 | `calibration_image_not_found` | calibration画像directoryまたは画像が見つからない |
