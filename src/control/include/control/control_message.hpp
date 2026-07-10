@@ -49,6 +49,15 @@ struct ControlMessage {
   /// output_file <std::optional<std::string>>: calibration結果の保存先file path。
   std::optional<std::string> output_file;
 
+  /// scan_id <std::optional<std::string>>: scan session識別子。
+  std::optional<std::string> scan_id;
+
+  /// output_dir <std::optional<std::string>>: scan dataset保存先directory。
+  std::optional<std::string> output_dir;
+
+  /// settle_ms <std::optional<int>>: pattern表示後captureまでの待機時間ms。
+  std::optional<int> settle_ms;
+
   /// camera_id <std::optional<int>>: open_cameraで使用するcamera識別子。
   std::optional<int> camera_id;
 

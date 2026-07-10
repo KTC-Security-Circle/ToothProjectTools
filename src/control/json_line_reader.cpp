@@ -111,6 +111,9 @@ ReadResult JsonLineReader::read() {
         !readString(root, "left_dir", message.left_dir, error_message) ||
         !readString(root, "right_dir", message.right_dir, error_message) ||
         !readString(root, "output_file", message.output_file, error_message) ||
+        !readString(root, "scan_id", message.scan_id, error_message) ||
+        !readString(root, "output_dir", message.output_dir, error_message) ||
+        !readInteger(root, "settle_ms", message.settle_ms, error_message) ||
         !readInteger(root, "camera_id", message.camera_id, error_message) ||
         !readString(root, "window_role", message.window_role, error_message) ||
         !readString(root, "title", message.title, error_message) ||

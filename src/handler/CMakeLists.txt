@@ -35,6 +35,7 @@ target_link_libraries(handler
     camera_service
     window_service
     projector_service
+    scan_service
     cv_lib
     logger
 )

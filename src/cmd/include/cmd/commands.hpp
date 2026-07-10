@@ -184,12 +184,38 @@ struct CmdShowPattern {
 struct CmdNextPattern {}; 
 struct CmdPrevPattern {};
 
-struct CmdStartScan { 
-  int interval_ms = 500; // パターン切り替え後の待機時間
+struct CmdStartScan
+{
+    /// scan_id <std::optional<std::string>>: scan session識別子。
+    std::optional<std::string> scan_id;
+
+    /// projector_role <std::string>: 使用projector role名。
+    std::string projector_role;
+
+    /// left_role <std::string>: 左camera role名。
+    std::string left_role;
+
+    /// right_role <std::string>: 右camera role名。
+    std::string right_role;
+
+    /// output_dir <std::string>: scan dataset保存先directory。
+    std::string output_dir;
+
+    /// settle_ms <int>: pattern表示後captureまでの待機時間ms。
+    int settle_ms{120};
 };
 
-// スキャン強制中断
-struct CmdStopScan {};
+struct CmdScanStatus
+{
+    /// scan_id <std::optional<std::string>>: status取得対象scan id。
+    std::optional<std::string> scan_id;
+};
+
+struct CmdStopScan
+{
+    /// scan_id <std::optional<std::string>>: 停止対象scan id。
+    std::optional<std::string> scan_id;
+};
 
 struct CmdCalibrate {
   /// target_camera_id <video::CameraId>: mono calibration結果を適用するcamera識別子。
@@ -271,6 +297,7 @@ using Command = std::variant<
   CmdNextPattern,
   CmdPrevPattern,
   CmdStartScan,
+  CmdScanStatus,
   CmdStopScan,
   CmdCalibrate,
   CmdCalibClear,
