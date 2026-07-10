@@ -1,10 +1,13 @@
 #pragma once
 
+#include "service/monitor_service.hpp"
 #include "service/projector_result.hpp"
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
+#include <opencv2/core/mat.hpp>
 
 namespace sl
 {
@@ -18,6 +21,40 @@ class WindowService;
 
 namespace service::projector
 {
+
+enum class ProjectorPlacement
+{
+    center,
+    custom,
+};
+
+struct ProjectorSurface
+{
+    int monitor_index{0};
+    int monitor_x{0};
+    int monitor_y{0};
+    int monitor_width{0};
+    int monitor_height{0};
+    int surface_width{0};
+    int surface_height{0};
+    int pattern_width{0};
+    int pattern_height{0};
+    int pattern_x{0};
+    int pattern_y{0};
+    bool clamped{false};
+    ProjectorPlacement placement{ProjectorPlacement::center};
+};
+
+struct ProjectorSurfaceRequest
+{
+    std::string projector_role;
+    int monitor_index{0};
+    int width{0};
+    int height{0};
+    std::optional<int> x;
+    std::optional<int> y;
+    ProjectorPlacement placement{ProjectorPlacement::center};
+};
 
 struct ProjectorOpenConfig
 {
@@ -44,7 +81,8 @@ class ProjectorService
     ///
     /// Return:
     ///   <ProjectorService>: WindowService backendを持つprojector service。
-    explicit ProjectorService(service::window::WindowService& window_service);
+    ProjectorService(service::window::WindowService& window_service,
+                     service::monitor::MonitorService& monitor_service);
 
     /// @brief ProjectorServiceを破棄する。
     ///
@@ -63,6 +101,12 @@ class ProjectorService
     /// Return:
     ///   <ProjectorResult>: projector open結果。
     ProjectorResult openProjector(const ProjectorOpenConfig& config);
+
+    /// @brief 利用可能なmonitor一覧を返す。
+    ProjectorResult listMonitors();
+
+    /// @brief projector表示surfaceとactive pattern areaを設定する。
+    ProjectorResult configureSurface(const ProjectorSurfaceRequest& request);
 
     /// @brief projector roleのbindingを解除する。
     ///
@@ -128,17 +172,17 @@ class ProjectorService
         /// window_role <std::string>: 表示先window role名。
         std::string window_role;
 
-        /// width <int>: pattern幅。
-        int width{0};
-
-        /// height <int>: pattern高さ。
-        int height{0};
+        /// surface <ProjectorSurface>: monitor/surface/pattern active area設定。
+        ProjectorSurface surface;
 
         /// structured_light <std::unique_ptr<sl::StructuredLight>>: GrayCodePattern管理object。
         std::unique_ptr<sl::StructuredLight> structured_light;
 
         /// current_index <int>: 現在表示対象のpattern index。
         int current_index{0};
+
+        /// patterns_dirty <bool>: surface変更によりpattern再生成が必要ならtrue。
+        bool patterns_dirty{true};
     };
 
     /// @brief projector role文字列を検証する。
@@ -168,8 +212,17 @@ class ProjectorService
     ///   <ProjectorResult>: 成功result。
     static ProjectorResult successFromSession(const ProjectorSession& session);
 
+    ProjectorSurface makeDefaultSurface(int width, int height) const;
+    static ProjectorSurface computeSurface(const service::monitor::MonitorInfo& monitor, int requested_width,
+                                           int requested_height, std::optional<int> requested_x,
+                                           std::optional<int> requested_y, ProjectorPlacement placement);
+    static cv::Mat composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface);
+
     /// window_service_ <service::window::WindowService&>: pattern表示先window service。
     service::window::WindowService& window_service_;
+
+    /// monitor_service_ <service::monitor::MonitorService&>: monitor情報取得service。
+    service::monitor::MonitorService& monitor_service_;
 
     /// sessions_ <std::unordered_map<std::string, ProjectorSession>>: projector roleごとのsession。
     std::unordered_map<std::string, ProjectorSession> sessions_;

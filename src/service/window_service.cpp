@@ -2,6 +2,7 @@
 
 #include "logger/logger_macros.hpp"
 #include "window/window.hpp"
+#include "window/monitor.hpp"
 #include "window/window_manager.hpp"
 
 #include <algorithm>
@@ -74,6 +75,7 @@ struct WindowService::WindowRequest
         Close,
         CloseAll,
         ShowImage,
+        ConfigureSurface,
         CheckWindowOpen,
     };
 
@@ -165,6 +167,17 @@ struct WindowService::ShowImageRequest final : WindowRequest
     ///   <ShowImageRequest>: show image request。
     ShowImageRequest(std::string target_role, cv::Mat show_image)
         : WindowRequest(Kind::ShowImage), role(std::move(target_role)), image(std::move(show_image))
+    {
+    }
+};
+
+struct WindowService::ConfigureWindowSurfaceRequest final : WindowRequest
+{
+    /// config <WindowSurfaceConfig>: window surface設定。
+    WindowSurfaceConfig config;
+
+    explicit ConfigureWindowSurfaceRequest(WindowSurfaceConfig surface_config)
+        : WindowRequest(Kind::ConfigureSurface), config(std::move(surface_config))
     {
     }
 };
@@ -261,6 +274,34 @@ class WindowService::WindowManagerBackend final : public WindowBackend
         return true;
     }
 
+    bool configureWindowSurface(win::WindowId window_id, int monitor_index, int x, int y, int width, int height,
+                                bool fullscreen) override
+    {
+        auto* window = windows_.get(window_id);
+        if (!window)
+        {
+            return false;
+        }
+
+        if (window->fullscreen())
+        {
+            window->setFullscreen(false);
+        }
+        const auto backend_monitor_index = monitor_index + 1;
+        window->setMonitorIndex(backend_monitor_index);
+        int local_x = x;
+        int local_y = y;
+        if (const auto rect = win::get_monitor_rect(backend_monitor_index))
+        {
+            local_x = x - rect->x;
+            local_y = y - rect->y;
+        }
+        window->move(win::Point{local_x, local_y});
+        window->resize(win::Size{width, height});
+        window->setFullscreen(fullscreen);
+        return true;
+    }
+
     /// @brief WindowManagerでwindow event処理を進める。
     ///
     /// Args:
@@ -331,6 +372,28 @@ WindowResult WindowService::showImage(const std::string& role, const cv::Mat& im
     return future.get();
 }
 
+WindowResult WindowService::configureWindowSurface(const WindowSurfaceConfig& config)
+{
+    if (!isValidRole(config.window_role))
+    {
+        return WindowResult::failure(config.window_role, "invalid_window_role",
+                                     "window_role must contain only [A-Za-z0-9_-]");
+    }
+    if (config.width <= 0 || config.height <= 0)
+    {
+        return WindowResult::failure(config.window_role, "invalid_window_size", "width and height must be positive");
+    }
+    if (config.monitor_index < 0)
+    {
+        return WindowResult::failure(config.window_role, "invalid_monitor_index", "monitor_index must be non-negative");
+    }
+
+    auto request = std::make_shared<ConfigureWindowSurfaceRequest>(config);
+    auto future = request->promise.get_future();
+    enqueue(request);
+    return future.get();
+}
+
 bool WindowService::isWindowOpen(const std::string& role)
 {
     auto request = std::make_shared<CheckWindowOpenRequest>(role);
@@ -394,6 +457,10 @@ void WindowService::processPendingRequests()
                 break;
             case WindowRequest::Kind::ShowImage:
                 request->promise.set_value(executeShowImage(static_cast<ShowImageRequest&>(*request)));
+                break;
+            case WindowRequest::Kind::ConfigureSurface:
+                request->promise.set_value(
+                    executeConfigureWindowSurface(static_cast<ConfigureWindowSurfaceRequest&>(*request)));
                 break;
             case WindowRequest::Kind::CheckWindowOpen:
                 request->promise.set_value(executeCheckWindowOpen(static_cast<CheckWindowOpenRequest&>(*request))
@@ -555,6 +622,25 @@ WindowResult WindowService::executeShowImage(ShowImageRequest& request)
         return WindowResult::failure(request.role, "window_show_failed", "failed to show image: " + request.role);
     }
     return WindowResult::success(request.role, it->second, request.image.cols, request.image.rows);
+}
+
+WindowResult WindowService::executeConfigureWindowSurface(ConfigureWindowSurfaceRequest& request)
+{
+    const auto& config = request.config;
+    const auto it = role_to_window_id_.find(config.window_role);
+    if (it == role_to_window_id_.end())
+    {
+        return WindowResult::failure(config.window_role, "window_not_open",
+                                     "window role is not open: " + config.window_role);
+    }
+
+    if (!backend_.configureWindowSurface(it->second, config.monitor_index, config.x, config.y, config.width,
+                                         config.height, config.fullscreen))
+    {
+        return WindowResult::failure(config.window_role, "window_configure_failed",
+                                     "failed to configure window surface: " + config.window_role);
+    }
+    return WindowResult::success(config.window_role, it->second, config.width, config.height);
 }
 
 bool WindowService::executeCheckWindowOpen(CheckWindowOpenRequest& request)

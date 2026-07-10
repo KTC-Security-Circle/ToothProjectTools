@@ -29,6 +29,14 @@ target_include_directories(camera_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/inc
 target_link_libraries(camera_service PUBLIC video)
 target_compile_features(camera_service PUBLIC cxx_std_20)
 
+add_library(monitor_service STATIC
+  monitor_service.cpp
+)
+
+target_include_directories(monitor_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(monitor_service PUBLIC window PRIVATE logger)
+target_compile_features(monitor_service PUBLIC cxx_std_20)
+
 add_library(window_service STATIC
   window_result.cpp
   window_service.cpp
@@ -44,7 +52,7 @@ add_library(projector_service STATIC
 )
 
 target_include_directories(projector_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(projector_service PUBLIC window_service structured_light)
+target_link_libraries(projector_service PUBLIC window_service monitor_service structured_light)
 target_compile_features(projector_service PUBLIC cxx_std_20)
 
 add_library(sidecar_service STATIC
@@ -60,6 +68,7 @@ target_link_libraries(sidecar_service
   PUBLIC
     camera_service
     window_service
+    monitor_service
     projector_service
     capture
     calibration

@@ -1,7 +1,10 @@
 #pragma once
 
+#include "service/monitor_service.hpp"
+
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace service::projector
 {
@@ -37,6 +40,20 @@ struct ProjectorResult
 
     /// pattern_index <int>: 表示または選択されたpattern index。
     int pattern_index{-1};
+
+    int monitor_index{0};
+    int monitor_width{0};
+    int monitor_height{0};
+    int surface_width{0};
+    int surface_height{0};
+    int pattern_width{0};
+    int pattern_height{0};
+    int pattern_x{0};
+    int pattern_y{0};
+    bool clamped{false};
+
+    /// monitors <std::vector<service::monitor::MonitorInfo>>: list_monitors結果。
+    std::vector<service::monitor::MonitorInfo> monitors;
 
     /// error <std::optional<ProjectorError>>: 失敗時のerror情報。
     std::optional<ProjectorError> error;
