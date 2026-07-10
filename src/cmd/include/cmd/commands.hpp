@@ -70,6 +70,61 @@ struct CmdCloseWindow
     std::string window_role;
 };
 
+
+/// @brief projector roleをwindow roleへbindするcommand。
+struct CmdOpenProjector
+{
+    /// projector_role <std::string>: runtime内でprojectorを参照するrole名。
+    std::string projector_role;
+
+    /// window_role <std::string>: pattern表示先window role名。
+    std::string window_role;
+
+    /// width <int>: pattern幅。
+    int width{0};
+
+    /// height <int>: pattern高さ。
+    int height{0};
+};
+
+/// @brief projector bindingを解除するcommand。
+struct CmdCloseProjector
+{
+    /// projector_role <std::string>: close対象projector role名。
+    std::string projector_role;
+};
+
+/// @brief projector patternを生成するcommand。
+struct CmdGeneratePatterns
+{
+    /// projector_role <std::string>: pattern生成対象projector role名。
+    std::string projector_role;
+};
+
+/// @brief 指定indexのprojector patternを表示するcommand。
+struct CmdProjectorShowPattern
+{
+    /// projector_role <std::string>: pattern表示対象projector role名。
+    std::string projector_role;
+
+    /// index <int>: 表示するpattern index。
+    int index{0};
+};
+
+/// @brief projector patternを次へ進めるcommand。
+struct CmdProjectorNextPattern
+{
+    /// projector_role <std::string>: 操作対象projector role名。
+    std::string projector_role;
+};
+
+/// @brief projector patternを前へ戻すcommand。
+struct CmdProjectorPrevPattern
+{
+    /// projector_role <std::string>: 操作対象projector role名。
+    std::string projector_role;
+};
+
 /// @brief 指定cameraからframeを取得して画像ファイルに保存するcommand。
 struct CmdCaptureFrame {
   /// camera_id <video::CameraId>: Capture対象のcamera識別子。
@@ -174,6 +229,12 @@ using Command = std::variant<
   CmdCloseCamera,
   CmdOpenWindow,
   CmdCloseWindow,
+  CmdOpenProjector,
+  CmdCloseProjector,
+  CmdGeneratePatterns,
+  CmdProjectorShowPattern,
+  CmdProjectorNextPattern,
+  CmdProjectorPrevPattern,
   CmdCaptureFrame,
   CmdCaptureStereo,
   CmdShowPattern,

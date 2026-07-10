@@ -69,6 +69,12 @@ struct ControlMessage {
 
   /// fullscreen <std::optional<bool>>: fullscreenでwindowを開くか。
   std::optional<bool> fullscreen;
+
+  /// projector_role <std::optional<std::string>>: 操作対象projector role名。
+  std::optional<std::string> projector_role;
+
+  /// index <std::optional<int>>: 表示するpattern index。
+  std::optional<int> index;
 };
 
 struct ControlError {

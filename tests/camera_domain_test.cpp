@@ -1,10 +1,12 @@
 #include "cmd/commands.hpp"
 #include "control/control_message.hpp"
 #include "handler/camera_command_handler.hpp"
+#include "handler/projector_command_handler.hpp"
 #include "handler/window_resource_command_handler.hpp"
 #include "headless/headless_command_mapper.hpp"
 #include "runtime/handler_context.hpp"
 #include "service/camera_service.hpp"
+#include "service/projector_service.hpp"
 #include "service/window_service.hpp"
 #include "video/camera_manager.hpp"
 
@@ -38,7 +40,16 @@ class FakeWindowBackend final : public service::window::WindowBackend
     {
         last_closed_id = window_id;
         opened = false;
+        ++close_count;
         return close_result;
+    }
+
+    bool showImage(win::WindowId window_id, const cv::Mat& image) override
+    {
+        last_shown_id = window_id;
+        last_shown_size = image.size();
+        ++show_count;
+        return show_result;
     }
 
     void pollEvents(int delay_ms) override
@@ -49,12 +60,17 @@ class FakeWindowBackend final : public service::window::WindowBackend
     win::WindowId next_id{1};
     bool opened{false};
     bool close_result{true};
+    bool show_result{true};
     std::string last_title;
     int last_width{0};
     int last_height{0};
     std::optional<int> last_monitor_index;
     bool last_fullscreen{false};
     win::WindowId last_closed_id{win::kInvalidWindowId};
+    win::WindowId last_shown_id{win::kInvalidWindowId};
+    cv::Size last_shown_size{};
+    int close_count{0};
+    int show_count{0};
     int last_delay_ms{0};
 };
 
@@ -145,6 +161,79 @@ void testWindowMapper()
     message.window_role = "projector";
     result = mapper.mapCloseWindow(message);
     assert(result.ok && std::holds_alternative<cmd::CmdCloseWindow>(*result.command));
+}
+
+void testProjectorMapper()
+{
+    video::CameraManager cameras;
+    service::camera::CameraService service{cameras};
+    headless::HeadlessCommandMapper mapper{service};
+
+    auto message = messageWithId();
+    message.window_role = "projector";
+    message.width = 640;
+    message.height = 480;
+    auto result = mapper.mapOpenProjector(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.projector_role = "projector";
+    message.window_role.reset();
+    result = mapper.mapOpenProjector(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.window_role = "projector";
+    message.width.reset();
+    result = mapper.mapOpenProjector(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.width = 640;
+    message.height.reset();
+    result = mapper.mapOpenProjector(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.height = 480;
+    message.width = 0;
+    result = mapper.mapOpenProjector(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.width = 640;
+    message.height = 0;
+    result = mapper.mapOpenProjector(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.height = 480;
+    result = mapper.mapOpenProjector(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdOpenProjector>(*result.command));
+
+    message = messageWithId();
+    result = mapper.mapCloseProjector(message);
+    assert(!result.ok && result.error->code == "missing_field");
+    message.projector_role = "projector";
+    result = mapper.mapCloseProjector(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdCloseProjector>(*result.command));
+
+    message = messageWithId();
+    result = mapper.mapGeneratePatterns(message);
+    assert(!result.ok && result.error->code == "missing_field");
+    message.projector_role = "projector";
+    result = mapper.mapGeneratePatterns(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdGeneratePatterns>(*result.command));
+
+    message = messageWithId();
+    message.projector_role = "projector";
+    result = mapper.mapProjectorShowPattern(message);
+    assert(!result.ok && result.error->code == "missing_field");
+    message.index = -1;
+    result = mapper.mapProjectorShowPattern(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+    message.index = 0;
+    result = mapper.mapProjectorShowPattern(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdProjectorShowPattern>(*result.command));
+
+    result = mapper.mapProjectorNextPattern(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdProjectorNextPattern>(*result.command));
+    result = mapper.mapProjectorPrevPattern(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdProjectorPrevPattern>(*result.command));
 }
 
 void testMapper()
@@ -308,6 +397,114 @@ void testWindowServiceValidation()
     assert(!service.resolveWindowId("two"));
 }
 
+void testProjectorServiceValidation()
+{
+    FakeWindowBackend backend;
+    service::window::WindowService window_service{backend};
+    service::projector::ProjectorService projector_service{window_service};
+
+    auto result = runWindowRequest(window_service, [&]
+                                   {
+                                       return projector_service.openProjector(service::projector::ProjectorOpenConfig{
+                                           "projector", "missing", 16, 12});
+                                   });
+    assert(!result.ok && result.error->code == "projector_window_not_open");
+
+    assert(runWindowRequest(window_service, [&]
+                            {
+                                return window_service.openWindow(service::window::WindowOpenConfig{
+                                    "projector_window", "Projector", 16, 12, std::nullopt, false});
+                            }).ok);
+
+    result = runWindowRequest(window_service, [&]
+                              {
+                                  return projector_service.openProjector(service::projector::ProjectorOpenConfig{
+                                      "projector", "projector_window", 16, 12});
+                              });
+    assert(result.ok);
+
+    const auto duplicate = runWindowRequest(window_service, [&]
+                                            {
+                                                return projector_service.openProjector(service::projector::ProjectorOpenConfig{
+                                                    "projector", "projector_window", 16, 12});
+                                            });
+    assert(!duplicate.ok && duplicate.error->code == "projector_already_open");
+
+    result = projector_service.showPattern("projector", 0);
+    assert(!result.ok && result.error->code == "pattern_not_generated");
+
+    result = projector_service.generatePatterns("projector");
+    assert(result.ok && result.pattern_count > 0);
+
+    result = projector_service.showPattern("projector", result.pattern_count);
+    assert(!result.ok && result.error->code == "pattern_index_out_of_range");
+
+    result = runWindowRequest(window_service, [&]
+                              { return projector_service.showPattern("projector", 0); });
+    assert(result.ok && result.pattern_index == 0);
+    assert(backend.show_count == 1);
+
+    result = runWindowRequest(window_service, [&]
+                              { return projector_service.nextPattern("projector"); });
+    assert(result.ok && result.pattern_index == 1);
+
+    result = runWindowRequest(window_service, [&]
+                              { return projector_service.prevPattern("projector"); });
+    assert(result.ok && result.pattern_index == 0);
+
+    const auto close_count_before = backend.close_count;
+    result = projector_service.closeProjector("projector");
+    assert(result.ok);
+    assert(backend.close_count == close_count_before);
+
+    result = projector_service.showPattern("projector", 0);
+    assert(!result.ok && result.error->code == "projector_not_open");
+}
+
+void testProjectorHandler()
+{
+    FakeWindowBackend backend;
+    service::window::WindowService window_service{backend};
+    service::projector::ProjectorService projector_service{window_service};
+    runtime::ProjectorHandlerContext context{projector_service};
+
+    assert(runWindowRequest(window_service, [&]
+                            {
+                                return window_service.openWindow(service::window::WindowOpenConfig{
+                                    "projector_window", "Projector", 16, 12, std::nullopt, false});
+                            }).ok);
+
+    auto result = runWindowRequest(window_service, [&]
+                                   {
+                                       return handler::projector::handle(
+                                           context, cmd::Command{cmd::CmdOpenProjector{"projector", "projector_window", 16, 12}});
+                                   });
+    assert(result.handled && result.ok);
+
+    result = handler::projector::handle(context, cmd::Command{cmd::CmdGeneratePatterns{"projector"}});
+    assert(result.handled && result.ok);
+
+    result = runWindowRequest(window_service, [&]
+                              {
+                                  return handler::projector::handle(
+                                      context, cmd::Command{cmd::CmdProjectorShowPattern{"projector", 0}});
+                              });
+    assert(result.handled && result.ok);
+
+    result = runWindowRequest(window_service, [&]
+                              {
+                                  return handler::projector::handle(
+                                      context, cmd::Command{cmd::CmdProjectorNextPattern{"projector"}});
+                              });
+    assert(result.handled && result.ok);
+
+    result = handler::projector::handle(context, cmd::Command{cmd::CmdCloseProjector{"projector"}});
+    assert(result.handled && result.ok);
+
+    const auto other = handler::projector::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
+    assert(!other.handled);
+}
+
 void testServiceValidation()
 {
     video::CameraManager cameras;
@@ -325,9 +522,12 @@ int main()
 {
     testMapper();
     testWindowMapper();
+    testProjectorMapper();
     testHandler();
     testWindowHandler();
+    testProjectorHandler();
     testServiceValidation();
     testWindowServiceValidation();
+    testProjectorServiceValidation();
     return 0;
 }

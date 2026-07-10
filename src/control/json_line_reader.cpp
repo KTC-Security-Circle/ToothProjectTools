@@ -117,7 +117,9 @@ ReadResult JsonLineReader::read() {
         !readInteger(root, "width", message.width, error_message) ||
         !readInteger(root, "height", message.height, error_message) ||
         !readInteger(root, "monitor_index", message.monitor_index, error_message) ||
-        !readBool(root, "fullscreen", message.fullscreen, error_message)) {
+        !readBool(root, "fullscreen", message.fullscreen, error_message) ||
+        !readString(root, "projector_role", message.projector_role, error_message) ||
+        !readInteger(root, "index", message.index, error_message)) {
       return ReadResult{
           ReadStatus::invalid,
           {},

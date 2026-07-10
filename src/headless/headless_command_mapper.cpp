@@ -177,6 +177,109 @@ CommandMapResult HeadlessCommandMapper::mapCloseWindow(const control::ControlMes
     return result;
 }
 
+
+CommandMapResult HeadlessCommandMapper::mapOpenProjector(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.projector_role, "projector_role"))
+    {
+        return *failure;
+    }
+    if (auto failure = requireString(message.window_role, "window_role"))
+    {
+        return *failure;
+    }
+    if (!message.width)
+    {
+        return mapFailure("missing_field", "missing required field: width");
+    }
+    if (!message.height)
+    {
+        return mapFailure("missing_field", "missing required field: height");
+    }
+    if (*message.width <= 0)
+    {
+        return mapFailure("invalid_command", "width must be positive");
+    }
+    if (*message.height <= 0)
+    {
+        return mapFailure("invalid_command", "height must be positive");
+    }
+
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdOpenProjector{*message.projector_role, *message.window_role, *message.width,
+                                           *message.height};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapCloseProjector(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.projector_role, "projector_role"))
+    {
+        return *failure;
+    }
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdCloseProjector{*message.projector_role};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapGeneratePatterns(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.projector_role, "projector_role"))
+    {
+        return *failure;
+    }
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdGeneratePatterns{*message.projector_role};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapProjectorShowPattern(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.projector_role, "projector_role"))
+    {
+        return *failure;
+    }
+    if (!message.index)
+    {
+        return mapFailure("missing_field", "missing required field: index");
+    }
+    if (*message.index < 0)
+    {
+        return mapFailure("invalid_command", "index must be non-negative");
+    }
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdProjectorShowPattern{*message.projector_role, *message.index};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapProjectorNextPattern(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.projector_role, "projector_role"))
+    {
+        return *failure;
+    }
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdProjectorNextPattern{*message.projector_role};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapProjectorPrevPattern(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.projector_role, "projector_role"))
+    {
+        return *failure;
+    }
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdProjectorPrevPattern{*message.projector_role};
+    return result;
+}
+
 CommandMapResult HeadlessCommandMapper::mapCaptureFrame(const control::ControlMessage& message)
 {
     if (auto failure = requireString(message.role, "role"))
