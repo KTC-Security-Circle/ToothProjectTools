@@ -239,6 +239,83 @@ ProjectorServiceは現在の ProjectorSurface の active pattern size で GrayCo
 
 `close_projector` はprojector bindingだけを解除し、window自体は閉じない。windowを閉じる場合は `close_window` を使う。
 
+
+### scan_start
+
+```json
+{"id":"70","cmd":"scan_start","scan_id":"session_001","projector_role":"projector","left_role":"left","right_role":"right","output_dir":"./data/scan/session_001","settle_ms":120}
+{"id":"70","ok":true,"scan_id":"session_001","status":"running","projector_role":"projector","left_role":"left","right_role":"right","pattern_count":"44","captured_count":"0","current_index":"-1","output_dir":"./data/scan/session_001"}
+```
+
+`scan_start` は非同期に実行される。responseは開始受付完了を表し、実際の進捗はeventで通知される。`scan_id` 省略時は `scan_YYYYMMDD_HHMMSS` 形式で自動生成する。`settle_ms` 省略時は `120`。
+
+scan workerは以下を順に実行する。
+
+- ProjectorServiceでpatternをindex順に表示する。
+- 表示後に `settle_ms` だけ待つ。
+- left/right cameraでstereo captureする。
+- `output_dir/left/pattern_000.png` と `output_dir/right/pattern_000.png` のように保存する。
+- 全pattern完了時に `scan_completed` eventを出す。
+
+出力directory構造:
+
+```text
+output_dir/
+  metadata.json
+  left/
+    pattern_000.png
+    pattern_001.png
+  right/
+    pattern_000.png
+    pattern_001.png
+```
+
+`metadata.json` には `scan_id`, `created_at`, `version`, `projector_role`, `left_role`, `right_role`, `pattern_count`, `settle_ms`, `output_dir`, `surface` を保存する。GrayCode decode / reconstruct は今回行わない。scan中にsurface変更や `generate_patterns` は行わない。
+
+scan中は、対象 `projector_role`、対象left/right camera role、対象projector window roleへの破壊的操作を拒否する。拒否されたcommandは `scan_resource_busy` を返す。
+
+拒否される例:
+
+- `close_projector`
+- `generate_patterns`
+- `configure_projector_surface`
+- `show_pattern` / `next_pattern` / `prev_pattern`
+- scan対象projector window roleへの `close_window` / `open_window`
+- scan対象left/right roleへの `open_camera` / `close_camera`
+- scan中のmanual capture / calibration capture command
+
+scan workerもcaptureを実行するため、scan中のmanual captureはframe取得順や保存結果を壊さないようdispatcherで拒否する。これによりscan workerの `captureStereo` 中に対象cameraがremoveされることを防ぐ。CameraManager自体の汎用thread safety強化は別PRで扱う。
+
+scan events:
+
+```json
+{"event":"scan_started","scan_id":"session_001","projector_role":"projector","left_role":"left","right_role":"right","pattern_count":"44","output_dir":"./data/scan/session_001"}
+{"event":"scan_frame_captured","scan_id":"session_001","pattern_index":"0","captured_count":"1","pattern_count":"44","left_path":"./data/scan/session_001/left/pattern_000.png","right_path":"./data/scan/session_001/right/pattern_000.png"}
+{"event":"scan_completed","scan_id":"session_001","captured_count":"44","pattern_count":"44","output_dir":"./data/scan/session_001"}
+{"event":"scan_failed","scan_id":"session_001","error_code":"capture_failed","error_message":"failed to capture stereo frame","captured_count":"12","current_index":"12"}
+{"event":"scan_stopped","scan_id":"session_001","captured_count":"12","current_index":"12"}
+```
+
+### scan_status
+
+```json
+{"id":"71","cmd":"scan_status"}
+{"id":"71","ok":true,"scan_id":"session_001","status":"running","pattern_count":"44","captured_count":"12","current_index":"12","output_dir":"./data/scan/session_001"}
+```
+
+`scan_id` は任意。指定したscanが存在しない場合は `scan_not_found`。`scan_id` 未指定でscanが存在しない場合は `idle` を返す。
+
+### scan_stop
+
+```json
+{"id":"72","cmd":"scan_stop","scan_id":"session_001"}
+{"id":"72","ok":true,"scan_id":"session_001","status":"stopping"}
+{"event":"scan_stopping","scan_id":"session_001"}
+{"event":"scan_stopped","scan_id":"session_001","captured_count":"12","current_index":"12"}
+```
+
+`scan_stop` は実行中scanへ停止要求を出す。停止完了は worker から `scan_stopped` eventとして通知される。
+
 ### start_stream
 
 ```json
@@ -423,6 +500,13 @@ Web UIはsidecarが返したURLをそのまま利用する。
 | `invalid_projector_size` | projector width/heightが不正 |
 | `invalid_projector_role` | projector_roleが空、または英数字、`_`、`-` 以外を含む |
 | `capture_failed` | capture詳細errorがない失敗 |
+| `scan_already_running` | scanが既にrunning/stopping |
+| `scan_not_found` | 指定scan_idのscanが存在しない |
+| `invalid_scan_config` | scan_start設定が不正 |
+| `scan_start_failed` | scan開始準備に失敗 |
+| `scan_failed` | scan workerが失敗 |
+| `scan_stop_failed` | scan停止要求に失敗 |
+| `scan_resource_busy` | scan中のprojector/camera/window roleへ干渉するcommandを拒否した |
 | `calibration_failed` | mono calibration計算失敗 |
 | `stereo_calibration_failed` | stereo calibration計算失敗 |
 | `calibration_image_not_found` | calibration画像directoryまたは画像が見つからない |

@@ -1,5 +1,4 @@
 add_library(service STATIC
-    scan_service.cpp
     calibration_service.cpp
     stereo_calibration_service.cpp
     reconstruction_service.cpp
@@ -55,6 +54,16 @@ target_include_directories(projector_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/
 target_link_libraries(projector_service PUBLIC window_service monitor_service structured_light)
 target_compile_features(projector_service PUBLIC cxx_std_20)
 
+add_library(scan_service STATIC
+  scan_result.cpp
+  scan_event.cpp
+  scan_service.cpp
+)
+
+target_include_directories(scan_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(scan_service PUBLIC projector_service camera_service capture PRIVATE logger)
+target_compile_features(scan_service PUBLIC cxx_std_20)
+
 add_library(sidecar_service STATIC
   sidecar_service.cpp
 )
@@ -70,6 +79,7 @@ target_link_libraries(sidecar_service
     window_service
     monitor_service
     projector_service
+    scan_service
     capture
     calibration
     mjpeg_stream

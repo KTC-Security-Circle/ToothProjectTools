@@ -21,6 +21,7 @@ target_link_libraries(headless_dispatch
     camera_service
     window_service
     projector_service
+    scan_service
     logger
 )
 

@@ -41,6 +41,10 @@ namespace projector
 {
 class ProjectorService;
 }
+namespace scan
+{
+class ScanService;
+}
 } // namespace service
 
 namespace win
@@ -71,16 +75,8 @@ struct PatternHandlerContext
 
 struct ScanHandlerContext
 {
-    win::WindowManager& windows;
-    video::CameraManager& cameras;
-    /// capture_service <capture::CaptureService&>: scan中の画像保存を実行するCapture用domain service。
-    capture::CaptureService& capture_service;
-    sl::StructuredLight* structured_light;
-    video::CameraId left_camera_id;
-    video::CameraId right_camera_id;
-    win::WindowId preview_window_id;
-    win::WindowId second_window_id;
-    int& interval_ms;
+    /// scan_service <service::scan::ScanService&>: scan commandを実行するservice。
+    service::scan::ScanService& scan_service;
 };
 
 struct CalibrationHandlerContext
@@ -154,7 +150,6 @@ struct ReconstructionHandlerContext
 GlobalHandlerContext make_global_handler_context(AppContext& ctx);
 WindowHandlerContext make_window_handler_context(AppContext& ctx);
 PatternHandlerContext make_pattern_handler_context(AppContext& ctx);
-ScanHandlerContext make_scan_handler_context(AppContext& ctx);
 CalibrationHandlerContext make_calibration_handler_context(AppContext& ctx);
 StereoCalibrationHandlerContext make_stereo_calibration_handler_context(AppContext& ctx);
 ReconstructionHandlerContext make_reconstruction_handler_context(AppContext& ctx);

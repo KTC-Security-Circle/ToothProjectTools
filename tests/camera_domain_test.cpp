@@ -385,6 +385,61 @@ void testMonitorService()
     assert(empty_service.listMonitors().empty());
 }
 
+
+void testScanMapper()
+{
+    video::CameraManager cameras;
+    service::camera::CameraService service{cameras};
+    headless::HeadlessCommandMapper mapper{service};
+
+    auto message = messageWithId();
+    message.left_role = "left";
+    message.right_role = "right";
+    message.output_dir = "./data/scan/test";
+    auto result = mapper.mapStartScan(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.projector_role = "projector";
+    message.left_role.reset();
+    result = mapper.mapStartScan(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.left_role = "left";
+    message.right_role.reset();
+    result = mapper.mapStartScan(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.right_role = "right";
+    message.output_dir.reset();
+    result = mapper.mapStartScan(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.output_dir = "./data/scan/test";
+    message.settle_ms = -1;
+    result = mapper.mapStartScan(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.settle_ms = 0;
+    message.scan_id = "session_001";
+    result = mapper.mapStartScan(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdStartScan>(*result.command));
+    const auto start = std::get<cmd::CmdStartScan>(*result.command);
+    assert(start.scan_id == "session_001");
+    assert(start.settle_ms == 0);
+
+    message.scan_id = "";
+    result = mapper.mapStartScan(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message = messageWithId();
+    result = mapper.mapScanStatus(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdScanStatus>(*result.command));
+
+    message.scan_id = "session_001";
+    result = mapper.mapStopScan(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdStopScan>(*result.command));
+}
+
 void testWindowHandler()
 {
     FakeWindowBackend backend;
@@ -740,6 +795,7 @@ int main()
     testMapper();
     testWindowMapper();
     testProjectorMapper();
+    testScanMapper();
     testMonitorService();
     testHandler();
     testWindowHandler();

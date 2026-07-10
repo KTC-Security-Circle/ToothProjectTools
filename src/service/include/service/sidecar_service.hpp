@@ -8,6 +8,8 @@
 #include "service/monitor_service.hpp"
 #include "service/window_service.hpp"
 #include "service/projector_service.hpp"
+#include "service/scan_event.hpp"
+#include "service/scan_service.hpp"
 #include "video/camera_manager.hpp"
 #include "window/window_manager.hpp"
 
@@ -173,6 +175,12 @@ class SidecarService
     ///   <capture::CaptureService&>: sidecar camera群へcaptureを実行するdomain service。
     capture::CaptureService& captureService();
 
+    /// @brief scan commandを実行するdomain serviceを取得する。
+    service::scan::ScanService& scanService();
+
+    /// @brief scan worker event queueを取得する。
+    service::scan::ScanEventQueue& scanEventQueue();
+
     /// @brief sidecarが所有するCameraManagerを取得する。
     ///
     /// Args:
@@ -255,6 +263,12 @@ class SidecarService
 
     /// capture_service_ <capture::CaptureService>: sidecar所有camera群を使うcapture用domain service。
     capture::CaptureService capture_service_{cameras_};
+
+    /// scan_event_queue_ <service::scan::ScanEventQueue>: scan worker event queue。
+    scan::ScanEventQueue scan_event_queue_;
+
+    /// scan_service_ <service::scan::ScanService>: 自動構造光scan domain service。
+    scan::ScanService scan_service_{projector_service_, capture_service_, camera_service_, scan_event_queue_};
 
     /// calibrator_ <calib::Calibrator>: sidecar用mono calibration計算器。
     calib::Calibrator calibrator_;

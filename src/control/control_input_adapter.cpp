@@ -43,7 +43,7 @@ std::string valueOrEmpty(const common::CommandResult& result, const std::string&
 
 ControlInputAdapter::ControlInputAdapter(service::SidecarService& service, JsonLineWriter& writer)
     : service_(service), writer_(writer), headless_mapper_(service.cameraService()),
-      headless_dispatcher_(service.cameraService(), service.windowService(), service.projectorService(),
+      headless_dispatcher_(service.cameraService(), service.windowService(), service.projectorService(), service.scanService(),
                            service.captureService(), service.cameraManager(), service.calibrator(), service.stereoCalibrator(),
                            service.stereoData())
 {
@@ -128,6 +128,21 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
     if (*message.cmd == "prev_pattern")
     {
         return handleProjectorCommand(id, message, ProjectorCommandKind::prev);
+    }
+
+    if (*message.cmd == "scan_start")
+    {
+        return handleScanCommand(id, message, ScanCommandKind::start);
+    }
+
+    if (*message.cmd == "scan_status")
+    {
+        return handleScanCommand(id, message, ScanCommandKind::status);
+    }
+
+    if (*message.cmd == "scan_stop")
+    {
+        return handleScanCommand(id, message, ScanCommandKind::stop);
     }
 
     if (*message.cmd == "start_stream")
@@ -361,6 +376,35 @@ AdapterResult ControlInputAdapter::handleProjectorCommand(const std::string& id,
                                              {"pattern_index", valueOrEmpty(result, "pattern_index")}}});
         }
     }
+    return AdapterResult::continue_running;
+}
+
+
+AdapterResult ControlInputAdapter::handleScanCommand(const std::string& id, const ControlMessage& message,
+                                                     ScanCommandKind kind)
+{
+    headless::CommandMapResult map_result;
+    switch (kind)
+    {
+    case ScanCommandKind::start:
+        map_result = headless_mapper_.mapStartScan(message);
+        break;
+    case ScanCommandKind::status:
+        map_result = headless_mapper_.mapScanStatus(message);
+        break;
+    case ScanCommandKind::stop:
+        map_result = headless_mapper_.mapStopScan(message);
+        break;
+    }
+
+    if (!map_result.ok)
+    {
+        writeHeadlessFailure(id, map_result.error.value_or(common::CommandError{"invalid_command", "failed to map scan command"}));
+        return AdapterResult::continue_running;
+    }
+
+    const auto result = headless_dispatcher_.execute(*map_result.command);
+    writer_.writeResponse(toControlResponse(id, result));
     return AdapterResult::continue_running;
 }
 

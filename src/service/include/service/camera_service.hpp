@@ -3,6 +3,7 @@
 #include "service/camera_result.hpp"
 #include "video/camera_manager.hpp"
 
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -53,6 +54,9 @@ class CameraService
 
     /// cameras_ <video::CameraManager&>: camera deviceを管理するmanager。
     video::CameraManager& cameras_;
+
+    /// mutex_ <std::mutex>: camera role binding mapを保護するmutex。
+    mutable std::mutex mutex_;
     /// role_to_camera_id_ <std::unordered_map<std::string, video::CameraId>>:
     /// role名からmanager上のcamera_idへのbinding。
     std::unordered_map<std::string, video::CameraId> role_to_camera_id_;

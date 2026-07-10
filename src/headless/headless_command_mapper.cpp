@@ -343,6 +343,61 @@ CommandMapResult HeadlessCommandMapper::mapProjectorPrevPattern(const control::C
     return result;
 }
 
+
+CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.projector_role, "projector_role"))
+    {
+        return *failure;
+    }
+    if (auto failure = requireString(message.left_role, "left_role"))
+    {
+        return *failure;
+    }
+    if (auto failure = requireString(message.right_role, "right_role"))
+    {
+        return *failure;
+    }
+    if (auto failure = requireString(message.output_dir, "output_dir"))
+    {
+        return *failure;
+    }
+    if (message.scan_id && message.scan_id->empty())
+    {
+        return mapFailure("invalid_command", "scan_id must not be empty");
+    }
+    if (message.settle_ms && *message.settle_ms < 0)
+    {
+        return mapFailure("invalid_command", "settle_ms must be non-negative");
+    }
+
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdStartScan{message.scan_id,
+                                       *message.projector_role,
+                                       *message.left_role,
+                                       *message.right_role,
+                                       *message.output_dir,
+                                       message.settle_ms.value_or(120)};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapScanStatus(const control::ControlMessage& message)
+{
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdScanStatus{message.scan_id};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapStopScan(const control::ControlMessage& message)
+{
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdStopScan{message.scan_id};
+    return result;
+}
+
 CommandMapResult HeadlessCommandMapper::mapCaptureFrame(const control::ControlMessage& message)
 {
     if (auto failure = requireString(message.role, "role"))

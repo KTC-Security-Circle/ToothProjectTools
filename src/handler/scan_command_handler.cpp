@@ -1,36 +1,44 @@
 #include "handler/scan_command_handler.hpp"
 
+#include "command_result_mapper/scan_command_result_mapper.hpp"
 #include "runtime/handler_context.hpp"
 #include "service/scan_service.hpp"
 
+#include <filesystem>
 #include <type_traits>
+#include <variant>
 
 namespace handler::scan
 {
 
-bool handle(runtime::ScanHandlerContext& ctx, win::Window& target_window, const cmd::Command& command)
+common::CommandResult handle(runtime::ScanHandlerContext& ctx, const cmd::Command& command)
 {
-    bool handled = false;
-
-    std::visit(
-        [&](auto&& c)
+    return std::visit(
+        [&](const auto& scan_command) -> common::CommandResult
         {
-            using T = std::decay_t<decltype(c)>;
-
-            if constexpr (std::is_same_v<T, cmd::CmdStartScan>)
+            using CommandType = std::decay_t<decltype(scan_command)>;
+            if constexpr (std::is_same_v<CommandType, cmd::CmdStartScan>)
             {
-                service::scan::start(ctx, target_window, c);
-                handled = true;
+                return command_result_mapper::scan::toCommandResult(ctx.scan_service.startScan(service::scan::ScanStartConfig{
+                    scan_command.scan_id,
+                    scan_command.projector_role,
+                    scan_command.left_role,
+                    scan_command.right_role,
+                    std::filesystem::path{scan_command.output_dir},
+                    scan_command.settle_ms,
+                }));
             }
-            else if constexpr (std::is_same_v<T, cmd::CmdStopScan>)
+            else if constexpr (std::is_same_v<CommandType, cmd::CmdScanStatus>)
             {
-                service::scan::stop(ctx);
-                handled = true;
+                return command_result_mapper::scan::toCommandResult(ctx.scan_service.scanStatus(scan_command.scan_id));
             }
+            else if constexpr (std::is_same_v<CommandType, cmd::CmdStopScan>)
+            {
+                return command_result_mapper::scan::toCommandResult(ctx.scan_service.stopScan(scan_command.scan_id));
+            }
+            return common::notHandled();
         },
         command);
-
-    return handled;
 }
 
 } // namespace handler::scan

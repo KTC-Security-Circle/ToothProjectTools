@@ -44,6 +44,13 @@ public:
   AdapterResult handle(const ControlMessage& message);
 
 private:
+  enum class ScanCommandKind
+  {
+    start,
+    status,
+    stop,
+  };
+
   enum class ProjectorCommandKind
   {
     list_monitors,
@@ -88,6 +95,9 @@ private:
   /// Return:
   ///   <AdapterResult>: serve loopを継続する指示。
   AdapterResult handleProjectorCommand(const std::string& id, const ControlMessage& message, ProjectorCommandKind kind);
+
+  /// @brief scan commandをmapper/dispatcher経由で実行する。
+  AdapterResult handleScanCommand(const std::string& id, const ControlMessage& message, ScanCommandKind kind);
 
   /// @brief capture_frame系commandをmapper/dispatcher経由で実行する。
   ///

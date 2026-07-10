@@ -20,20 +20,6 @@ PatternHandlerContext make_pattern_handler_context(AppContext& ctx)
     return {ctx.sl_system.get()};
 }
 
-ScanHandlerContext make_scan_handler_context(AppContext& ctx)
-{
-    return {
-        ctx.win_mgr,
-        ctx.cam_mgr,
-        ctx.capture_service,
-        ctx.sl_system.get(),
-        ctx.scan_cam_id_left,
-        ctx.scan_cam_id_right,
-        ctx.id_preview,
-        ctx.id_second,
-        ctx.scan_interval_ms,
-    };
-}
 
 CalibrationHandlerContext make_calibration_handler_context(AppContext& ctx)
 {

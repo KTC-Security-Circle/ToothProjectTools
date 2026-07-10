@@ -141,6 +141,15 @@ class HeadlessCommandMapper
     ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
     CommandMapResult mapProjectorPrevPattern(const control::ControlMessage& message);
 
+    /// @brief scan_start用ControlMessageをCmdStartScanへ変換する。
+    CommandMapResult mapStartScan(const control::ControlMessage& message);
+
+    /// @brief scan_status用ControlMessageをCmdScanStatusへ変換する。
+    CommandMapResult mapScanStatus(const control::ControlMessage& message);
+
+    /// @brief scan_stop用ControlMessageをCmdStopScanへ変換する。
+    CommandMapResult mapStopScan(const control::ControlMessage& message);
+
     /// @brief capture_frame用ControlMessageをCmdCaptureFrameへ変換する。
     ///
     /// Args:

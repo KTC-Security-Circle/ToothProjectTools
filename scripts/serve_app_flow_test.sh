@@ -314,6 +314,27 @@ test_calib_capture_stereo() {
 
 
 
+
+test_scan_validation() {
+  request_error "scan-missing-projector" "missing_field" \
+    '{"id":"scan-missing-projector","cmd":"scan_start","left_role":"left","right_role":"right","output_dir":"./data/scan/test"}'
+
+  request_error "scan-missing-left" "missing_field" \
+    '{"id":"scan-missing-left","cmd":"scan_start","projector_role":"projector","right_role":"right","output_dir":"./data/scan/test"}'
+
+  request_error "scan-missing-right" "missing_field" \
+    '{"id":"scan-missing-right","cmd":"scan_start","projector_role":"projector","left_role":"left","output_dir":"./data/scan/test"}'
+
+  request_error "scan-missing-output" "missing_field" \
+    '{"id":"scan-missing-output","cmd":"scan_start","projector_role":"projector","left_role":"left","right_role":"right"}'
+
+  request_error "scan-invalid-settle" "invalid_command" \
+    '{"id":"scan-invalid-settle","cmd":"scan_start","projector_role":"projector","left_role":"left","right_role":"right","output_dir":"./data/scan/test","settle_ms":-1}'
+
+  request_ok "scan-status" \
+    '{"id":"scan-status","cmd":"scan_status"}'
+}
+
 test_projector_validation() {
   request_ok "list-monitors" \
     '{"id":"list-monitors","cmd":"list_monitors"}'
@@ -535,6 +556,9 @@ run_flow_test() {
 
   echo "[FLOW] projector command validation" >&2
   test_projector_validation
+
+  echo "[FLOW] scan command validation" >&2
+  test_scan_validation
   test_window_success_if_enabled
 
   echo "[FLOW] calibration command validation" >&2
