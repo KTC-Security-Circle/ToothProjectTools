@@ -192,6 +192,11 @@ camera::CameraService& SidecarService::cameraService()
     return camera_service_;
 }
 
+window::WindowService& SidecarService::windowService()
+{
+    return window_service_;
+}
+
 capture::CaptureService& SidecarService::captureService()
 {
     return capture_service_;
@@ -230,6 +235,7 @@ void SidecarService::shutdown()
         streams_.removeRole(role);
     }
     bindings_.clear();
+    window_service_.closeAll();
     cameras_.clear();
 }
 
