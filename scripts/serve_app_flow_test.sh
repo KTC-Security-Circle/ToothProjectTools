@@ -313,6 +313,30 @@ test_calib_capture_stereo() {
 }
 
 
+
+test_projector_validation() {
+  request_error "projector-missing-role" "missing_field" \
+    '{"id":"projector-missing-role","cmd":"open_projector","window_role":"projector","width":640,"height":480}'
+
+  request_error "projector-missing-window" "missing_field" \
+    '{"id":"projector-missing-window","cmd":"open_projector","projector_role":"projector","width":640,"height":480}'
+
+  request_error "projector-missing-width" "missing_field" \
+    '{"id":"projector-missing-width","cmd":"open_projector","projector_role":"projector","window_role":"projector","height":480}'
+
+  request_error "projector-invalid-width" "invalid_command" \
+    '{"id":"projector-invalid-width","cmd":"open_projector","projector_role":"projector","window_role":"projector","width":0,"height":480}'
+
+  request_error "projector-window-not-open" "projector_window_not_open" \
+    '{"id":"projector-window-not-open","cmd":"open_projector","projector_role":"projector","window_role":"projector","width":640,"height":480}'
+
+  request_error "show-pattern-missing-index" "missing_field" \
+    '{"id":"show-pattern-missing-index","cmd":"show_pattern","projector_role":"projector"}'
+
+  request_error "show-pattern-invalid-index" "invalid_command" \
+    '{"id":"show-pattern-invalid-index","cmd":"show_pattern","projector_role":"projector","index":-1}'
+}
+
 test_window_validation() {
   request_error "window-missing-role" "missing_field" \
     '{"id":"window-missing-role","cmd":"open_window","width":640,"height":480}'
@@ -347,6 +371,60 @@ test_window_success_if_enabled() {
 
   expect_event "window_opened" \
     '.event == "window_opened" and .window_role == "test"'
+
+  request_ok "projector-open" \
+    '{"id":"projector-open","cmd":"open_projector","projector_role":"projector","window_role":"test","width":640,"height":480}'
+
+  assert_last_json '.projector_role == "projector" and .window_role == "test" and .width == "640" and .height == "480"' \
+    "open_projector response"
+
+  expect_event "projector_opened" \
+    '.event == "projector_opened" and .projector_role == "projector" and .window_role == "test"'
+
+  request_ok "patterns-generate" \
+    '{"id":"patterns-generate","cmd":"generate_patterns","projector_role":"projector"}'
+
+  assert_last_json '.projector_role == "projector" and (.pattern_count | tonumber) > 0 and .width == "640" and .height == "480"' \
+    "generate_patterns response"
+
+  expect_event "patterns_generated" \
+    '.event == "patterns_generated" and .projector_role == "projector" and (.pattern_count | tonumber) > 0'
+
+  request_ok_timeout "pattern-show" 5 \
+    '{"id":"pattern-show","cmd":"show_pattern","projector_role":"projector","index":0}'
+
+  assert_last_json '.projector_role == "projector" and .pattern_index == "0"' \
+    "show_pattern response"
+
+  expect_event "pattern_shown" \
+    '.event == "pattern_shown" and .projector_role == "projector" and .pattern_index == "0"'
+
+  request_ok_timeout "pattern-next" 5 \
+    '{"id":"pattern-next","cmd":"next_pattern","projector_role":"projector"}'
+
+  assert_last_json '.projector_role == "projector" and .pattern_index == "1"' \
+    "next_pattern response"
+
+  expect_event "pattern_shown" \
+    '.event == "pattern_shown" and .projector_role == "projector" and .pattern_index == "1"'
+
+  request_ok_timeout "pattern-prev" 5 \
+    '{"id":"pattern-prev","cmd":"prev_pattern","projector_role":"projector"}'
+
+  assert_last_json '.projector_role == "projector" and .pattern_index == "0"' \
+    "prev_pattern response"
+
+  expect_event "pattern_shown" \
+    '.event == "pattern_shown" and .projector_role == "projector" and .pattern_index == "0"'
+
+  request_ok "projector-close" \
+    '{"id":"projector-close","cmd":"close_projector","projector_role":"projector"}'
+
+  assert_last_json '.projector_role == "projector"' \
+    "close_projector response"
+
+  expect_event "projector_closed" \
+    '.event == "projector_closed" and .projector_role == "projector"'
 
   request_ok_timeout "window-close" 5 \
     '{"id":"window-close","cmd":"close_window","window_role":"test"}'
@@ -427,6 +505,9 @@ run_flow_test() {
 
   echo "[FLOW] window command validation" >&2
   test_window_validation
+
+  echo "[FLOW] projector command validation" >&2
+  test_projector_validation
   test_window_success_if_enabled
 
   echo "[FLOW] calibration command validation" >&2
