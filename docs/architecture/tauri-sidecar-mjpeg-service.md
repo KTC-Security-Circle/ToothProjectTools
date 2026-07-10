@@ -145,6 +145,43 @@ stream中のroleをcloseした場合はpublisherを停止してからcameraを�
 ```
 
 
+
+### list_monitors
+
+```json
+{"id":"60","cmd":"list_monitors"}
+{"id":"60","ok":true,"monitor_count":"2","monitors_json":"[{\"monitor_index\":0,\"x\":0,\"y\":0,\"width\":1920,\"height\":1080,\"primary\":true,\"name\":\"monitor-0\"}]"}
+```
+
+`monitor_index` は runtime 内で指定する 0-based index。monitor情報を取得できない環境では fallback として `monitor_index=0`, `x=0`, `y=0`, `width=1920`, `height=1080`, `primary=true`, `name=default` を返す。
+
+### configure_projector_surface
+
+中央配置:
+
+```json
+{"id":"61","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":1,"width":1280,"height":720,"placement":"center"}
+{"id":"61","ok":true,"projector_role":"projector","window_role":"projector","monitor_index":"1","monitor_width":"1920","monitor_height":"1080","surface_width":"1920","surface_height":"1080","pattern_width":"1280","pattern_height":"720","pattern_x":"320","pattern_y":"180","clamped":"false"}
+{"event":"projector_surface_configured","projector_role":"projector","window_role":"projector","monitor_index":"1","surface_width":"1920","surface_height":"1080","pattern_width":"1280","pattern_height":"720","pattern_x":"320","pattern_y":"180","clamped":"false"}
+```
+
+custom配置:
+
+```json
+{"id":"62","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":1,"width":1280,"height":720,"x":320,"y":180,"placement":"custom"}
+```
+
+- `monitor_size` は実monitorの表示可能最大領域。例: 1920x1080。
+- `surface_size` は WindowService へ表示する canvas size。原則として monitor size と同じ。
+- `pattern_size` は GrayCodePattern を生成する active area size。`width` / `height` は requested active pattern area の size。
+- `pattern_origin` は surface 内で pattern を貼る左上座標。
+- 表示時は `surface_size` 全体を 0,0,0 の black canvas で初期化し、active pattern だけを ROI に copy する。active pattern 以外の領域は必ず黒画素になる。
+- requested size が monitor size を超えた場合は pattern size を clamp する。
+- custom `x` / `y` により pattern が monitor 外へ出る場合も、origin または pattern size を clamp する。
+- clamp が発生した場合は response の `clamped=true`。
+- surface変更後は GrayCodePattern の再生成が必要。`generate_patterns` は active pattern size で GrayCodePattern を生成する。
+- `close_projector` は window を閉じない。window を閉じる場合は `close_window` を使う。
+
 ### open_projector
 
 ```json
@@ -163,7 +200,7 @@ stream中のroleをcloseした場合はpublisherを停止してからcameraを�
 {"event":"patterns_generated","projector_role":"projector","pattern_count":"44","width":"1920","height":"1080"}
 ```
 
-ProjectorServiceはprojector解像度でGrayCodePatternを生成する。
+ProjectorServiceは現在の ProjectorSurface の active pattern size で GrayCodePattern を生成する。surface未設定時は `open_projector` の `width` / `height` から default surface を作る。
 
 ### show_pattern
 
@@ -173,7 +210,7 @@ ProjectorServiceはprojector解像度でGrayCodePatternを生成する。
 {"event":"pattern_shown","projector_role":"projector","pattern_index":"0"}
 ```
 
-表示は `WindowService::showImage` 経由で行う。ProjectorServiceはWindowManagerやHighGUIを直接操作しない。
+表示は `WindowService::showImage` 経由で行う。ProjectorServiceはWindowManagerやHighGUIを直接操作しない。active pattern は `surface_width` x `surface_height` の black canvas へ合成して表示する。
 
 ### next_pattern / prev_pattern
 
@@ -468,6 +505,8 @@ ProjectorServiceはWindowManagerを直接触らず、表示は `WindowService::s
 
 | JSONL `cmd` | C++ command | Handler | Service | 備考 |
 | --- | --- | --- | --- | --- |
+| `list_monitors` | `cmd::CmdListMonitors` | `handler::projector` | `service::monitor::MonitorService` | monitor一覧を返す |
+| `configure_projector_surface` | `cmd::CmdConfigureProjectorSurface` | `handler::projector` | `service::projector::ProjectorService` | monitorに合わせてprojector surfaceとactive pattern areaを設定する |
 | `open_projector` | `cmd::CmdOpenProjector` | `handler::projector` | `service::projector::ProjectorService` | projector_roleをwindow_roleへbindする |
 | `close_projector` | `cmd::CmdCloseProjector` | `handler::projector` | `service::projector::ProjectorService` | projector bindingを解除する。windowは閉じない |
 | `generate_patterns` | `cmd::CmdGeneratePatterns` | `handler::projector` | `service::projector::ProjectorService` | projector解像度でGrayCodePatternを生成する |
