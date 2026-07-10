@@ -81,6 +81,60 @@ class HeadlessCommandMapper
     ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
     CommandMapResult mapCloseWindow(const control::ControlMessage& message);
 
+    /// @brief open_projector用ControlMessageをCmdOpenProjectorへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapOpenProjector(const control::ControlMessage& message);
+
+    /// @brief close_projector用ControlMessageをCmdCloseProjectorへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapCloseProjector(const control::ControlMessage& message);
+
+    /// @brief generate_patterns用ControlMessageをCmdGeneratePatternsへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapGeneratePatterns(const control::ControlMessage& message);
+
+    /// @brief show_pattern用ControlMessageをCmdProjectorShowPatternへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapProjectorShowPattern(const control::ControlMessage& message);
+
+    /// @brief next_pattern用ControlMessageをCmdProjectorNextPatternへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapProjectorNextPattern(const control::ControlMessage& message);
+
+    /// @brief prev_pattern用ControlMessageをCmdProjectorPrevPatternへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapProjectorPrevPattern(const control::ControlMessage& message);
+
     /// @brief capture_frame用ControlMessageをCmdCaptureFrameへ変換する。
     ///
     /// Args:

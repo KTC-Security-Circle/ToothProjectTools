@@ -37,6 +37,10 @@ namespace window
 {
 class WindowService;
 }
+namespace projector
+{
+class ProjectorService;
+}
 } // namespace service
 
 namespace win
@@ -115,6 +119,12 @@ struct WindowResourceHandlerContext
 {
     /// window_service <service::window::WindowService&>: window open/closeを実行するruntime service。
     service::window::WindowService& window_service;
+};
+
+struct ProjectorHandlerContext
+{
+    /// projector_service <service::projector::ProjectorService&>: projector commandを実行するservice。
+    service::projector::ProjectorService& projector_service;
 };
 
 struct StereoCalibrationHandlerContext
