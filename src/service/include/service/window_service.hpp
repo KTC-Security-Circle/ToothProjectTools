@@ -9,6 +9,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <opencv2/core/mat.hpp>
 #include <thread>
 #include <unordered_map>
 
@@ -76,6 +77,16 @@ class WindowBackend
     ///   <bool>: close対象が存在しcloseできた場合はtrue。
     virtual bool closeWindow(win::WindowId window_id) = 0;
 
+    /// @brief windowへ画像を表示する。
+    ///
+    /// Args:
+    ///   window_id <win::WindowId>: 表示対象window id。
+    ///   image <const cv::Mat&>: 表示する画像。
+    ///
+    /// Return:
+    ///   <bool>: 表示対象が存在し表示できた場合はtrue。
+    virtual bool showImage(win::WindowId window_id, const cv::Mat& image) = 0;
+
     /// @brief window event処理を進める。
     ///
     /// Args:
@@ -133,6 +144,25 @@ class WindowService
     /// Return:
     ///   <WindowResult>: window close結果。
     WindowResult closeWindow(const std::string& role);
+
+    /// @brief windowへ画像を表示する。
+    ///
+    /// Args:
+    ///   role <const std::string&>: 表示対象window role名。
+    ///   image <const cv::Mat&>: 表示する画像。
+    ///
+    /// Return:
+    ///   <WindowResult>: 表示結果。
+    WindowResult showImage(const std::string& role, const cv::Mat& image);
+
+    /// @brief window roleがopen済みかmain threadへ問い合わせる。
+    ///
+    /// Args:
+    ///   role <const std::string&>: 確認対象window role名。
+    ///
+    /// Return:
+    ///   <bool>: open済みならtrue。
+    bool isWindowOpen(const std::string& role);
 
     /// @brief roleに紐づくWindowIdを取得する。
     ///
@@ -193,6 +223,8 @@ class WindowService
     struct OpenWindowRequest;
     struct CloseWindowRequest;
     struct CloseAllWindowsRequest;
+    struct ShowImageRequest;
+    struct CheckWindowOpenRequest;
     class WindowManagerBackend;
 
     /// @brief main thread専用API呼び出し元を検証する。
@@ -230,6 +262,24 @@ class WindowService
     /// Return:
     ///   <WindowResult>: window close結果。
     WindowResult executeCloseWindow(CloseWindowRequest& request);
+
+    /// @brief show image requestをmain thread上で実行する。
+    ///
+    /// Args:
+    ///   request <ShowImageRequest&>: 処理対象request。
+    ///
+    /// Return:
+    ///   <WindowResult>: window表示結果。
+    WindowResult executeShowImage(ShowImageRequest& request);
+
+    /// @brief window open確認requestをmain thread上で実行する。
+    ///
+    /// Args:
+    ///   request <CheckWindowOpenRequest&>: 処理対象request。
+    ///
+    /// Return:
+    ///   <bool>: open済みならtrue。
+    bool executeCheckWindowOpen(CheckWindowOpenRequest& request);
 
     /// @brief close all requestをmain thread上で実行する。
     ///

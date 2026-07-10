@@ -197,6 +197,11 @@ window::WindowService& SidecarService::windowService()
     return window_service_;
 }
 
+projector::ProjectorService& SidecarService::projectorService()
+{
+    return projector_service_;
+}
+
 capture::CaptureService& SidecarService::captureService()
 {
     return capture_service_;
@@ -235,6 +240,7 @@ void SidecarService::shutdown()
         streams_.removeRole(role);
     }
     bindings_.clear();
+    projector_service_.closeAll();
     cameras_.clear();
 }
 

@@ -73,6 +73,8 @@ struct WindowService::WindowRequest
         Open,
         Close,
         CloseAll,
+        ShowImage,
+        CheckWindowOpen,
     };
 
     /// kind <Kind>: main threadで実行するrequest種別。
@@ -145,6 +147,46 @@ struct WindowService::CloseAllWindowsRequest final : WindowRequest
     CloseAllWindowsRequest() : WindowRequest(Kind::CloseAll) {}
 };
 
+struct WindowService::ShowImageRequest final : WindowRequest
+{
+    /// role <std::string>: 表示対象window role名。
+    std::string role;
+
+    /// image <cv::Mat>: 表示する画像。
+    cv::Mat image;
+
+    /// @brief show image requestを構築する。
+    ///
+    /// Args:
+    ///   target_role <std::string>: 表示対象window role名。
+    ///   show_image <cv::Mat>: 表示する画像。
+    ///
+    /// Return:
+    ///   <ShowImageRequest>: show image request。
+    ShowImageRequest(std::string target_role, cv::Mat show_image)
+        : WindowRequest(Kind::ShowImage), role(std::move(target_role)), image(std::move(show_image))
+    {
+    }
+};
+
+struct WindowService::CheckWindowOpenRequest final : WindowRequest
+{
+    /// role <std::string>: 確認対象window role名。
+    std::string role;
+
+    /// @brief check window open requestを構築する。
+    ///
+    /// Args:
+    ///   target_role <std::string>: 確認対象window role名。
+    ///
+    /// Return:
+    ///   <CheckWindowOpenRequest>: window open確認request。
+    explicit CheckWindowOpenRequest(std::string target_role)
+        : WindowRequest(Kind::CheckWindowOpen), role(std::move(target_role))
+    {
+    }
+};
+
 class WindowService::WindowManagerBackend final : public WindowBackend
 {
   public:
@@ -197,6 +239,26 @@ class WindowService::WindowManagerBackend final : public WindowBackend
     bool closeWindow(win::WindowId window_id) override
     {
         return windows_.closeWindow(window_id);
+    }
+
+    /// @brief WindowManagerでwindowへ画像を表示する。
+    ///
+    /// Args:
+    ///   window_id <win::WindowId>: 表示対象window id。
+    ///   image <const cv::Mat&>: 表示する画像。
+    ///
+    /// Return:
+    ///   <bool>: 表示対象が存在し表示できた場合はtrue。
+    bool showImage(win::WindowId window_id, const cv::Mat& image) override
+    {
+        auto* window = windows_.get(window_id);
+        if (!window)
+        {
+            return false;
+        }
+        window->setImage(image);
+        window->present();
+        return true;
     }
 
     /// @brief WindowManagerでwindow event処理を進める。
@@ -261,6 +323,22 @@ WindowResult WindowService::closeWindow(const std::string& role)
     return future.get();
 }
 
+WindowResult WindowService::showImage(const std::string& role, const cv::Mat& image)
+{
+    auto request = std::make_shared<ShowImageRequest>(role, image.clone());
+    auto future = request->promise.get_future();
+    enqueue(request);
+    return future.get();
+}
+
+bool WindowService::isWindowOpen(const std::string& role)
+{
+    auto request = std::make_shared<CheckWindowOpenRequest>(role);
+    auto future = request->promise.get_future();
+    enqueue(request);
+    return future.get().ok;
+}
+
 std::optional<win::WindowId> WindowService::resolveWindowId(const std::string& role) const
 {
     if (std::this_thread::get_id() != gui_thread_id_)
@@ -313,6 +391,16 @@ void WindowService::processPendingRequests()
                 break;
             case WindowRequest::Kind::CloseAll:
                 request->promise.set_value(executeCloseAllWindows(static_cast<CloseAllWindowsRequest&>(*request)));
+                break;
+            case WindowRequest::Kind::ShowImage:
+                request->promise.set_value(executeShowImage(static_cast<ShowImageRequest&>(*request)));
+                break;
+            case WindowRequest::Kind::CheckWindowOpen:
+                request->promise.set_value(executeCheckWindowOpen(static_cast<CheckWindowOpenRequest&>(*request))
+                                               ? WindowResult::success(static_cast<CheckWindowOpenRequest&>(*request).role,
+                                                                       win::kInvalidWindowId, 0, 0)
+                                               : WindowResult::failure(static_cast<CheckWindowOpenRequest&>(*request).role,
+                                                                       "window_not_open", "window role is not open"));
                 break;
             }
         }
@@ -449,6 +537,29 @@ WindowResult WindowService::executeCloseWindow(CloseWindowRequest& request)
     {
         return WindowResult::failure(request.role, "internal_error", "window close failed without error detail");
     }
+}
+
+WindowResult WindowService::executeShowImage(ShowImageRequest& request)
+{
+    const auto it = role_to_window_id_.find(request.role);
+    if (it == role_to_window_id_.end())
+    {
+        return WindowResult::failure(request.role, "window_not_open", "window role is not open: " + request.role);
+    }
+    if (request.image.empty())
+    {
+        return WindowResult::failure(request.role, "invalid_window_image", "image is empty");
+    }
+    if (!backend_.showImage(it->second, request.image))
+    {
+        return WindowResult::failure(request.role, "window_show_failed", "failed to show image: " + request.role);
+    }
+    return WindowResult::success(request.role, it->second, request.image.cols, request.image.rows);
+}
+
+bool WindowService::executeCheckWindowOpen(CheckWindowOpenRequest& request)
+{
+    return role_to_window_id_.contains(request.role);
 }
 
 WindowResult WindowService::executeCloseAllWindows(CloseAllWindowsRequest& request)
