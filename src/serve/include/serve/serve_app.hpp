@@ -9,6 +9,8 @@
 
 #include <istream>
 #include <ostream>
+#include <atomic>
+#include <stop_token>
 #include <string>
 
 namespace serve {
@@ -28,6 +30,16 @@ public:
   int run();
 
 private:
+  /// @brief JSON Lines control入力をcontrol threadで処理する。
+  ///
+  /// Args:
+  ///   running <std::atomic_bool&>: main loop継続状態。
+  ///   stop_token <std::stop_token>: jthread停止通知。
+  ///
+  /// Return:
+  ///   <void>: なし。
+  void runControlLoop(std::atomic_bool& running, std::stop_token stop_token);
+
   ServeOptions options_;
   stream::StreamRegistry streams_;
   service::SidecarService service_;

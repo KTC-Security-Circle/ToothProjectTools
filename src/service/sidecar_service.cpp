@@ -192,6 +192,11 @@ camera::CameraService& SidecarService::cameraService()
     return camera_service_;
 }
 
+window::WindowService& SidecarService::windowService()
+{
+    return window_service_;
+}
+
 capture::CaptureService& SidecarService::captureService()
 {
     return capture_service_;

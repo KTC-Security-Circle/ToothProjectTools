@@ -1,5 +1,5 @@
 add_executable(camera_domain_test camera_domain_test.cpp)
 target_include_directories(camera_domain_test PRIVATE ${CMAKE_SOURCE_DIR}/src/control/include)
-target_link_libraries(camera_domain_test PRIVATE headless_dispatch handler camera_service)
+target_link_libraries(camera_domain_test PRIVATE headless_dispatch handler camera_service window_service)
 target_compile_features(camera_domain_test PRIVATE cxx_std_20)
 add_test(NAME camera_domain_test COMMAND camera_domain_test)

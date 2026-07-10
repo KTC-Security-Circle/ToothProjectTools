@@ -120,6 +120,30 @@ JSONをparseできず `id` も復元できない場合、error responseには `i
 
 stream中のroleをcloseした場合はpublisherを停止してからcameraを解放する。
 
+
+### open_window
+
+```json
+{"id":"40","cmd":"open_window","window_role":"projector","title":"Projector","width":1920,"height":1080,"monitor_index":1,"fullscreen":true}
+{"id":"40","ok":true,"window_role":"projector","window_id":"1","width":"1920","height":"1080"}
+{"event":"window_opened","window_role":"projector","window_id":"1","width":"1920","height":"1080"}
+```
+
+- `window_role` はruntime内のwindow binding名。
+- `title` 省略時は `window_role` を使う。
+- `width` / `height` は必須。
+- `monitor_index` 省略時は既定monitorを使う。
+- `fullscreen` 省略時は `false`。
+- 現段階では既存 `WindowManager` backendを利用する。
+
+### close_window
+
+```json
+{"id":"41","cmd":"close_window","window_role":"projector"}
+{"id":"41","ok":true,"window_role":"projector","window_id":"1"}
+{"event":"window_closed","window_role":"projector","window_id":"1"}
+```
+
 ### start_stream
 
 ```json
@@ -285,6 +309,13 @@ Web UIはsidecarが返したURLをそのまま利用する。
 | `invalid_output_path` | 保存先pathが不正 |
 | `directory_create_failed` | 保存先directory作成失敗 |
 | `file_write_failed` | image保存失敗 |
+| `window_close_failed` | WindowManager backendでwindow closeに失敗 |
+| `window_not_open` | roleにopen済みwindowがない |
+| `window_open_failed` | WindowManager backendでwindow作成に失敗 |
+| `window_already_open` | 指定window_roleが既にopen済み |
+| `invalid_monitor_index` | monitor_indexが不正 |
+| `invalid_window_size` | window width/heightが不正 |
+| `invalid_window_role` | window_roleが空、または英数字、`_`、`-` 以外を含む |
 | `capture_failed` | capture詳細errorがない失敗 |
 | `calibration_failed` | mono calibration計算失敗 |
 | `stereo_calibration_failed` | stereo calibration計算失敗 |
@@ -314,3 +345,42 @@ JSON Lines
 ```
 
 この統合でもcamera deviceとstreamの所有者はC++のままとする。
+
+
+Window resource commandは次の経路で処理する。
+
+```text
+JSON Lines ControlMessage
+  -> ControlInputAdapter
+  -> HeadlessCommandMapper
+  -> cmd::CmdOpenWindow / cmd::CmdCloseWindow
+  -> HeadlessDispatcher
+  -> WindowResourceHandler
+  -> WindowService
+  -> WindowManager
+  -> common::CommandResult
+  -> ControlResponse
+```
+
+| JSONL `cmd` | C++ command | Handler | Service | 備考 |
+| --- | --- | --- | --- | --- |
+| `open_window` | `cmd::CmdOpenWindow` | `handler::window_resource` | `service::window::WindowService` | WindowManagerを通してwindowを作成しroleへbindする |
+| `close_window` | `cmd::CmdCloseWindow` | `handler::window_resource` | `service::window::WindowService` | roleに紐づくwindowをcloseする |
+
+mapping例:
+
+```text
+ControlMessage
+  cmd = "open_window"
+  window_role = "projector"
+  width = 1920
+  height = 1080
+
+HeadlessCommandMapper
+  -> cmd::CmdOpenWindow
+
+HeadlessDispatcher
+  -> WindowResourceHandler
+  -> WindowService
+  -> WindowManager
+```

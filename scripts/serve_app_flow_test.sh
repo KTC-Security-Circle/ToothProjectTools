@@ -135,6 +135,18 @@ request_ok() {
   wait_json ".id == \"${id}\" and .ok == true" "ok response id=${id}"
 }
 
+request_ok_timeout() {
+  local id="$1"
+  local timeout_sec="$2"
+  local json="$3"
+  local old_timeout="${TIMEOUT_SEC}"
+
+  TIMEOUT_SEC="${timeout_sec}"
+  send_json "${json}"
+  wait_json ".id == \"${id}\" and .ok == true" "ok response id=${id} timeout=${timeout_sec}s"
+  TIMEOUT_SEC="${old_timeout}"
+}
+
 request_error() {
   local id="$1"
   local code="$2"
@@ -300,6 +312,70 @@ test_calib_capture_stereo() {
     ".event == \"calibration_stereo_frame_saved\" and .left_role == \"left\" and .right_role == \"right\" and .left_path == \"${left_output}\" and .right_path == \"${right_output}\""
 }
 
+
+test_window_validation() {
+  request_error "window-missing-role" "missing_field" \
+    '{"id":"window-missing-role","cmd":"open_window","width":640,"height":480}'
+
+  request_error "window-missing-width" "missing_field" \
+    '{"id":"window-missing-width","cmd":"open_window","window_role":"projector","height":480}'
+
+  request_error "window-missing-height" "missing_field" \
+    '{"id":"window-missing-height","cmd":"open_window","window_role":"projector","width":640}'
+
+  request_error "window-invalid-width" "invalid_command" \
+    '{"id":"window-invalid-width","cmd":"open_window","window_role":"projector","width":0,"height":480}'
+
+  request_error "window-invalid-monitor" "invalid_command" \
+    '{"id":"window-invalid-monitor","cmd":"open_window","window_role":"projector","width":640,"height":480,"monitor_index":-1}'
+
+  request_error "window-close-missing-role" "missing_field" \
+    '{"id":"window-close-missing-role","cmd":"close_window"}'
+}
+
+test_window_success_if_enabled() {
+  if [[ "${ENABLE_WINDOW_TEST:-0}" != "1" ]]; then
+    echo "[SKIP] window success flow; set ENABLE_WINDOW_TEST=1 to enable" >&2
+    return 0
+  fi
+
+  request_ok "window-open" \
+    '{"id":"window-open","cmd":"open_window","window_role":"test","title":"Test","width":640,"height":480}'
+
+  assert_last_json '.window_role == "test" and .window_id != null and .width == "640" and .height == "480"' \
+    "open_window response"
+
+  expect_event "window_opened" \
+    '.event == "window_opened" and .window_role == "test"'
+
+  request_ok_timeout "window-close" 5 \
+    '{"id":"window-close","cmd":"close_window","window_role":"test"}'
+
+  assert_last_json '.window_role == "test" and .window_id != null' \
+    "close_window response"
+
+  expect_event "window_closed" \
+    '.event == "window_closed" and .window_role == "test"'
+
+  request_ok "window-reopen" \
+    '{"id":"window-reopen","cmd":"open_window","window_role":"test","title":"Test","width":640,"height":480}'
+
+  assert_last_json '.window_role == "test" and .window_id != null and .width == "640" and .height == "480"' \
+    "reopen_window response"
+
+  expect_event "window_opened" \
+    '.event == "window_opened" and .window_role == "test"'
+
+  request_ok_timeout "window-reclose" 5 \
+    '{"id":"window-reclose","cmd":"close_window","window_role":"test"}'
+
+  assert_last_json '.window_role == "test" and .window_id != null' \
+    "reclose_window response"
+
+  expect_event "window_closed" \
+    '.event == "window_closed" and .window_role == "test"'
+}
+
 run_flow_test() {
   mkdir -p "${OUT_DIR}"
 
@@ -348,6 +424,10 @@ run_flow_test() {
     "${OUT_DIR}/calib/stereo/left_001.png" \
     "${OUT_DIR}/calib/stereo/right_001.png"
 
+
+  echo "[FLOW] window command validation" >&2
+  test_window_validation
+  test_window_success_if_enabled
 
   echo "[FLOW] calibration command validation" >&2
   request_error "camera-missing-id" "missing_field" \

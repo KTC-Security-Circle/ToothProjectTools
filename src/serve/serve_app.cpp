@@ -2,7 +2,10 @@
 
 #include "logger/logger_macros.hpp"
 
+#include <atomic>
+#include <chrono>
 #include <exception>
+#include <thread>
 #include <utility>
 
 namespace serve {
@@ -26,10 +29,38 @@ int ServeApp::run() {
 
   writer_.writeReady("0.1.0");
 
-  bool running = true;
-  while (running) {
+  std::atomic_bool running{true};
+  std::jthread control_thread(
+      [this, &running](std::stop_token stop_token) {
+        runControlLoop(running, stop_token);
+      });
+
+  while (running.load()) {
+    service_.windowService().processPendingRequests();
+    if (service_.windowService().hasOpenWindows()) {
+      service_.windowService().pollEvents(1);
+    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+  }
+
+  service_.windowService().processPendingRequests();
+  service_.windowService().closeAllOnMainThread();
+
+  control_thread.request_stop();
+  if (control_thread.joinable()) {
+    control_thread.join();
+  }
+
+  service_.shutdown();
+  mjpeg_server_.stop();
+  return 0;
+}
+
+void ServeApp::runControlLoop(std::atomic_bool& running, std::stop_token stop_token) {
+  while (running.load() && !stop_token.stop_requested()) {
     auto read_result = reader_.read();
     if (read_result.status == control::ReadStatus::end_of_input) {
+      running.store(false);
       break;
     }
     if (read_result.status == control::ReadStatus::invalid) {
@@ -41,7 +72,11 @@ int ServeApp::run() {
     }
 
     try {
-      running = adapter_.handle(read_result.message) != control::AdapterResult::shutdown;
+      const auto result = adapter_.handle(read_result.message);
+      if (result == control::AdapterResult::shutdown) {
+        running.store(false);
+        break;
+      }
     } catch (const std::exception& error) {
       LOG_ERROR("Unhandled sidecar command error: {}", error.what());
       writer_.writeResponse(control::ControlResponse::failure(
@@ -56,10 +91,6 @@ int ServeApp::run() {
           "internal command processing error"));
     }
   }
-
-  service_.shutdown();
-  mjpeg_server_.stop();
-  return 0;
 }
 
 } // namespace serve

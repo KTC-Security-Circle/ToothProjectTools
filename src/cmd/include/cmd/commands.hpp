@@ -41,6 +41,35 @@ struct CmdCloseCamera {
   std::string role;
 };
 
+/// @brief runtime上にwindowを作成するcommand。
+struct CmdOpenWindow
+{
+    /// window_role <std::string>: runtime内でwindowを参照するrole名。
+    std::string window_role;
+
+    /// title <std::string>: window title。
+    std::string title;
+
+    /// width <int>: windowの横幅。
+    int width{0};
+
+    /// height <int>: windowの縦幅。
+    int height{0};
+
+    /// monitor_index <std::optional<int>>: 表示先monitor index。
+    std::optional<int> monitor_index;
+
+    /// fullscreen <bool>: fullscreenで開くか。
+    bool fullscreen{false};
+};
+
+/// @brief runtime上のwindowをcloseするcommand。
+struct CmdCloseWindow
+{
+    /// window_role <std::string>: close対象window role名。
+    std::string window_role;
+};
+
 /// @brief 指定cameraからframeを取得して画像ファイルに保存するcommand。
 struct CmdCaptureFrame {
   /// camera_id <video::CameraId>: Capture対象のcamera識別子。
@@ -143,6 +172,8 @@ using Command = std::variant<
   CmdCapturePush,
   CmdOpenCamera,
   CmdCloseCamera,
+  CmdOpenWindow,
+  CmdCloseWindow,
   CmdCaptureFrame,
   CmdCaptureStereo,
   CmdShowPattern,
