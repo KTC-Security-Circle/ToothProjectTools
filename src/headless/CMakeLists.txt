@@ -22,6 +22,7 @@ target_link_libraries(headless_dispatch
     window_service
     projector_service
     scan_service
+    scan_dataset_service
     logger
 )
 

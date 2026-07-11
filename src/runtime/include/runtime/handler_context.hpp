@@ -45,6 +45,10 @@ namespace scan
 {
 class ScanService;
 }
+namespace scan_dataset
+{
+class ScanDatasetValidator;
+}
 } // namespace service
 
 namespace win
@@ -77,6 +81,12 @@ struct ScanHandlerContext
 {
     /// scan_service <service::scan::ScanService&>: scan commandを実行するservice。
     service::scan::ScanService& scan_service;
+};
+
+struct ScanDatasetHandlerContext
+{
+    /// validator <service::scan_dataset::ScanDatasetValidator&>: scan dataset validator。
+    service::scan_dataset::ScanDatasetValidator& validator;
 };
 
 struct CalibrationHandlerContext

@@ -150,6 +150,15 @@ class HeadlessCommandMapper
     /// @brief scan_stop用ControlMessageをCmdStopScanへ変換する。
     CommandMapResult mapStopScan(const control::ControlMessage& message);
 
+    /// @brief scan_validate用ControlMessageをCmdValidateScanDatasetへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapValidateScanDataset(const control::ControlMessage& message);
+
     /// @brief capture_frame用ControlMessageをCmdCaptureFrameへ変換する。
     ///
     /// Args:
