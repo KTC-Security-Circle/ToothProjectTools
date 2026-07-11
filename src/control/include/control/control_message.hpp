@@ -55,6 +55,12 @@ struct ControlMessage {
   /// output_dir <std::optional<std::string>>: scan dataset保存先directory。
   std::optional<std::string> output_dir;
 
+  /// input_dir <std::optional<std::string>>: scan dataset input directory。
+  std::optional<std::string> input_dir;
+
+  /// allow_partial <std::optional<bool>>: partial datasetをvalid扱いするか。
+  std::optional<bool> allow_partial;
+
   /// settle_ms <std::optional<int>>: pattern表示後captureまでの待機時間ms。
   std::optional<int> settle_ms;
 

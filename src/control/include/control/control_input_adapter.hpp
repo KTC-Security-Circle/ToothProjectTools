@@ -99,6 +99,16 @@ private:
   /// @brief scan commandをmapper/dispatcher経由で実行する。
   AdapterResult handleScanCommand(const std::string& id, const ControlMessage& message, ScanCommandKind kind);
 
+  /// @brief scan dataset commandをmapper/dispatcher経由で実行する。
+  ///
+  /// Args:
+  ///   id <const std::string&>: responseへ設定するrequest id。
+  ///   message <const ControlMessage&>: JSON Linesからparseされたcontrol message。
+  ///
+  /// Return:
+  ///   <AdapterResult>: serve loopを継続する指示。
+  AdapterResult handleScanDatasetCommand(const std::string& id, const ControlMessage& message);
+
   /// @brief capture_frame系commandをmapper/dispatcher経由で実行する。
   ///
   /// Args:
