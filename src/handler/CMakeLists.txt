@@ -7,6 +7,7 @@ add_library(handler STATIC
     pattern_command_handler.cpp
     scan_command_handler.cpp
     scan_dataset_command_handler.cpp
+    decode_command_handler.cpp
     calibration_command_handler.cpp
     capture_command_handler.cpp
     stereo_calibration_command_handler.cpp
@@ -38,6 +39,7 @@ target_link_libraries(handler
     projector_service
     scan_service
     scan_dataset_service
+    decode_service
     cv_lib
     logger
 )
