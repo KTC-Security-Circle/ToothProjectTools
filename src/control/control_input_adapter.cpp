@@ -44,8 +44,8 @@ std::string valueOrEmpty(const common::CommandResult& result, const std::string&
 ControlInputAdapter::ControlInputAdapter(service::SidecarService& service, JsonLineWriter& writer)
     : service_(service), writer_(writer), headless_mapper_(service.cameraService()),
       headless_dispatcher_(service.cameraService(), service.windowService(), service.projectorService(), service.scanService(),
-                           service.scanDatasetValidator(), service.captureService(), service.cameraManager(), service.calibrator(),
-                           service.stereoCalibrator(), service.stereoData())
+                           service.scanDatasetValidator(), service.decodeService(), service.captureService(), service.cameraManager(),
+                           service.calibrator(), service.stereoCalibrator(), service.stereoData())
 {
 }
 
@@ -148,6 +148,11 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
     if (*message.cmd == "scan_validate")
     {
         return handleScanDatasetCommand(id, message);
+    }
+
+    if (*message.cmd == "decode_patterns")
+    {
+        return handleDecodeCommand(id, message);
     }
 
     if (*message.cmd == "start_stream")
@@ -420,6 +425,21 @@ AdapterResult ControlInputAdapter::handleScanDatasetCommand(const std::string& i
     {
         writeHeadlessFailure(id, map_result.error.value_or(
                                      common::CommandError{"invalid_command", "failed to map scan_validate command"}));
+        return AdapterResult::continue_running;
+    }
+
+    const auto result = headless_dispatcher_.execute(*map_result.command);
+    writer_.writeResponse(toControlResponse(id, result));
+    return AdapterResult::continue_running;
+}
+
+AdapterResult ControlInputAdapter::handleDecodeCommand(const std::string& id, const ControlMessage& message)
+{
+    const auto map_result = headless_mapper_.mapDecodePatterns(message);
+    if (!map_result.ok)
+    {
+        writeHeadlessFailure(id, map_result.error.value_or(
+                                     common::CommandError{"invalid_command", "failed to map decode_patterns command"}));
         return AdapterResult::continue_running;
     }
 
