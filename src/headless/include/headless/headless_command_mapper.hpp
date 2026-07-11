@@ -159,6 +159,15 @@ class HeadlessCommandMapper
     ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
     CommandMapResult mapValidateScanDataset(const control::ControlMessage& message);
 
+    /// @brief decode_patterns用ControlMessageをCmdDecodePatternsへ変換する。
+    ///
+    /// Args:
+    ///   message <const control::ControlMessage&>: JSON Linesからparseされたcontrol message。
+    ///
+    /// Return:
+    ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
+    CommandMapResult mapDecodePatterns(const control::ControlMessage& message);
+
     /// @brief capture_frame用ControlMessageをCmdCaptureFrameへ変換する。
     ///
     /// Args:

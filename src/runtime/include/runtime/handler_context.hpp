@@ -49,6 +49,10 @@ namespace scan_dataset
 {
 class ScanDatasetValidator;
 }
+namespace decode
+{
+class DecodeService;
+}
 } // namespace service
 
 namespace win
@@ -87,6 +91,12 @@ struct ScanDatasetHandlerContext
 {
     /// validator <service::scan_dataset::ScanDatasetValidator&>: scan dataset validator。
     service::scan_dataset::ScanDatasetValidator& validator;
+};
+
+struct DecodeHandlerContext
+{
+    /// decode_service <service::decode::DecodeService&>: pattern decode service。
+    service::decode::DecodeService& decode_service;
 };
 
 struct CalibrationHandlerContext

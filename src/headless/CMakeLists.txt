@@ -23,6 +23,7 @@ target_link_libraries(headless_dispatch
     projector_service
     scan_service
     scan_dataset_service
+    decode_service
     logger
 )
 

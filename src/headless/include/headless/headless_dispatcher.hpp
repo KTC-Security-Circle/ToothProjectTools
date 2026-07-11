@@ -44,6 +44,10 @@ namespace scan_dataset
 {
 class ScanDatasetValidator;
 }
+namespace decode
+{
+class DecodeService;
+}
 } // namespace service
 
 namespace headless
@@ -68,6 +72,7 @@ class HeadlessDispatcher
     HeadlessDispatcher(service::camera::CameraService& camera_service, service::window::WindowService& window_service,
                        service::projector::ProjectorService& projector_service, service::scan::ScanService& scan_service,
                        service::scan_dataset::ScanDatasetValidator& scan_dataset_validator,
+                       service::decode::DecodeService& decode_service,
                        capture::CaptureService& capture_service,
                        video::CameraManager& cameras, calib::Calibrator* calibrator,
                        calib::StereoCalibrator* stereo_calibrator, calib::StereoData& stereo_data);
@@ -98,6 +103,9 @@ class HeadlessDispatcher
 
     /// scan_dataset_validator_ <service::scan_dataset::ScanDatasetValidator&>: scan dataset検証service。
     service::scan_dataset::ScanDatasetValidator& scan_dataset_validator_;
+
+    /// decode_service_ <service::decode::DecodeService&>: GrayCode decode commandを実行するservice。
+    service::decode::DecodeService& decode_service_;
 
     /// capture_service_ <capture::CaptureService&>: capture系domain commandを実行するservice。
     capture::CaptureService& capture_service_;
