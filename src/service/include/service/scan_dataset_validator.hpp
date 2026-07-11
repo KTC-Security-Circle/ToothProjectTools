@@ -30,6 +30,18 @@ class ScanDatasetValidator
     ///   <ScanDatasetValidationResult>: validation結果。
     ScanDatasetValidationResult validate(const ScanDatasetValidationConfig& config) const;
 
+    /// @brief decode処理向けにmetadata.jsonを読み取る。
+    ///
+    /// Args:
+    ///   input_dir <const std::filesystem::path&>: scan dataset directory。
+    ///   issues <std::vector<ScanDatasetIssue>&>: 検出issueの追加先。
+    ///
+    /// Return:
+    ///   <std::optional<ScanDatasetMetadata>>: parse可能なmetadata。致命的なparse失敗時はstd::nullopt。
+    std::optional<ScanDatasetMetadata> readMetadataForDecode(
+        const std::filesystem::path& input_dir,
+        std::vector<ScanDatasetIssue>& issues) const;
+
   private:
     /// @brief metadata.jsonを読み取り、固定schemaから必要fieldを取り出す。
     ///

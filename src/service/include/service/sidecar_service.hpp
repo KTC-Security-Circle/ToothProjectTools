@@ -11,6 +11,7 @@
 #include "service/scan_event.hpp"
 #include "service/scan_service.hpp"
 #include "service/scan_dataset_validator.hpp"
+#include "service/decode_service.hpp"
 #include "video/camera_manager.hpp"
 #include "window/window_manager.hpp"
 
@@ -188,6 +189,15 @@ class SidecarService
     ///   <service::scan_dataset::ScanDatasetValidator&>: sidecar所有scan dataset validator。
     service::scan_dataset::ScanDatasetValidator& scanDatasetValidator();
 
+    /// @brief GrayCode decode serviceを取得する。
+    ///
+    /// Args:
+    ///   none <void>: 引数なし。
+    ///
+    /// Return:
+    ///   <service::decode::DecodeService&>: sidecar所有decode service。
+    service::decode::DecodeService& decodeService();
+
     /// @brief scan worker event queueを取得する。
     service::scan::ScanEventQueue& scanEventQueue();
 
@@ -282,6 +292,9 @@ class SidecarService
 
     /// scan_dataset_validator_ <service::scan_dataset::ScanDatasetValidator>: scan dataset検証service。
     scan_dataset::ScanDatasetValidator scan_dataset_validator_;
+
+    /// decode_service_ <service::decode::DecodeService>: scan datasetからGrayCode decode結果を生成するservice。
+    decode::DecodeService decode_service_{scan_dataset_validator_};
 
     /// calibrator_ <calib::Calibrator>: sidecar用mono calibration計算器。
     calib::Calibrator calibrator_;

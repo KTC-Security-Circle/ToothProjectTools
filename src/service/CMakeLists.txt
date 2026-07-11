@@ -73,6 +73,15 @@ target_include_directories(scan_dataset_service PUBLIC ${CMAKE_CURRENT_SOURCE_DI
 target_link_libraries(scan_dataset_service PUBLIC cv_lib)
 target_compile_features(scan_dataset_service PUBLIC cxx_std_20)
 
+add_library(decode_service STATIC
+  decode_result.cpp
+  decode_service.cpp
+)
+
+target_include_directories(decode_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(decode_service PUBLIC scan_dataset_service cv_lib)
+target_compile_features(decode_service PUBLIC cxx_std_20)
+
 add_library(sidecar_service STATIC
   sidecar_service.cpp
 )
@@ -90,6 +99,7 @@ target_link_libraries(sidecar_service
     projector_service
     scan_service
     scan_dataset_service
+    decode_service
     capture
     calibration
     mjpeg_stream
