@@ -316,6 +316,49 @@ scan events:
 
 `scan_stop` は実行中scanへ停止要求を出す。停止完了は worker から `scan_stopped` eventとして通知される。
 
+### scan_validate
+
+```json
+{"id":"80","cmd":"scan_validate","input_dir":"./data/scan/session_001"}
+{"id":"80","ok":true,"input_dir":"./data/scan/session_001","scan_id":"session_001","valid":"true","partial":"false","pattern_count":"44","left_count":"44","right_count":"44","missing_count":"0","issue_count":"0","width":"640","height":"480","issues_json":"[]"}
+```
+
+`allow_partial` は任意で、未指定時は `false`。
+
+```json
+{"id":"80","cmd":"scan_validate","input_dir":"./data/scan/session_001","allow_partial":false}
+```
+
+`scan_validate` は `scan_start` が保存したdatasetを、GrayCode decode / reconstructへ渡す前に検証する。検証処理自体が実行できた場合、datasetが不正でも原則 `ok=true`、`valid="false"` を返す。不備の詳細は `issues_json` にJSON array文字列として入る。
+
+検証対象構造:
+
+```text
+output_dir/
+  metadata.json
+  left/
+    pattern_000.png
+  right/
+    pattern_000.png
+```
+
+主な検証内容:
+
+- `input_dir` が存在し、directoryであること。
+- `metadata.json` が存在し、`scan_id`、正の `pattern_count`、正の `surface.pattern_width` / `surface.pattern_height` を持つこと。
+- `left/` と `right/` が存在すること。
+- `pattern_count` に対応する `left/right/pattern_NNN.png` が存在し、読み込み可能で、left/right sizeと全indexの画像sizeが整合すること。
+
+`allow_partial=true` の場合、issueが `missing_left_image` / `missing_right_image` のみであれば `valid="true"` として扱える。metadata不備、directory不備、unreadable image、size mismatchは `allow_partial=true` でも `valid="false"`。
+
+invalid dataset例:
+
+```json
+{"id":"80","ok":true,"input_dir":"./data/scan/session_001","scan_id":"session_001","valid":"false","partial":"true","pattern_count":"44","left_count":"40","right_count":"40","missing_count":"4","issue_count":"4","width":"640","height":"480","issues_json":"[{\"code\":\"missing_left_image\",\"message\":\"missing left image for pattern index 40\",\"path\":\"./data/scan/session_001/left/pattern_040.png\",\"pattern_index\":40}]"}
+```
+
+`input_dir` field自体が不足、または空文字の場合は mapper validation として `ok=false` を返す。GrayCode decode / reconstruct は行わない。
+
 ### start_stream
 
 ```json
@@ -507,6 +550,24 @@ Web UIはsidecarが返したURLをそのまま利用する。
 | `scan_failed` | scan workerが失敗 |
 | `scan_stop_failed` | scan停止要求に失敗 |
 | `scan_resource_busy` | scan中のprojector/camera/window roleへ干渉するcommandを拒否した |
+| `input_dir_not_found` | scan_validate対象input_dirが存在しない |
+| `input_dir_not_directory` | scan_validate対象input_dirがdirectoryではない |
+| `metadata_not_found` | metadata.jsonが存在しない |
+| `metadata_read_failed` | metadata.jsonを読み取れない |
+| `metadata_parse_failed` | metadata.jsonをparseできない、またはobjectではない |
+| `metadata_missing_scan_id` | metadata.jsonにscan_idがない |
+| `metadata_invalid_pattern_count` | metadata.jsonのpattern_countが正の値ではない |
+| `metadata_invalid_surface` | metadata.jsonのsurface pattern sizeが正の値ではない |
+| `left_dir_not_found` | left/ directoryが存在しない |
+| `right_dir_not_found` | right/ directoryが存在しない |
+| `missing_left_image` | expected left imageが存在しない |
+| `missing_right_image` | expected right imageが存在しない |
+| `unreadable_left_image` | expected left imageを読み込めない |
+| `unreadable_right_image` | expected right imageを読み込めない |
+| `empty_left_image` | expected left imageがempty image |
+| `empty_right_image` | expected right imageがempty image |
+| `stereo_size_mismatch` | 同一indexのleft/right画像sizeが一致しない |
+| `image_size_inconsistent` | pattern index間で画像sizeが一致しない |
 | `calibration_failed` | mono calibration計算失敗 |
 | `stereo_calibration_failed` | stereo calibration計算失敗 |
 | `calibration_image_not_found` | calibration画像directoryまたは画像が見つからない |
@@ -592,6 +653,22 @@ JSON Lines ControlMessage
 
 ProjectorServiceはWindowManagerを直接触らず、表示は `WindowService::showImage` 経由で行う。現段階ではwindow backendのみを利用し、DRM/KMSやHDMI直接制御は後続PRで扱う。
 
+Scan dataset validation commandは次の経路で処理する。
+
+```text
+JSON Lines ControlMessage
+  -> ControlInputAdapter
+  -> HeadlessCommandMapper
+  -> cmd::CmdValidateScanDataset
+  -> HeadlessDispatcher
+  -> ScanDatasetHandler
+  -> ScanDatasetValidator
+  -> common::CommandResult
+  -> ControlResponse
+```
+
+`scan_validate` は保存済みdatasetだけを読むため、実行中scanのprojector/camera/window resourceには触らない。
+
 | JSONL `cmd` | C++ command | Handler | Service | 備考 |
 | --- | --- | --- | --- | --- |
 | `list_monitors` | `cmd::CmdListMonitors` | `handler::projector` | `service::monitor::MonitorService` | monitor一覧を返す |
@@ -602,3 +679,4 @@ ProjectorServiceはWindowManagerを直接触らず、表示は `WindowService::s
 | `show_pattern` | `cmd::CmdProjectorShowPattern` | `handler::projector` | `service::projector::ProjectorService` | 指定indexのpatternをWindowService経由で表示する |
 | `next_pattern` | `cmd::CmdProjectorNextPattern` | `handler::projector` | `service::projector::ProjectorService` | 次のpatternを表示する |
 | `prev_pattern` | `cmd::CmdProjectorPrevPattern` | `handler::projector` | `service::projector::ProjectorService` | 前のpatternを表示する |
+| `scan_validate` | `cmd::CmdValidateScanDataset` | `handler::scan_dataset` | `service::scan_dataset::ScanDatasetValidator` | scan_start出力datasetをdecode前に検証する |

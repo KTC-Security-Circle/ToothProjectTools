@@ -217,6 +217,11 @@ scan::ScanService& SidecarService::scanService()
     return scan_service_;
 }
 
+scan_dataset::ScanDatasetValidator& SidecarService::scanDatasetValidator()
+{
+    return scan_dataset_validator_;
+}
+
 scan::ScanEventQueue& SidecarService::scanEventQueue()
 {
     return scan_event_queue_;

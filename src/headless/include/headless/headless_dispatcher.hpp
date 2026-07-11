@@ -40,6 +40,10 @@ namespace scan
 {
 class ScanService;
 }
+namespace scan_dataset
+{
+class ScanDatasetValidator;
+}
 } // namespace service
 
 namespace headless
@@ -63,6 +67,7 @@ class HeadlessDispatcher
     ///   <HeadlessDispatcher>: GUI非依存handler contextを保持するdispatcher。
     HeadlessDispatcher(service::camera::CameraService& camera_service, service::window::WindowService& window_service,
                        service::projector::ProjectorService& projector_service, service::scan::ScanService& scan_service,
+                       service::scan_dataset::ScanDatasetValidator& scan_dataset_validator,
                        capture::CaptureService& capture_service,
                        video::CameraManager& cameras, calib::Calibrator* calibrator,
                        calib::StereoCalibrator* stereo_calibrator, calib::StereoData& stereo_data);
@@ -90,6 +95,9 @@ class HeadlessDispatcher
 
     /// scan_service_ <service::scan::ScanService&>: scan commandを実行するservice。
     service::scan::ScanService& scan_service_;
+
+    /// scan_dataset_validator_ <service::scan_dataset::ScanDatasetValidator&>: scan dataset検証service。
+    service::scan_dataset::ScanDatasetValidator& scan_dataset_validator_;
 
     /// capture_service_ <capture::CaptureService&>: capture系domain commandを実行するservice。
     capture::CaptureService& capture_service_;

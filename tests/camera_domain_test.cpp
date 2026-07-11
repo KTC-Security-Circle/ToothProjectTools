@@ -2,22 +2,28 @@
 #include "control/control_message.hpp"
 #include "handler/camera_command_handler.hpp"
 #include "handler/projector_command_handler.hpp"
+#include "handler/scan_dataset_command_handler.hpp"
 #include "handler/window_resource_command_handler.hpp"
 #include "headless/headless_command_mapper.hpp"
 #include "runtime/handler_context.hpp"
 #include "service/camera_service.hpp"
 #include "service/monitor_service.hpp"
 #include "service/projector_service.hpp"
+#include "service/scan_dataset_validator.hpp"
 #include "service/window_service.hpp"
 #include "video/camera_manager.hpp"
 
 #include <cassert>
+#include <filesystem>
+#include <fstream>
 #include <chrono>
 #include <future>
 #include <optional>
 #include <string>
 #include <thread>
 #include <variant>
+
+#include <opencv2/imgcodecs.hpp>
 
 namespace
 {
@@ -135,6 +141,65 @@ control::ControlMessage messageWithId()
     control::ControlMessage message;
     message.id = "test";
     return message;
+}
+
+
+std::filesystem::path testTempDir(const std::string& name)
+{
+    auto path = std::filesystem::temp_directory_path() / ("tooth_scan_dataset_" + name);
+    std::filesystem::remove_all(path);
+    std::filesystem::create_directories(path);
+    return path;
+}
+
+void writeScanMetadata(const std::filesystem::path& dir, int pattern_count = 2, int pattern_width = 20, int pattern_height = 16)
+{
+    std::ofstream output(dir / "metadata.json");
+    output << "{\n"
+           << "  \"scan_id\": \"session_001\",\n"
+           << "  \"created_at\": \"2026-07-11T00:00:00\",\n"
+           << "  \"version\": \"0.1.0\",\n"
+           << "  \"projector_role\": \"projector\",\n"
+           << "  \"left_role\": \"left\",\n"
+           << "  \"right_role\": \"right\",\n"
+           << "  \"pattern_count\": " << pattern_count << ",\n"
+           << "  \"settle_ms\": 120,\n"
+           << "  \"output_dir\": \"" << dir.string() << "\",\n"
+           << "  \"surface\": {\n"
+           << "    \"surface_width\": " << pattern_width << ",\n"
+           << "    \"surface_height\": " << pattern_height << ",\n"
+           << "    \"pattern_width\": " << pattern_width << ",\n"
+           << "    \"pattern_height\": " << pattern_height << ",\n"
+           << "    \"pattern_x\": 0,\n"
+           << "    \"pattern_y\": 0\n"
+           << "  }\n"
+           << "}\n";
+}
+
+std::filesystem::path patternPath(const std::filesystem::path& dir, const std::string& side, int index)
+{
+    std::ostringstream name;
+    name << "pattern_" << std::setfill('0') << std::setw(3) << index << ".png";
+    return dir / side / name.str();
+}
+
+void writeImage(const std::filesystem::path& path, int width = 20, int height = 16)
+{
+    std::filesystem::create_directories(path.parent_path());
+    cv::Mat image(height, width, CV_8UC3, cv::Scalar(10, 20, 30));
+    assert(cv::imwrite(path.string(), image));
+}
+
+void writeValidScanDataset(const std::filesystem::path& dir, int pattern_count = 2)
+{
+    std::filesystem::create_directories(dir / "left");
+    std::filesystem::create_directories(dir / "right");
+    writeScanMetadata(dir, pattern_count);
+    for (int index = 0; index < pattern_count; ++index)
+    {
+        writeImage(patternPath(dir, "left", index));
+        writeImage(patternPath(dir, "right", index));
+    }
 }
 
 void testWindowMapper()
@@ -438,6 +503,27 @@ void testScanMapper()
     message.scan_id = "session_001";
     result = mapper.mapStopScan(message);
     assert(result.ok && std::holds_alternative<cmd::CmdStopScan>(*result.command));
+
+    message = messageWithId();
+    result = mapper.mapValidateScanDataset(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.input_dir = "";
+    result = mapper.mapValidateScanDataset(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.input_dir = "./data/scan/session_001";
+    result = mapper.mapValidateScanDataset(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdValidateScanDataset>(*result.command));
+    auto validate = std::get<cmd::CmdValidateScanDataset>(*result.command);
+    assert(validate.input_dir == "./data/scan/session_001");
+    assert(!validate.allow_partial);
+
+    message.allow_partial = true;
+    result = mapper.mapValidateScanDataset(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdValidateScanDataset>(*result.command));
+    validate = std::get<cmd::CmdValidateScanDataset>(*result.command);
+    assert(validate.allow_partial);
 }
 
 void testWindowHandler()
@@ -777,6 +863,124 @@ void testProjectorHandler()
     assert(!other.handled);
 }
 
+void testScanDatasetValidator()
+{
+    service::scan_dataset::ScanDatasetValidator validator;
+
+    auto dir = testTempDir("valid");
+    writeValidScanDataset(dir, 2);
+    auto result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(result.valid);
+    assert(!result.partial);
+    assert(result.scan_id == "session_001");
+    assert(result.pattern_count == 2);
+    assert(result.left_count == 2 && result.right_count == 2);
+    assert(result.width == 20 && result.height == 16);
+    assert(result.issues.empty());
+
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir / "missing", false});
+    assert(!result.valid && result.issues.size() == 1 && result.issues[0].code == "input_dir_not_found");
+
+    dir = testTempDir("metadata_missing");
+    std::filesystem::create_directories(dir / "left");
+    std::filesystem::create_directories(dir / "right");
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(!result.valid && result.issues[0].code == "metadata_not_found");
+
+    dir = testTempDir("invalid_pattern_count");
+    writeValidScanDataset(dir, 1);
+    writeScanMetadata(dir, 0);
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(!result.valid);
+    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
+                       { return issue.code == "metadata_invalid_pattern_count"; }));
+
+    dir = testTempDir("invalid_surface");
+    writeValidScanDataset(dir, 1);
+    writeScanMetadata(dir, 1, 0, 16);
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(!result.valid);
+    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
+                       { return issue.code == "metadata_invalid_surface"; }));
+
+    dir = testTempDir("left_missing");
+    writeValidScanDataset(dir, 1);
+    std::filesystem::remove_all(dir / "left");
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(!result.valid);
+    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
+                       { return issue.code == "left_dir_not_found"; }));
+
+    dir = testTempDir("right_missing");
+    writeValidScanDataset(dir, 1);
+    std::filesystem::remove_all(dir / "right");
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(!result.valid);
+    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
+                       { return issue.code == "right_dir_not_found"; }));
+
+    dir = testTempDir("missing_left_image");
+    writeValidScanDataset(dir, 2);
+    std::filesystem::remove(patternPath(dir, "left", 1));
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(!result.valid && result.partial && result.missing_count == 1);
+    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
+                       { return issue.code == "missing_left_image"; }));
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, true});
+    assert(result.valid && result.partial);
+
+    dir = testTempDir("missing_right_image");
+    writeValidScanDataset(dir, 2);
+    std::filesystem::remove(patternPath(dir, "right", 1));
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(!result.valid && result.partial && result.missing_count == 1);
+    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
+                       { return issue.code == "missing_right_image"; }));
+
+    dir = testTempDir("unreadable");
+    writeValidScanDataset(dir, 1);
+    std::ofstream(patternPath(dir, "left", 0)) << "not a png";
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(!result.valid);
+    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
+                       { return issue.code == "unreadable_left_image"; }));
+
+    dir = testTempDir("stereo_size_mismatch");
+    writeValidScanDataset(dir, 1);
+    writeImage(patternPath(dir, "right", 0), 24, 16);
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(!result.valid);
+    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
+                       { return issue.code == "stereo_size_mismatch"; }));
+
+    dir = testTempDir("image_size_inconsistent");
+    writeValidScanDataset(dir, 2);
+    writeImage(patternPath(dir, "left", 1), 22, 16);
+    writeImage(patternPath(dir, "right", 1), 22, 16);
+    result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
+    assert(!result.valid);
+    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
+                       { return issue.code == "image_size_inconsistent"; }));
+}
+
+void testScanDatasetHandler()
+{
+    service::scan_dataset::ScanDatasetValidator validator;
+    runtime::ScanDatasetHandlerContext context{validator};
+    const auto dir = testTempDir("handler");
+    writeValidScanDataset(dir, 1);
+
+    auto result = handler::scan_dataset::handle(
+        context, cmd::Command{cmd::CmdValidateScanDataset{dir.string(), false}});
+    assert(result.handled && result.ok);
+    assert(result.values.at("valid") == "true");
+    assert(result.values.at("issues_json") == "[]");
+
+    const auto other = handler::scan_dataset::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
+    assert(!other.handled);
+}
+
+
 void testServiceValidation()
 {
     video::CameraManager cameras;
@@ -800,9 +1004,11 @@ int main()
     testHandler();
     testWindowHandler();
     testProjectorHandler();
+    testScanDatasetHandler();
     testProjectorSurfaceConfiguration();
     testServiceValidation();
     testWindowServiceValidation();
     testProjectorServiceValidation();
+    testScanDatasetValidator();
     return 0;
 }

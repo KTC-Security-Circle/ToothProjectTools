@@ -331,6 +331,12 @@ test_scan_validation() {
   request_error "scan-invalid-settle" "invalid_command" \
     '{"id":"scan-invalid-settle","cmd":"scan_start","projector_role":"projector","left_role":"left","right_role":"right","output_dir":"./data/scan/test","settle_ms":-1}'
 
+  request_error "scan-validate-missing-input" "missing_field" \
+    '{"id":"scan-validate-missing-input","cmd":"scan_validate"}'
+
+  request_error "scan-validate-empty-input" "invalid_command" \
+    '{"id":"scan-validate-empty-input","cmd":"scan_validate","input_dir":""}'
+
   request_ok "scan-status" \
     '{"id":"scan-status","cmd":"scan_status"}'
 }

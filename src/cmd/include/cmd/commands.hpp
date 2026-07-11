@@ -217,6 +217,15 @@ struct CmdStopScan
     std::optional<std::string> scan_id;
 };
 
+struct CmdValidateScanDataset
+{
+    /// input_dir <std::string>: scan dataset directory。
+    std::string input_dir;
+
+    /// allow_partial <bool>: partial datasetをvalid扱いするか。
+    bool allow_partial{false};
+};
+
 struct CmdCalibrate {
   /// target_camera_id <video::CameraId>: mono calibration結果を適用するcamera識別子。
   video::CameraId target_camera_id;
@@ -299,6 +308,7 @@ using Command = std::variant<
   CmdStartScan,
   CmdScanStatus,
   CmdStopScan,
+  CmdValidateScanDataset,
   CmdCalibrate,
   CmdCalibClear,
   CmdCalibCapture,

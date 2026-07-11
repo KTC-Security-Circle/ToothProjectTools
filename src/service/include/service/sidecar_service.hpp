@@ -10,6 +10,7 @@
 #include "service/projector_service.hpp"
 #include "service/scan_event.hpp"
 #include "service/scan_service.hpp"
+#include "service/scan_dataset_validator.hpp"
 #include "video/camera_manager.hpp"
 #include "window/window_manager.hpp"
 
@@ -178,6 +179,15 @@ class SidecarService
     /// @brief scan commandを実行するdomain serviceを取得する。
     service::scan::ScanService& scanService();
 
+    /// @brief scan dataset検証serviceを取得する。
+    ///
+    /// Args:
+    ///   none <void>: 引数なし。
+    ///
+    /// Return:
+    ///   <service::scan_dataset::ScanDatasetValidator&>: sidecar所有scan dataset validator。
+    service::scan_dataset::ScanDatasetValidator& scanDatasetValidator();
+
     /// @brief scan worker event queueを取得する。
     service::scan::ScanEventQueue& scanEventQueue();
 
@@ -269,6 +279,9 @@ class SidecarService
 
     /// scan_service_ <service::scan::ScanService>: 自動構造光scan domain service。
     scan::ScanService scan_service_{projector_service_, capture_service_, camera_service_, scan_event_queue_};
+
+    /// scan_dataset_validator_ <service::scan_dataset::ScanDatasetValidator>: scan dataset検証service。
+    scan_dataset::ScanDatasetValidator scan_dataset_validator_;
 
     /// calibrator_ <calib::Calibrator>: sidecar用mono calibration計算器。
     calib::Calibrator calibrator_;
