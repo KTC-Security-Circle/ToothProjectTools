@@ -7,6 +7,7 @@ add_library(command_result_mapper STATIC
     projector_command_result_mapper.cpp
     scan_command_result_mapper.cpp
     scan_dataset_command_result_mapper.cpp
+    decode_command_result_mapper.cpp
 )
 
 target_include_directories(command_result_mapper
@@ -23,6 +24,7 @@ target_link_libraries(command_result_mapper
     projector_service
     scan_service
     scan_dataset_service
+    decode_service
 )
 
 target_compile_features(command_result_mapper PUBLIC cxx_std_20)

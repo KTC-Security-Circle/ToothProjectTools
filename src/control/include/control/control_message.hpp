@@ -64,6 +64,9 @@ struct ControlMessage {
   /// settle_ms <std::optional<int>>: pattern表示後captureまでの待機時間ms。
   std::optional<int> settle_ms;
 
+  /// threshold <std::optional<int>>: GrayCode decode threshold。
+  std::optional<int> threshold;
+
   /// camera_id <std::optional<int>>: open_cameraで使用するcamera識別子。
   std::optional<int> camera_id;
 

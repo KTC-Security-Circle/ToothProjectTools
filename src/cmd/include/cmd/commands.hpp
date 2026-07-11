@@ -226,6 +226,21 @@ struct CmdValidateScanDataset
     bool allow_partial{false};
 };
 
+struct CmdDecodePatterns
+{
+    /// input_dir <std::string>: scan dataset directory。
+    std::string input_dir;
+
+    /// output_dir <std::string>: decode output directory。
+    std::string output_dir;
+
+    /// threshold <int>: GrayCode inverse pair threshold。
+    int threshold{15};
+
+    /// allow_partial <bool>: partial scan datasetをdecode対象として許可するか。
+    bool allow_partial{false};
+};
+
 struct CmdCalibrate {
   /// target_camera_id <video::CameraId>: mono calibration結果を適用するcamera識別子。
   video::CameraId target_camera_id;
@@ -309,6 +324,7 @@ using Command = std::variant<
   CmdScanStatus,
   CmdStopScan,
   CmdValidateScanDataset,
+  CmdDecodePatterns,
   CmdCalibrate,
   CmdCalibClear,
   CmdCalibCapture,

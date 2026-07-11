@@ -359,6 +359,71 @@ invalid dataset例:
 
 `input_dir` field自体が不足、または空文字の場合は mapper validation として `ok=false` を返す。GrayCode decode / reconstruct は行わない。
 
+### decode_patterns
+
+```json
+{"id":"90","cmd":"decode_patterns","input_dir":"./data/scan/session_001","output_dir":"./data/decode/session_001","threshold":15}
+{"id":"90","ok":true,"input_dir":"./data/scan/session_001","output_dir":"./data/decode/session_001","scan_id":"session_001","pattern_count":"44","image_width":"640","image_height":"480","projector_width":"1280","projector_height":"720","threshold":"15","left_valid_count":"245000","right_valid_count":"244300","left_valid_ratio":"0.7975","right_valid_ratio":"0.7952"}
+```
+
+`decode_patterns` は `scan_start` 出力datasetを入力にし、事前に `ScanDatasetValidator` でdatasetを検証してからGrayCode inverse pairをdecodeする。3D reconstructは行わない。
+
+必須field:
+
+- `input_dir`: scan dataset directory。
+- `output_dir`: decode result output directory。
+
+任意field:
+
+- `threshold`: GrayCode inverse pairの明暗差threshold。未指定時は `15`。
+- `allow_partial`: partial datasetを許可するか。未指定時は `false`。
+
+mapper validation:
+
+- `input_dir` 不足は `missing_field`。
+- `output_dir` 不足は `missing_field`。
+- `input_dir` / `output_dir` 空文字は `invalid_command`。
+- `threshold < 0` は `invalid_command`。
+
+出力構造:
+
+```text
+output_dir/
+  metadata.json
+  left/
+    projector_x.yml
+    projector_y.yml
+    valid_mask.png
+  right/
+    projector_x.yml
+    projector_y.yml
+    valid_mask.png
+```
+
+保存形式:
+
+- `projector_x.yml`: camera pixelごとのprojector active pattern x座標。`CV_32SC1`。invalid pixelは `-1`。
+- `projector_y.yml`: camera pixelごとのprojector active pattern y座標。`CV_32SC1`。invalid pixelは `-1`。
+- `valid_mask.png`: valid pixelは `255`、invalid pixelは `0`。`CV_8UC1`。
+
+GrayCode pattern順序はOpenCV `GrayCodePattern::generate()` に合わせる。現在は `x` のMSBからLSBのnormal/inverse pair、続いて `y` のMSBからLSBのnormal/inverse pairをdecodeする。既存 `StructuredLight::generatePatterns()` は末尾に白/黒patternを追加するため、decodeではGrayCode部分を使い、末尾の白/黒は無視する。
+
+threshold判定:
+
+```text
+abs(normal - inverse) < threshold なら invalid
+normal > inverse なら gray bit = 1
+normal <= inverse なら gray bit = 0
+```
+
+metadata例:
+
+```json
+{"scan_id":"session_001","input_dir":"./data/scan/session_001","output_dir":"./data/decode/session_001","pattern_count":44,"image_width":640,"image_height":480,"projector_width":1280,"projector_height":720,"threshold":15,"left_valid_count":245000,"right_valid_count":244300,"left_valid_ratio":0.7975,"right_valid_ratio":0.7952,"surface":{"surface_width":1920,"surface_height":1080,"pattern_width":1280,"pattern_height":720,"pattern_x":320,"pattern_y":180}}
+```
+
+`projector_x` / `projector_y` はcamera pixelからprojector active pattern座標へのmap。`metadata.surface.pattern_x` / `pattern_y` は後続reconstructでprojector full surface座標へ変換する際に利用できる。
+
 ### start_stream
 
 ```json
@@ -568,6 +633,12 @@ Web UIはsidecarが返したURLをそのまま利用する。
 | `empty_right_image` | expected right imageがempty image |
 | `stereo_size_mismatch` | 同一indexのleft/right画像sizeが一致しない |
 | `image_size_inconsistent` | pattern index間で画像sizeが一致しない |
+| `scan_dataset_invalid` | decode_patterns入力datasetがdecode対象として不正 |
+| `decode_pattern_count_mismatch` | metadata pattern_countがGrayCode decoderの期待枚数と一致しない |
+| `decode_image_load_failed` | decode対象pattern画像の読み込みに失敗 |
+| `decode_image_size_mismatch` | decode対象pattern画像のsizeが一致しない |
+| `decode_output_write_failed` | decode結果fileの書き込みに失敗 |
+| `decode_failed` | GrayCode decode処理中の予期しない失敗 |
 | `calibration_failed` | mono calibration計算失敗 |
 | `stereo_calibration_failed` | stereo calibration計算失敗 |
 | `calibration_image_not_found` | calibration画像directoryまたは画像が見つからない |
@@ -669,6 +740,23 @@ JSON Lines ControlMessage
 
 `scan_validate` は保存済みdatasetだけを読むため、実行中scanのprojector/camera/window resourceには触らない。
 
+Decode commandは次の経路で処理する。
+
+```text
+JSON Lines ControlMessage
+  -> ControlInputAdapter
+  -> HeadlessCommandMapper
+  -> cmd::CmdDecodePatterns
+  -> HeadlessDispatcher
+  -> DecodeHandler
+  -> DecodeService
+  -> ScanDatasetValidator
+  -> common::CommandResult
+  -> ControlResponse
+```
+
+`decode_patterns` も保存済みdatasetを読むだけなので、実行中scan resourceには触らない。同じ `input_dir` がscan workerにより書き込み中かどうかは今回判定しない。
+
 | JSONL `cmd` | C++ command | Handler | Service | 備考 |
 | --- | --- | --- | --- | --- |
 | `list_monitors` | `cmd::CmdListMonitors` | `handler::projector` | `service::monitor::MonitorService` | monitor一覧を返す |
@@ -680,3 +768,4 @@ JSON Lines ControlMessage
 | `next_pattern` | `cmd::CmdProjectorNextPattern` | `handler::projector` | `service::projector::ProjectorService` | 次のpatternを表示する |
 | `prev_pattern` | `cmd::CmdProjectorPrevPattern` | `handler::projector` | `service::projector::ProjectorService` | 前のpatternを表示する |
 | `scan_validate` | `cmd::CmdValidateScanDataset` | `handler::scan_dataset` | `service::scan_dataset::ScanDatasetValidator` | scan_start出力datasetをdecode前に検証する |
+| `decode_patterns` | `cmd::CmdDecodePatterns` | `handler::decode` | `service::decode::DecodeService` | scan datasetからprojector coordinate mapを生成する |

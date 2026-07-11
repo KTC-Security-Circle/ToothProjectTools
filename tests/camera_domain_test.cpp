@@ -1,21 +1,27 @@
 #include "cmd/commands.hpp"
 #include "control/control_message.hpp"
 #include "handler/camera_command_handler.hpp"
+#include "handler/decode_command_handler.hpp"
 #include "handler/projector_command_handler.hpp"
 #include "handler/scan_dataset_command_handler.hpp"
 #include "handler/window_resource_command_handler.hpp"
 #include "headless/headless_command_mapper.hpp"
 #include "runtime/handler_context.hpp"
 #include "service/camera_service.hpp"
+#include "service/decode_service.hpp"
 #include "service/monitor_service.hpp"
 #include "service/projector_service.hpp"
 #include "service/scan_dataset_validator.hpp"
 #include "service/window_service.hpp"
 #include "video/camera_manager.hpp"
+#include "structured_light/structured_light.hpp"
 
+#include <algorithm>
 #include <cassert>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <chrono>
 #include <future>
 #include <optional>
@@ -23,6 +29,7 @@
 #include <thread>
 #include <variant>
 
+#include <opencv2/core/persistence.hpp>
 #include <opencv2/imgcodecs.hpp>
 
 namespace
@@ -200,6 +207,34 @@ void writeValidScanDataset(const std::filesystem::path& dir, int pattern_count =
         writeImage(patternPath(dir, "left", index));
         writeImage(patternPath(dir, "right", index));
     }
+}
+
+void writeSyntheticGrayCodeDataset(const std::filesystem::path& dir, int projector_width = 8, int projector_height = 4)
+{
+    std::filesystem::create_directories(dir / "left");
+    std::filesystem::create_directories(dir / "right");
+    sl::StructuredLight structured_light{projector_width, projector_height};
+    structured_light.generatePatterns();
+    const auto pattern_count = static_cast<int>(structured_light.getPatternCount());
+    writeScanMetadata(dir, pattern_count, projector_width, projector_height);
+    for (int index = 0; index < pattern_count; ++index)
+    {
+        const auto& pattern = structured_light.getPattern(static_cast<std::size_t>(index));
+        const bool left_written = cv::imwrite(patternPath(dir, "left", index).string(), pattern);
+        const bool right_written = cv::imwrite(patternPath(dir, "right", index).string(), pattern);
+        assert(left_written && right_written);
+        (void)left_written;
+        (void)right_written;
+    }
+}
+
+cv::Mat readYmlMat(const std::filesystem::path& path, const std::string& key)
+{
+    cv::FileStorage storage(path.string(), cv::FileStorage::READ);
+    assert(storage.isOpened());
+    cv::Mat mat;
+    storage[key] >> mat;
+    return mat;
 }
 
 void testWindowMapper()
@@ -524,6 +559,41 @@ void testScanMapper()
     assert(result.ok && std::holds_alternative<cmd::CmdValidateScanDataset>(*result.command));
     validate = std::get<cmd::CmdValidateScanDataset>(*result.command);
     assert(validate.allow_partial);
+
+    message = messageWithId();
+    message.output_dir = "./data/decode/session_001";
+    result = mapper.mapDecodePatterns(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.input_dir = "./data/scan/session_001";
+    message.output_dir.reset();
+    result = mapper.mapDecodePatterns(message);
+    assert(!result.ok && result.error->code == "missing_field");
+
+    message.output_dir = "./data/decode/session_001";
+    message.input_dir = "";
+    result = mapper.mapDecodePatterns(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.input_dir = "./data/scan/session_001";
+    message.output_dir = "";
+    result = mapper.mapDecodePatterns(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.output_dir = "./data/decode/session_001";
+    message.threshold = -1;
+    result = mapper.mapDecodePatterns(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message.threshold = 20;
+    message.allow_partial = true;
+    result = mapper.mapDecodePatterns(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdDecodePatterns>(*result.command));
+    const auto decode = std::get<cmd::CmdDecodePatterns>(*result.command);
+    assert(decode.input_dir == "./data/scan/session_001");
+    assert(decode.output_dir == "./data/decode/session_001");
+    assert(decode.threshold == 20);
+    assert(decode.allow_partial);
 }
 
 void testWindowHandler()
@@ -981,6 +1051,91 @@ void testScanDatasetHandler()
 }
 
 
+void testDecodeServiceSyntheticDataset()
+{
+    service::scan_dataset::ScanDatasetValidator validator;
+    service::decode::DecodeService decode_service{validator};
+
+    const auto input_dir = testTempDir("decode_synthetic_input");
+    const auto output_dir = testTempDir("decode_synthetic_output");
+    writeSyntheticGrayCodeDataset(input_dir, 8, 4);
+
+    auto result = decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, output_dir, 15, false});
+    assert(result.ok);
+    assert(result.scan_id == "session_001");
+    assert(result.projector_width == 8 && result.projector_height == 4);
+    assert(result.image_width == 8 && result.image_height == 4);
+    assert(result.left_valid_count == 32 && result.right_valid_count == 32);
+    assert(result.left_valid_ratio == 1.0 && result.right_valid_ratio == 1.0);
+
+    const auto projector_x = readYmlMat(output_dir / "left" / "projector_x.yml", "projector_x");
+    const auto projector_y = readYmlMat(output_dir / "left" / "projector_y.yml", "projector_y");
+    const auto mask = cv::imread((output_dir / "left" / "valid_mask.png").string(), cv::IMREAD_GRAYSCALE);
+    assert(projector_x.type() == CV_32SC1);
+    assert(projector_y.type() == CV_32SC1);
+    assert(mask.type() == CV_8UC1);
+    for (int y = 0; y < 4; ++y)
+    {
+        for (int x = 0; x < 8; ++x)
+        {
+            assert(projector_x.at<int>(y, x) == x);
+            assert(projector_y.at<int>(y, x) == y);
+            assert(mask.at<uchar>(y, x) == 255);
+        }
+    }
+
+    const auto high_threshold_output = testTempDir("decode_high_threshold_output");
+    result = decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, high_threshold_output, 300, false});
+    assert(result.ok);
+    assert(result.left_valid_count == 0 && result.right_valid_count == 0);
+}
+
+void testDecodeServiceFailures()
+{
+    service::scan_dataset::ScanDatasetValidator validator;
+    service::decode::DecodeService decode_service{validator};
+
+    auto input_dir = testTempDir("decode_invalid_dataset");
+    auto output_dir = testTempDir("decode_invalid_output");
+    auto result = decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, output_dir, 15, false});
+    assert(!result.ok && result.error->code == "scan_dataset_invalid");
+
+    input_dir = testTempDir("decode_count_mismatch");
+    output_dir = testTempDir("decode_count_mismatch_output");
+    writeSyntheticGrayCodeDataset(input_dir, 8, 4);
+    writeScanMetadata(input_dir, 9, 8, 4);
+    result = decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, output_dir, 15, false});
+    assert(!result.ok && result.error->code == "decode_pattern_count_mismatch");
+
+    input_dir = testTempDir("decode_write_failure");
+    output_dir = testTempDir("decode_write_failure_output");
+    writeSyntheticGrayCodeDataset(input_dir, 8, 4);
+    std::filesystem::remove_all(output_dir);
+    std::ofstream(output_dir) << "not a directory";
+    result = decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, output_dir, 15, false});
+    assert(!result.ok && result.error->code == "decode_output_write_failed");
+}
+
+void testDecodeHandler()
+{
+    service::scan_dataset::ScanDatasetValidator validator;
+    service::decode::DecodeService decode_service{validator};
+    runtime::DecodeHandlerContext context{decode_service};
+    const auto input_dir = testTempDir("decode_handler_input");
+    const auto output_dir = testTempDir("decode_handler_output");
+    writeSyntheticGrayCodeDataset(input_dir, 8, 4);
+
+    auto result = handler::decode::handle(context, cmd::Command{cmd::CmdDecodePatterns{input_dir.string(), output_dir.string(), 15, false}});
+    assert(result.handled && result.ok);
+    assert(result.values.at("projector_width") == "8");
+    assert(result.values.at("projector_height") == "4");
+    assert(result.values.at("left_valid_count") == "32");
+
+    const auto other = handler::decode::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
+    assert(!other.handled);
+}
+
+
 void testServiceValidation()
 {
     video::CameraManager cameras;
@@ -1005,10 +1160,13 @@ int main()
     testWindowHandler();
     testProjectorHandler();
     testScanDatasetHandler();
+    testDecodeHandler();
     testProjectorSurfaceConfiguration();
     testServiceValidation();
     testWindowServiceValidation();
     testProjectorServiceValidation();
     testScanDatasetValidator();
+    testDecodeServiceSyntheticDataset();
+    testDecodeServiceFailures();
     return 0;
 }

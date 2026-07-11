@@ -120,6 +120,13 @@ ScanDatasetValidationResult ScanDatasetValidator::validate(const ScanDatasetVali
     return result;
 }
 
+std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadataForDecode(
+    const std::filesystem::path& input_dir,
+    std::vector<ScanDatasetIssue>& issues) const
+{
+    return readMetadata(input_dir / "metadata.json", issues);
+}
+
 std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadata(
     const std::filesystem::path& metadata_path,
     std::vector<ScanDatasetIssue>& issues) const

@@ -415,6 +415,37 @@ CommandMapResult HeadlessCommandMapper::mapValidateScanDataset(const control::Co
     return result;
 }
 
+CommandMapResult HeadlessCommandMapper::mapDecodePatterns(const control::ControlMessage& message)
+{
+    if (!message.input_dir)
+    {
+        return mapFailure("missing_field", "missing required field: input_dir");
+    }
+    if (!message.output_dir)
+    {
+        return mapFailure("missing_field", "missing required field: output_dir");
+    }
+    if (message.input_dir->empty())
+    {
+        return mapFailure("invalid_command", "input_dir must not be empty");
+    }
+    if (message.output_dir->empty())
+    {
+        return mapFailure("invalid_command", "output_dir must not be empty");
+    }
+    if (message.threshold && *message.threshold < 0)
+    {
+        return mapFailure("invalid_command", "threshold must be non-negative");
+    }
+
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdDecodePatterns{*message.input_dir, *message.output_dir,
+                                            message.threshold.value_or(15),
+                                            message.allow_partial.value_or(false)};
+    return result;
+}
+
 CommandMapResult HeadlessCommandMapper::mapCaptureFrame(const control::ControlMessage& message)
 {
     if (auto failure = requireString(message.role, "role"))

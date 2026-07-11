@@ -222,6 +222,11 @@ scan_dataset::ScanDatasetValidator& SidecarService::scanDatasetValidator()
     return scan_dataset_validator_;
 }
 
+decode::DecodeService& SidecarService::decodeService()
+{
+    return decode_service_;
+}
+
 scan::ScanEventQueue& SidecarService::scanEventQueue()
 {
     return scan_event_queue_;

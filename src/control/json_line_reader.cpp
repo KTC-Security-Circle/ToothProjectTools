@@ -116,6 +116,7 @@ ReadResult JsonLineReader::read() {
         !readString(root, "input_dir", message.input_dir, error_message) ||
         !readBool(root, "allow_partial", message.allow_partial, error_message) ||
         !readInteger(root, "settle_ms", message.settle_ms, error_message) ||
+        !readInteger(root, "threshold", message.threshold, error_message) ||
         !readInteger(root, "camera_id", message.camera_id, error_message) ||
         !readString(root, "window_role", message.window_role, error_message) ||
         !readString(root, "title", message.title, error_message) ||

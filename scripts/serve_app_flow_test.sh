@@ -337,6 +337,18 @@ test_scan_validation() {
   request_error "scan-validate-empty-input" "invalid_command" \
     '{"id":"scan-validate-empty-input","cmd":"scan_validate","input_dir":""}'
 
+  request_error "decode-missing-input" "missing_field" \
+    '{"id":"decode-missing-input","cmd":"decode_patterns","output_dir":"./data/decode/test"}'
+
+  request_error "decode-missing-output" "missing_field" \
+    '{"id":"decode-missing-output","cmd":"decode_patterns","input_dir":"./data/scan/test"}'
+
+  request_error "decode-empty-input" "invalid_command" \
+    '{"id":"decode-empty-input","cmd":"decode_patterns","input_dir":"","output_dir":"./data/decode/test"}'
+
+  request_error "decode-invalid-threshold" "invalid_command" \
+    '{"id":"decode-invalid-threshold","cmd":"decode_patterns","input_dir":"./data/scan/test","output_dir":"./data/decode/test","threshold":-1}'
+
   request_ok "scan-status" \
     '{"id":"scan-status","cmd":"scan_status"}'
 }

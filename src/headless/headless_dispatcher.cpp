@@ -4,6 +4,7 @@
 #include "handler/calibration_command_handler.hpp"
 #include "handler/camera_command_handler.hpp"
 #include "handler/capture_command_handler.hpp"
+#include "handler/decode_command_handler.hpp"
 #include "handler/projector_command_handler.hpp"
 #include "handler/scan_command_handler.hpp"
 #include "handler/scan_dataset_command_handler.hpp"
@@ -12,6 +13,7 @@
 #include "runtime/handler_context.hpp"
 #include "service/scan_service.hpp"
 #include "service/scan_dataset_validator.hpp"
+#include "service/decode_service.hpp"
 
 #include <optional>
 #include <string>
@@ -69,12 +71,13 @@ HeadlessDispatcher::HeadlessDispatcher(service::camera::CameraService& camera_se
                                        service::projector::ProjectorService& projector_service,
                                        service::scan::ScanService& scan_service,
                                        service::scan_dataset::ScanDatasetValidator& scan_dataset_validator,
+                                       service::decode::DecodeService& decode_service,
                                        capture::CaptureService& capture_service,
                                        video::CameraManager& cameras,
                                        calib::Calibrator* calibrator, calib::StereoCalibrator* stereo_calibrator,
                                        calib::StereoData& stereo_data)
     : camera_service_(camera_service), window_service_(window_service), projector_service_(projector_service),
-      scan_service_(scan_service), scan_dataset_validator_(scan_dataset_validator), capture_service_(capture_service), cameras_(cameras), calibrator_(calibrator),
+      scan_service_(scan_service), scan_dataset_validator_(scan_dataset_validator), decode_service_(decode_service), capture_service_(capture_service), cameras_(cameras), calibrator_(calibrator),
       stereo_calibrator_(stereo_calibrator), stereo_data_(stereo_data)
 {
 }
@@ -119,6 +122,13 @@ common::CommandResult HeadlessDispatcher::execute(const cmd::Command& command)
     if (scan_dataset_result.handled)
     {
         return scan_dataset_result;
+    }
+
+    runtime::DecodeHandlerContext decode_ctx{decode_service_};
+    const auto decode_result = handler::decode::handle(decode_ctx, command);
+    if (decode_result.handled)
+    {
+        return decode_result;
     }
 
     runtime::CaptureHandlerContext capture_ctx{capture_service_};
