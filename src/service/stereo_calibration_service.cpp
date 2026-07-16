@@ -78,11 +78,14 @@ bool ensureOutputParent(const fs::path& output_file)
 
 StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, const cmd::CmdStereoCalibrate& command)
 {
+    LOG_INFO("step1: Stereo: 計算要求 left={} right={} left_dir={} right_dir={} output_file={}",
+             command.left_cam_id, command.right_cam_id, command.left_dir, command.right_dir, command.output_file);
     const fs::path output_file{command.output_file};
     if (!ctx.stereo_calibrator)
     {
         return failure(output_file, "stereo_calibration_failed", "stereo calibrator is not available");
     }
+    LOG_INFO("step2: Stereo: カメラ準備");
 
     auto* cL = ctx.cameras.get(command.left_cam_id);
     auto* cR = ctx.cameras.get(command.right_cam_id);
@@ -94,15 +97,27 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     {
         return failure(output_file, "camera_not_open", "right camera is not open");
     }
+    LOG_INFO("step3: Stereo: カメラ内部パラメータ取得");
 
     cv::Mat K1 = cL->intrinsics();
     cv::Mat D1 = cL->distCoeffs();
     cv::Mat K2 = cR->intrinsics();
     cv::Mat D2 = cR->distCoeffs();
+    
     if (K1.empty() || D1.empty() || K2.empty() || D2.empty())
     {
+        LOG_WARN("Stereo: intrinsics are not ready. "
+             "Run mono calibration for both cameras first. "
+             "left_id={} right_id={} K1_empty={} D1_empty={} K2_empty={} D2_empty={}",
+             command.left_cam_id,
+             command.right_cam_id,
+             K1.empty(),
+             D1.empty(),
+             K2.empty(),
+             D2.empty());
         return failure(output_file, "stereo_calibration_failed", "left/right camera intrinsics are not ready");
     }
+    LOG_INFO("step4: Stereo: 左右画像pairの取得");
 
     const fs::path left_dir{command.left_dir};
     const fs::path right_dir{command.right_dir};
@@ -114,6 +129,8 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     {
         return failure(output_file, "calibration_image_not_found", "right_dir does not exist");
     }
+    LOG_INFO("step5: Stereo: 左右画像pairの計算");
+
 
     const auto fL = listRegularFiles(left_dir);
     const auto fR = listRegularFiles(right_dir);
@@ -165,6 +182,8 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
 
 StereoCalibrationResult calibrate(runtime::StereoCalibrationHandlerContext& ctx, const cmd::CmdStereoCalibrate& command)
 {
+    LOG_INFO("step0: Stereo: 計算要求 left={} right={} left_dir={} right_dir={} output_file={}",
+             command.left_cam_id, command.right_cam_id, command.left_dir, command.right_dir, command.output_file);
     runtime::StereoCalibrationCalcContext calc_ctx{ctx.cameras, ctx.stereo_calibrator, ctx.stereo_data};
     return calibrate(calc_ctx, command);
 }

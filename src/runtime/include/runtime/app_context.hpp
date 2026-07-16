@@ -13,6 +13,7 @@
 #include <memory>
 #include <map>
 #include <deque> // ★追加
+#include <filesystem>
 
 namespace runtime {
 
@@ -70,6 +71,7 @@ struct AppContext {
     std::vector<cv::Mat> scanned_imgs_left;
     std::vector<cv::Mat> scanned_imgs_right;
     int scan_interval_ms = 500;
+    std::filesystem::path scan_output_dir{"./data/scan/default"};
 };
 
 } // namespace runtime

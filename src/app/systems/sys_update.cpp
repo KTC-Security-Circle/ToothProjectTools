@@ -3,9 +3,12 @@
 #include "logger/logger_macros.hpp"
 #include "video/camera.hpp"
 
+#include <exception>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <opencv2/highgui.hpp>
+#include <opencv2/imgcodecs.hpp>
 #include <sstream>
 
 namespace fs = std::filesystem;
@@ -71,15 +74,63 @@ static void save_scan_results(runtime::AppContext& ctx)
     if (ctx.scanned_imgs_left.empty() && ctx.scanned_imgs_right.empty())
         return;
 
-    // ... (保存ロジック: app_core.cpp から移動) ...
-    // 長くなるので省略しますが、元のロジックをここに置きます
-    LOG_INFO("Scan: 保存完了");
+    const fs::path left_dir = ctx.scan_output_dir / "left";
+    const fs::path right_dir = ctx.scan_output_dir / "right";
+
+    try
+    {
+        fs::create_directories(left_dir);
+        fs::create_directories(right_dir);
+
+        auto save_images = [](const std::vector<cv::Mat>& images, const fs::path& dir, const char* side)
+        {
+            for (std::size_t i = 0; i < images.size(); ++i)
+            {
+                if (images[i].empty())
+                {
+                    LOG_WARN("Scan: {} image {} is empty; skip save", side, i);
+                    continue;
+                }
+
+                std::ostringstream name;
+                name << "pattern_" << std::setw(3) << std::setfill('0') << i << ".png";
+                const fs::path output_path = dir / name.str();
+                if (!cv::imwrite(output_path.string(), images[i]))
+                    LOG_WARN("Scan: failed to save {}", output_path.string());
+            }
+        };
+
+        save_images(ctx.scanned_imgs_left, left_dir, "left");
+        save_images(ctx.scanned_imgs_right, right_dir, "right");
+
+        std::ofstream metadata(ctx.scan_output_dir / "metadata.json");
+        metadata << "{\n"
+                 << "  \"output_dir\": \"" << ctx.scan_output_dir.string() << "\",\n"
+                 << "  \"left_count\": " << ctx.scanned_imgs_left.size() << ",\n"
+                 << "  \"right_count\": " << ctx.scanned_imgs_right.size() << ",\n"
+                 << "  \"pattern_count\": " << (ctx.sl_system ? ctx.sl_system->getPatternCount() : 0) << "\n"
+                 << "}\n";
+
+        LOG_INFO("Scan: 保存完了 output_dir={} left_count={} right_count={}",
+                 ctx.scan_output_dir.string(),
+                 ctx.scanned_imgs_left.size(),
+                 ctx.scanned_imgs_right.size());
+    }
+    catch (const std::exception& e)
+    {
+        LOG_WARN("Scan: 保存失敗 output_dir={} error={}", ctx.scan_output_dir.string(), e.what());
+    }
 }
 
 void update_scan(runtime::AppContext& ctx)
 {
     if (!ctx.sl_system || !ctx.sl_system->isScanning())
         return;
+
+    LOG_INFO("Scan: update tick current_index={} left_count={} right_count={}",
+             ctx.sl_system->getCurrentIndex(),
+             ctx.scanned_imgs_left.size(),
+             ctx.scanned_imgs_right.size());
 
     if (ctx.sl_system->checkTimerAndReset(ctx.scan_interval_ms))
     {
