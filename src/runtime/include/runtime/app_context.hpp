@@ -13,6 +13,8 @@
 #include <memory>
 #include <map>
 #include <deque> // ★追加
+#include <filesystem>
+#include <string>
 
 namespace runtime {
 
@@ -70,6 +72,28 @@ struct AppContext {
     std::vector<cv::Mat> scanned_imgs_left;
     std::vector<cv::Mat> scanned_imgs_right;
     int scan_interval_ms = 500;
+    std::filesystem::path scan_output_dir{"./data/scan/default"};
+    std::string scan_id;
+    std::string scan_projector_role{"projector"};
+    std::string scan_left_role{"left"};
+    std::string scan_right_role{"right"};
+    int scan_pattern_count{0};
+
+    struct GuiScanSurface
+    {
+        int monitor_index{0};
+        int monitor_width{0};
+        int monitor_height{0};
+        int surface_width{0};
+        int surface_height{0};
+        int pattern_width{0};
+        int pattern_height{0};
+        int pattern_x{0};
+        int pattern_y{0};
+        bool clamped{false};
+    };
+
+    GuiScanSurface scan_surface;
 };
 
 } // namespace runtime

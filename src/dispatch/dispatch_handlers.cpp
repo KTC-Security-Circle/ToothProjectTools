@@ -2,6 +2,7 @@
 #include "handler/calibration_command_handler.hpp"
 #include "handler/capture_command_handler.hpp"
 #include "handler/global_command_handler.hpp"
+#include "handler/gui_scan_command_handler.hpp"
 #include "handler/pattern_command_handler.hpp"
 #include "handler/reconstruction_command_handler.hpp"
 #include "handler/stereo_calibration_command_handler.hpp"
@@ -34,6 +35,8 @@ void handle_window(runtime::AppContext& ctx, win::Window& target_window, const c
     if (handler::pattern::handle(pattern_ctx, target_window, command))
         return;
 
+    if (handler::gui_scan::handle(ctx, target_window, command))
+        return;
 
     auto calibration_ctx = runtime::make_calibration_handler_context(ctx);
     const auto calibration_result = handler::calibration::handle(calibration_ctx, target_window, command);

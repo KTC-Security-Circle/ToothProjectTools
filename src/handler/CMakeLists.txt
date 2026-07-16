@@ -1,6 +1,7 @@
 add_library(handler STATIC
     camera_command_handler.cpp
     global_command_handler.cpp
+    gui_scan_command_handler.cpp
     window_command_handler.cpp
     window_resource_command_handler.cpp
     projector_command_handler.cpp

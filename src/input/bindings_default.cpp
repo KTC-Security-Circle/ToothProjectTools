@@ -154,9 +154,9 @@ void install_default_bindings(
   
   // [x] スキャン中断
   // Ctrl+X が効かない環境のため x に割り当て
-  handler.bind('x', [&]{
+  handler.bind('x', [&, projector_id]{
     LOG_INFO("スキャン中断");
-    cmd_que.push_back(DispatchCmd{cmd::TargetAll{}, cmd::CmdStopScan{}});
+    cmd_que.push_back(DispatchCmd{cmd::TargetWindow{projector_id}, cmd::CmdStopScan{}});
   });
 
   // [m] 3D Reconstruction
