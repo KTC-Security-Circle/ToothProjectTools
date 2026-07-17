@@ -23,7 +23,7 @@ metadata.jsonが無い場合は、`projector_width` / `projector_height` を指�
 | --- | --- | --- |
 | `id` | 必須 | request ID。 |
 | `cmd` | 必須 | `decode_patterns`。 |
-| `input_dir` | 条件付き必須 | scan dataset root、left/rightを含む親directory、または`left`/`right` directoryそのもの。`left_dir`/`right_dir`指定時は省略可。 |
+| `input_dir` | 条件付き必須 | scan dataset root、left/rightを含む親directory、または`left`/`right` directoryそのもの。末尾スラッシュ付きpathも同じ意味で扱う。`left_dir`/`right_dir`指定時は省略可。 |
 | `output_dir` | 必須 | decode result出力directory。 |
 | `left_dir` | 条件付き必須 | left画像directory。`input_dir`指定時は省略可。 |
 | `right_dir` | 条件付き必須 | right画像directory。`input_dir`指定時は省略可。 |

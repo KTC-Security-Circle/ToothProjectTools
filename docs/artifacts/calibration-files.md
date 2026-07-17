@@ -17,8 +17,8 @@ mono calibration file は単眼cameraの内部parameterを保存するfileであ
 
 | field | 説明 |
 | --- | --- |
-| `K` | camera内部parameter。 |
-| `D` | 歪み係数。 |
+| `K` | camera内部parameter。3x3、single-channel、CV_32FまたはCV_64F。読み込み時はCV_64Fへ正規化する。 |
+| `D` | 歪み係数。1xNまたはNx1、single-channel、CV_32FまたはCV_64F。係数数は4、5、8、12、14を許可する。読み込み時はCV_64Fへ正規化する。 |
 | `RMS` | calibration RMS。 |
 
 ### 任意field
@@ -32,7 +32,7 @@ mono calibration file は単眼cameraの内部parameterを保存するfileであ
 
 ### file format
 
-OpenCV FileStorage YAMLである。
+OpenCV FileStorage YAMLである。`K` / `D` にNaNまたはInfが含まれるfileは無効である。
 
 ## stereo calibration file
 
