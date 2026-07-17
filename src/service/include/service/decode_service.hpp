@@ -2,6 +2,7 @@
 
 #include "service/decode_result.hpp"
 #include "service/scan_dataset_result.hpp"
+#include "service/scan_dataset_resolver.hpp"
 
 #include <filesystem>
 #include <string>
@@ -15,19 +16,21 @@ class ScanDatasetValidator;
 namespace service::decode
 {
 
-struct DecodePatternsConfig
+struct DecodePatternsConfig : service::scan_dataset::ScanDatasetInputSpec
 {
-    /// input_dir <std::filesystem::path>: scan dataset directory。
-    std::filesystem::path input_dir;
+    DecodePatternsConfig() = default;
+    DecodePatternsConfig(std::filesystem::path input, std::filesystem::path output, int decode_threshold, bool allow)
+        : output_dir(std::move(output)), threshold(decode_threshold)
+    {
+        input_dir = std::move(input);
+        allow_partial = allow;
+    }
 
     /// output_dir <std::filesystem::path>: decode result output directory。
     std::filesystem::path output_dir;
 
     /// threshold <int>: GrayCode inverse pairの明暗差threshold。
     int threshold{15};
-
-    /// allow_partial <bool>: partial datasetをdecode対象として許可するか。
-    bool allow_partial{false};
 };
 
 class DecodeService

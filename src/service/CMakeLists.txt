@@ -1,4 +1,5 @@
 add_library(service STATIC
+    calibration_file.cpp
     calibration_service.cpp
     stereo_calibration_service.cpp
     reconstruction_service.cpp
@@ -66,6 +67,7 @@ target_compile_features(scan_service PUBLIC cxx_std_20)
 
 add_library(scan_dataset_service STATIC
   scan_dataset_result.cpp
+  scan_dataset_resolver.cpp
   scan_dataset_validator.cpp
 )
 

@@ -115,14 +115,32 @@ DecodeService::DecodeService(service::scan_dataset::ScanDatasetValidator& valida
 DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& config) const
 {
     auto result = DecodePatternsResult::success();
-    result.input_dir = config.input_dir.string();
+    result.input_dir = config.input_dir ? config.input_dir->string() : std::string{};
     result.output_dir = config.output_dir.string();
     result.threshold = config.threshold;
 
-    const auto validation = validator_.validate(service::scan_dataset::ScanDatasetValidationConfig{
-        config.input_dir,
-        config.allow_partial,
-    });
+    service::scan_dataset::ScanDatasetResolver resolver;
+    const auto resolved = resolver.resolve(config);
+    if (!resolved.ok)
+    {
+        auto failure = DecodePatternsResult::failure("scan_dataset_invalid", issuesSummary(resolved.issues));
+        failure.input_dir = result.input_dir;
+        failure.output_dir = result.output_dir;
+        failure.threshold = config.threshold;
+        return failure;
+    }
+    result.input_dir = resolved.dataset.root_dir.string();
+
+    service::scan_dataset::ScanDatasetValidationConfig validation_config;
+    validation_config.input_dir = config.input_dir;
+    validation_config.left_dir = config.left_dir;
+    validation_config.right_dir = config.right_dir;
+    validation_config.metadata_file = config.metadata_file;
+    validation_config.allow_partial = config.allow_partial;
+    validation_config.projector_width = config.projector_width;
+    validation_config.projector_height = config.projector_height;
+    validation_config.pattern_count = config.pattern_count;
+    const auto validation = validator_.validate(validation_config);
     if (!validation.valid || (config.allow_partial && std::min(validation.left_count, validation.right_count) == 0))
     {
         auto failure = DecodePatternsResult::failure("scan_dataset_invalid", issuesSummary(validation.issues));
@@ -133,60 +151,92 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
     }
 
     std::vector<service::scan_dataset::ScanDatasetIssue> metadata_issues;
-    const auto metadata = validator_.readMetadataForDecode(config.input_dir, metadata_issues);
-    if (!metadata)
+    std::optional<service::scan_dataset::ScanDatasetMetadata> metadata;
+    if (resolved.dataset.metadata_file)
     {
-        auto failure = DecodePatternsResult::failure("scan_dataset_invalid", issuesSummary(metadata_issues));
-        failure.input_dir = result.input_dir;
-        failure.output_dir = result.output_dir;
-        failure.threshold = config.threshold;
-        return failure;
+        metadata = validator_.readMetadataFileForDecode(*resolved.dataset.metadata_file, metadata_issues);
+        if (!metadata)
+        {
+            auto failure = DecodePatternsResult::failure("scan_dataset_invalid", issuesSummary(metadata_issues));
+            failure.input_dir = result.input_dir;
+            failure.output_dir = result.output_dir;
+            failure.threshold = config.threshold;
+            return failure;
+        }
     }
 
-    result.scan_id = metadata->scan_id;
-    result.pattern_count = metadata->pattern_count;
-    result.projector_width = metadata->pattern_width;
-    result.projector_height = metadata->pattern_height;
+    service::scan_dataset::ScanDatasetMetadata metadata_for_output;
+    if (metadata)
+    {
+        metadata_for_output = *metadata;
+        result.scan_id = metadata->scan_id;
+        result.pattern_count = metadata->pattern_count;
+        result.projector_width = metadata->pattern_width;
+        result.projector_height = metadata->pattern_height;
+    }
+    else
+    {
+        if (!config.projector_width || !config.projector_height || *config.projector_width <= 0 || *config.projector_height <= 0)
+        {
+            auto failure = DecodePatternsResult::failure(
+                "scan_dataset_invalid",
+                "metadata.json is missing and projector_width/projector_height are required");
+            failure.input_dir = result.input_dir;
+            failure.output_dir = result.output_dir;
+            failure.threshold = config.threshold;
+            return failure;
+        }
+        result.scan_id = resolved.dataset.root_dir.filename().string();
+        result.pattern_count = config.pattern_count.value_or(resolved.dataset.pattern_count);
+        result.projector_width = *config.projector_width;
+        result.projector_height = *config.projector_height;
+        metadata_for_output.scan_id = result.scan_id;
+        metadata_for_output.pattern_count = result.pattern_count;
+        metadata_for_output.pattern_width = result.projector_width;
+        metadata_for_output.pattern_height = result.projector_height;
+        metadata_for_output.surface_width = result.projector_width;
+        metadata_for_output.surface_height = result.projector_height;
+    }
 
-    const int x_bits = ceilLog2(metadata->pattern_width);
-    const int y_bits = ceilLog2(metadata->pattern_height);
+    const int x_bits = ceilLog2(result.projector_width);
+    const int y_bits = ceilLog2(result.projector_height);
     const int stripe_pattern_count = 2 * (x_bits + y_bits);
-    const bool has_shadow_patterns = metadata->pattern_count == stripe_pattern_count + 2;
-    if (metadata->pattern_count != stripe_pattern_count && !has_shadow_patterns)
+    const bool has_shadow_patterns = result.pattern_count == stripe_pattern_count + 2;
+    if (result.pattern_count != stripe_pattern_count && !has_shadow_patterns)
     {
         auto failure = DecodePatternsResult::failure(
             "decode_pattern_count_mismatch",
-            "metadata pattern_count does not match GrayCode decoder expected count");
+            "pattern_count does not match GrayCode decoder expected count");
         failure.input_dir = result.input_dir;
         failure.output_dir = result.output_dir;
         failure.scan_id = result.scan_id;
-        failure.pattern_count = metadata->pattern_count;
-        failure.projector_width = metadata->pattern_width;
-        failure.projector_height = metadata->pattern_height;
+        failure.pattern_count = result.pattern_count;
+        failure.projector_width = result.projector_width;
+        failure.projector_height = result.projector_height;
         failure.threshold = config.threshold;
         return failure;
     }
 
     std::string error_message;
-    const auto left_patterns = loadPatternImages(config.input_dir / "left", stripe_pattern_count, error_message);
+    const auto left_patterns = loadPatternImages(resolved.dataset.left_dir, stripe_pattern_count, error_message);
     if (!error_message.empty())
     {
         auto failure = DecodePatternsResult::failure("decode_image_load_failed", error_message);
         failure.input_dir = result.input_dir;
         failure.output_dir = result.output_dir;
         failure.scan_id = result.scan_id;
-        failure.pattern_count = metadata->pattern_count;
+        failure.pattern_count = result.pattern_count;
         failure.threshold = config.threshold;
         return failure;
     }
-    const auto right_patterns = loadPatternImages(config.input_dir / "right", stripe_pattern_count, error_message);
+    const auto right_patterns = loadPatternImages(resolved.dataset.right_dir, stripe_pattern_count, error_message);
     if (!error_message.empty())
     {
         auto failure = DecodePatternsResult::failure("decode_image_load_failed", error_message);
         failure.input_dir = result.input_dir;
         failure.output_dir = result.output_dir;
         failure.scan_id = result.scan_id;
-        failure.pattern_count = metadata->pattern_count;
+        failure.pattern_count = result.pattern_count;
         failure.threshold = config.threshold;
         return failure;
     }
@@ -195,8 +245,8 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
     DecodeSideResult right;
     try
     {
-        left = decodeSide(left_patterns, metadata->pattern_width, metadata->pattern_height, config.threshold);
-        right = decodeSide(right_patterns, metadata->pattern_width, metadata->pattern_height, config.threshold);
+        left = decodeSide(left_patterns, result.projector_width, result.projector_height, config.threshold);
+        right = decodeSide(right_patterns, result.projector_width, result.projector_height, config.threshold);
     }
     catch (const std::invalid_argument& error)
     {
@@ -204,7 +254,7 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
         failure.input_dir = result.input_dir;
         failure.output_dir = result.output_dir;
         failure.scan_id = result.scan_id;
-        failure.pattern_count = metadata->pattern_count;
+        failure.pattern_count = result.pattern_count;
         failure.threshold = config.threshold;
         return failure;
     }
@@ -214,7 +264,7 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
         failure.input_dir = result.input_dir;
         failure.output_dir = result.output_dir;
         failure.scan_id = result.scan_id;
-        failure.pattern_count = metadata->pattern_count;
+        failure.pattern_count = result.pattern_count;
         failure.threshold = config.threshold;
         return failure;
     }
@@ -232,24 +282,24 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
         failure.input_dir = result.input_dir;
         failure.output_dir = result.output_dir;
         failure.scan_id = result.scan_id;
-        failure.pattern_count = metadata->pattern_count;
+        failure.pattern_count = result.pattern_count;
         failure.threshold = config.threshold;
         return failure;
     }
 
     if (!writeDecodeOutput(config.output_dir, "left", left, error_message) ||
         !writeDecodeOutput(config.output_dir, "right", right, error_message) ||
-        !writeMetadata(config, result, *metadata, error_message))
+        !writeMetadata(config, result, metadata_for_output, error_message))
     {
         auto failure = DecodePatternsResult::failure("decode_output_write_failed", error_message);
         failure.input_dir = result.input_dir;
         failure.output_dir = result.output_dir;
         failure.scan_id = result.scan_id;
-        failure.pattern_count = metadata->pattern_count;
+        failure.pattern_count = result.pattern_count;
         failure.image_width = result.image_width;
         failure.image_height = result.image_height;
-        failure.projector_width = metadata->pattern_width;
-        failure.projector_height = metadata->pattern_height;
+        failure.projector_width = result.projector_width;
+        failure.projector_height = result.projector_height;
         failure.threshold = config.threshold;
         return failure;
     }
@@ -438,7 +488,7 @@ bool DecodeService::writeMetadata(
         output << std::fixed << std::setprecision(6);
         output << "{\n"
                << "  \"scan_id\": \"" << jsonEscape(result.scan_id) << "\",\n"
-               << "  \"input_dir\": \"" << jsonEscape(config.input_dir.string()) << "\",\n"
+               << "  \"input_dir\": \"" << jsonEscape(result.input_dir) << "\",\n"
                << "  \"output_dir\": \"" << jsonEscape(config.output_dir.string()) << "\",\n"
                << "  \"pattern_count\": " << result.pattern_count << ",\n"
                << "  \"image_width\": " << result.image_width << ",\n"
