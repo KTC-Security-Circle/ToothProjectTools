@@ -1,8 +1,8 @@
-# cmd パッケージ設計メモ（刷新版）
+# コマンドパッケージ設計メモ（cmd）（刷新版）
 
 > 対象: `./src/cmd/include/cmd/{commands.hpp, target.hpp, dispatch_cmd.hpp, keycodes.hpp}`
 >
-> **位置づけ**: `cmd` は **副作用を持たないデータモデル層**（Command/Target/Envelope）。概念的には `input` の“子”として運用しますが、ビルド上は **INTERFACE ライブラリ**として独立させ、`input` が **PUBLIC 依存**で再輸送（re-export）します。上位の `app` は `input` にリンクすれば `cmd` も利用可能になります。
+> **位置づけ**: `cmd` は **副作用を持たないデータモデル**（Command/Target/Envelope）。概念的には `input` の“子”として運用しますが、ビルド上は **INTERFACE ライブラリ**として独立させ、`input` が **PUBLIC 依存**で再輸送（re-export）します。上位の `app` は `input` にリンクすれば `cmd` も利用可能になります。
 
 ---
 
@@ -119,7 +119,7 @@ namespace cmd {
 ## 8. CMake / 依存関係
 
 ```cmake
-# src/cmd/CMakeLists.txt
+# ビルド定義（src/cmd/CMakeLists.txt）
 add_library(cmd_api INTERFACE)
 
 target_include_directories(cmd_api INTERFACE

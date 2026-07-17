@@ -1,4 +1,4 @@
-# logger パッケージ設計メモ
+# ロガーパッケージ設計メモ（logger）
 
 > 対象: `./src/logger/{include/logger/*.hpp, logger_setup.cpp}`
 
@@ -92,7 +92,7 @@ namespace logger {
 ## 4. ライフサイクル
 
 1. **起動時**：`app::run()` 前に `logger::init()` を一度呼ぶ（重複呼び出しは no-op）。
-2. **運用**：各層は `LOG_*` マクロで出力（ソース位置付き）。
+2. **運用**：各packageは `LOG_*` マクロで出力（ソース位置付き）。
 3. **終了**：`spdlog::shutdown()`（任意、プロセス終了時のバッファ flush を明示）。
 
 ---
@@ -125,7 +125,7 @@ namespace logger {
 
 * `spdlog` は `FetchContent` または APT/パッケージマネージャ経由で取得。
 * リンク：`target_link_libraries(logger PRIVATE spdlog::spdlog)`（ヘッダオンリーへ切替可）。
-* `logger` を **PUBLIC** にインクルードディレクトリ公開し、マクロヘッダを全層で利用可能に。
+* `logger` を **PUBLIC** にインクルードディレクトリ公開し、マクロヘッダを全packageで利用可能に。
 
 ---
 
