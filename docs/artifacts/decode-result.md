@@ -29,7 +29,6 @@ decode_result/
 
 | field | 説明 |
 | --- | --- |
-| `metadata.version` | decode result format version。 |
 | `metadata.input_dir` | 元のscan dataset root。 |
 | `metadata.pattern_count` | decodeしたpattern数。 |
 | `metadata.projector_width` | projector座標の幅。 |
@@ -46,7 +45,6 @@ decode_result/
 | field | 説明 |
 | --- | --- |
 | `metadata.threshold` | decode時の閾値。 |
-| `metadata.allow_partial` | 欠損画像を許可したか。 |
 
 ## file format
 

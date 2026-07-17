@@ -13,17 +13,22 @@
 {"id":"80","cmd":"scan_validate","input_dir":"./data/scan/session_001","allow_partial":false}
 ```
 
+```json
+{"id":"80","cmd":"scan_validate","left_dir":"./captures/scan_L","right_dir":"./captures/scan_R","allow_partial":false}
+```
+
 | field | 必須 | 説明 |
 | --- | --- | --- |
 | `id` | 必須 | request ID。 |
 | `cmd` | 必須 | `scan_validate`。 |
-| `input_dir` | 現在は必須 | scan dataset root。 |
-| `left_dir` | 未対応 | left画像directory。 |
-| `right_dir` | 未対応 | right画像directory。 |
+| `input_dir` | 条件付き必須 | scan dataset root、left/rightを含む親directory、または`left`/`right` directoryそのもの。`left_dir`/`right_dir`指定時は省略可。 |
+| `left_dir` | 条件付き必須 | left画像directory。`input_dir`指定時は省略可。 |
+| `right_dir` | 条件付き必須 | right画像directory。`input_dir`指定時は省略可。 |
+| `metadata_file` | 任意 | 明示metadata file。省略時はrootの`metadata.json`を探す。 |
 | `allow_partial` | 任意 | 欠損画像を許可するか。 |
 
-現在の実装では `input_dir` はdataset rootだけを受け付ける。
-`left_dir` / `right_dir` 明示指定は未対応である。
+metadata.jsonが無い場合でも、`pattern_*.png` の連番からpattern数を推定してleft/right画像ペアを検証する。
+`input_dir` が `left` または `right` directoryそのものの場合は、sibling directoryを推定する。
 
 ### return
 
@@ -68,7 +73,7 @@ scan dataset。
 
 | code | 条件 |
 | --- | --- |
-| `missing_field` | `input_dir` がない。 |
+| `missing_field` | `input_dir` または `left_dir`/`right_dir` がない。 |
 | `input_dir_not_found` | 入力directoryが存在しない。 |
 | `invalid_command` | field値が不正である。 |
 

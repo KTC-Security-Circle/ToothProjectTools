@@ -6,32 +6,36 @@
 
 mono_calibrate はファイル処理commandである。
 保存済み単眼calibration画像からmono calibration fileを生成する。
-現在の実装では `role` とopen済みcameraへの依存が残っている。
-この依存は仕様上の必須条件ではない。
+`apply_to_camera=true` の場合だけ、計算結果をopen済みcameraへ反映する。
 
 ### args(JSONL)
 
 ```json
-{"id":"20","cmd":"mono_calibrate","role":"left","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml"}
+{"id":"20","cmd":"mono_calibrate","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml"}
+```
+
+```json
+{"id":"20","cmd":"mono_calibrate","role":"left","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml","apply_to_camera":true}
 ```
 
 | field | 必須 | 説明 |
 | --- | --- | --- |
 | `id` | 必須 | request ID。 |
 | `cmd` | 必須 | `mono_calibrate`。 |
-| `role` | 現在は必須 | camera role。仕様上はlabelである。 |
 | `image_folder` | 必須 | calibration画像directory。 |
-| `output_file` | 任意 | 出力file。省略時は `./data/calib/<role>_mono.yml`。 |
+| `output_file` | 必須 | 出力file。 |
+| `role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
+| `apply_to_camera` | 任意 | trueの場合のみ、roleに対応するopen済みcameraへK/Dを反映する。省略時はfalse。 |
 
 ### return
 
 ```json
-{"id":"20","ok":true,"role":"left","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml","rms":"0.420000"}
+{"id":"20","ok":true,"role":"","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml","rms":"0.420000"}
 ```
 
 | field | 説明 |
 | --- | --- |
-| `role` | camera role。 |
+| `role` | camera role。未指定なら空文字列。 |
 | `image_folder` | 入力directory。 |
 | `output_file` | 出力file。 |
 | `rms` | calibration RMS。 |
@@ -52,15 +56,15 @@ mono calibration file。
 
 ### 必要なruntime resource
 
-現在の実装ではopen済みcamera roleが必要である。
-仕様上は不要である。
+なし。
+`apply_to_camera=true` の場合のみopen済みcamera roleが必要である。
 
 ### error code
 
 | code | 条件 |
 | --- | --- |
-| `missing_field` | 必須fieldがない。 |
-| `camera_not_open` | roleがopenされていない。現在の実装で発生する。 |
+| `missing_field` | 必須fieldがない。`apply_to_camera=true` の場合は `role` も必須。 |
+| `camera_not_open` | `apply_to_camera=true` でroleがopenされていない。 |
 | `calibration_image_not_found` | calibration画像がない。 |
 | `calibration_failed` | calibration計算に失敗した。 |
 | `calibration_output_write_failed` | 結果fileを書けない。 |
@@ -70,38 +74,40 @@ mono calibration file。
 ### 役割
 
 stereo_calibrate はファイル処理commandである。
-保存済み左右calibration画像からstereo calibration fileを生成する。
-現在の実装では `left_role` / `right_role` とopen済みcameraへの依存が残っている。
-この依存は仕様上の必須条件ではない。
+保存済み左右calibration画像とmono calibration fileからstereo calibration fileを生成する。
+open済みcameraのK/Dではなく、`left_calibration_file` / `right_calibration_file` を主入力にする。
 
 ### args(JSONL)
 
 ```json
-{"id":"21","cmd":"stereo_calibrate","left_role":"left","right_role":"right","left_dir":"./data/calib/stereo/left","right_dir":"./data/calib/stereo/right","output_file":"./data/calib/stereo.yml"}
+{"id":"21","cmd":"stereo_calibrate","left_dir":"./data/calib/stereo/left","right_dir":"./data/calib/stereo/right","left_calibration_file":"./data/calib/mono_left.yml","right_calibration_file":"./data/calib/mono_right.yml","output_file":"./data/calib/stereo.yml"}
 ```
 
 | field | 必須 | 説明 |
 | --- | --- | --- |
 | `id` | 必須 | request ID。 |
 | `cmd` | 必須 | `stereo_calibrate`。 |
-| `left_role` | 現在は必須 | left camera role。仕様上はlabelである。 |
-| `right_role` | 現在は必須 | right camera role。仕様上はlabelである。 |
 | `left_dir` | 必須 | left calibration画像directory。 |
 | `right_dir` | 必須 | right calibration画像directory。 |
+| `left_calibration_file` | 必須 | left mono calibration file。 |
+| `right_calibration_file` | 必須 | right mono calibration file。 |
 | `output_file` | 必須 | stereo calibration file出力path。 |
-| `left_calibration_file` | 未対応 | left mono calibration file。 |
-| `right_calibration_file` | 未対応 | right mono calibration file。 |
+| `left_role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
+| `right_role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
+| `apply_to_camera` | 任意 | trueの場合のみ、left/right roleのopen済みcameraを確認する。省略時はfalse。 |
+
+`image_folder_left` / `image_folder_right`、`left_image_folder` / `right_image_folder` は `left_dir` / `right_dir` の互換aliasとして受け付ける。
 
 ### return
 
 ```json
-{"id":"21","ok":true,"left_role":"left","right_role":"right","left_dir":"./data/calib/stereo/left","right_dir":"./data/calib/stereo/right","output_file":"./data/calib/stereo.yml","rms":"0.620000"}
+{"id":"21","ok":true,"left_role":"","right_role":"","left_dir":"./data/calib/stereo/left","right_dir":"./data/calib/stereo/right","output_file":"./data/calib/stereo.yml","rms":"0.620000"}
 ```
 
 | field | 説明 |
 | --- | --- |
-| `left_role` | left camera role。 |
-| `right_role` | right camera role。 |
+| `left_role` | left camera role。未指定なら空文字列。 |
+| `right_role` | right camera role。未指定なら空文字列。 |
 | `left_dir` | left入力directory。 |
 | `right_dir` | right入力directory。 |
 | `output_file` | 出力file。 |
@@ -117,6 +123,8 @@ stereo_calibrate はファイル処理commandである。
 
 left calibration画像directory。
 right calibration画像directory。
+left mono calibration file。
+right mono calibration file。
 
 ### 書くArtifact
 
@@ -124,17 +132,19 @@ stereo calibration file。
 
 ### 必要なruntime resource
 
-現在の実装ではopen済みleft/right camera roleが必要である。
-仕様上は不要である。
+なし。
+`apply_to_camera=true` の場合のみopen済みleft/right camera roleが必要である。
 
 ### error code
 
 | code | 条件 |
 | --- | --- |
-| `missing_field` | 必須fieldがない。 |
-| `camera_not_open` | roleがopenされていない。現在の実装で発生する。 |
-| `invalid_command` | 左右roleが同じcameraを指す。 |
-| `invalid_command` | `left_dir` と `right_dir` が同じpathである。 |
-| `calibration_image_count_mismatch` | 左右画像数が一致しない。 |
+| `missing_field` | 必須fieldがない。`apply_to_camera=true` の場合は `left_role` / `right_role` も必須。 |
+| `camera_not_open` | `apply_to_camera=true` でroleがopenされていない。 |
+| `invalid_command` | `left_dir` と `right_dir` が同じpathである、または左右roleが同じcameraを指す。 |
+| `calibration_file_not_found` | mono calibration fileが存在しない。 |
+| `calibration_file_invalid` | mono calibration fileを読めない、またはK/Dが空である。 |
+| `calibration_image_not_found` | calibration画像がない。 |
+| `stereo_image_pair_mismatch` | 左右画像数が一致しない。 |
 | `stereo_calibration_failed` | stereo calibrationに失敗した。 |
-| `calibration_output_write_failed` | 結果fileを書けない。 |
+| `file_write_failed` | 結果fileを書けない。 |

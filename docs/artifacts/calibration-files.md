@@ -17,11 +17,9 @@ mono calibration file は単眼cameraの内部parameterを保存するfileであ
 
 | field | 説明 |
 | --- | --- |
-| `camera_matrix` | camera内部parameter。 |
-| `distortion_coefficients` | 歪み係数。 |
-| `image_width` | calibration画像幅。 |
-| `image_height` | calibration画像高さ。 |
-| `rms` | calibration RMS。 |
+| `K` | camera内部parameter。 |
+| `D` | 歪み係数。 |
+| `RMS` | calibration RMS。 |
 
 ### 任意field
 
@@ -53,15 +51,14 @@ stereo calibration file はleft/right camera間の外部parameterを保存する
 
 | field | 説明 |
 | --- | --- |
-| `left_camera_matrix` | left camera内部parameter。 |
-| `left_distortion_coefficients` | left camera歪み係数。 |
-| `right_camera_matrix` | right camera内部parameter。 |
-| `right_distortion_coefficients` | right camera歪み係数。 |
+| `K1` | left camera内部parameter。 |
+| `D1` | left camera歪み係数。 |
+| `K2` | right camera内部parameter。 |
+| `D2` | right camera歪み係数。 |
 | `R` | leftからrightへの回転。 |
 | `T` | leftからrightへの並進。 |
-| `E` | essential matrix。 |
-| `F` | fundamental matrix。 |
-| `rms` | stereo calibration RMS。 |
+| `Q` | 視差-深度変換行列。 |
+| `RMS` | stereo calibration RMS。 |
 
 ### 任意field
 
