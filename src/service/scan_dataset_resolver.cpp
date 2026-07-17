@@ -16,6 +16,17 @@ ScanDatasetIssue issue(std::string code, std::string message, const std::filesys
     return ScanDatasetIssue{std::move(code), std::move(message), path.empty() ? std::string{} : path.string(), pattern_index};
 }
 
+std::filesystem::path normalizeDirectoryPath(std::filesystem::path path)
+{
+    path = path.lexically_normal();
+    auto text = path.string();
+    while (text.size() > 1 && (text.back() == '/' || text.back() == '\\'))
+    {
+        text.pop_back();
+    }
+    return std::filesystem::path{text}.lexically_normal();
+}
+
 bool isDirectory(const std::filesystem::path& path)
 {
     std::error_code ec;
@@ -89,27 +100,28 @@ ScanDatasetResolveResult ScanDatasetResolver::resolve(const ScanDatasetInputSpec
     if (spec.input_dir && !spec.left_dir && !spec.right_dir)
     {
         std::error_code ec;
-        if (!std::filesystem::exists(*spec.input_dir, ec))
+        const auto input = normalizeDirectoryPath(*spec.input_dir);
+        if (!std::filesystem::exists(input, ec))
         {
-            result.issues.push_back(issue("input_dir_not_found", "input_dir does not exist", *spec.input_dir));
+            result.issues.push_back(issue("input_dir_not_found", "input_dir does not exist", input));
             return result;
         }
-        if (!std::filesystem::is_directory(*spec.input_dir, ec))
+        if (!std::filesystem::is_directory(input, ec))
         {
-            result.issues.push_back(issue("input_dir_not_directory", "input_dir is not a directory", *spec.input_dir));
+            result.issues.push_back(issue("input_dir_not_directory", "input_dir is not a directory", input));
             return result;
         }
     }
 
     if (spec.left_dir && spec.right_dir)
     {
-        dataset.left_dir = *spec.left_dir;
-        dataset.right_dir = *spec.right_dir;
-        dataset.root_dir = spec.input_dir.value_or(dataset.left_dir.parent_path());
+        dataset.left_dir = normalizeDirectoryPath(*spec.left_dir);
+        dataset.right_dir = normalizeDirectoryPath(*spec.right_dir);
+        dataset.root_dir = spec.input_dir ? normalizeDirectoryPath(*spec.input_dir) : dataset.left_dir.parent_path();
     }
     else if (spec.input_dir)
     {
-        const auto input = *spec.input_dir;
+        const auto input = normalizeDirectoryPath(*spec.input_dir);
         const auto name = input.filename().string();
         if (name == "left")
         {
@@ -147,7 +159,7 @@ ScanDatasetResolveResult ScanDatasetResolver::resolve(const ScanDatasetInputSpec
 
     if (spec.metadata_file)
     {
-        dataset.metadata_file = *spec.metadata_file;
+        dataset.metadata_file = spec.metadata_file->lexically_normal();
     }
     else
     {

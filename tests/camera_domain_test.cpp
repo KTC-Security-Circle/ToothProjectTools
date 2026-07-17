@@ -10,6 +10,7 @@
 #include "service/camera_service.hpp"
 #include "service/decode_service.hpp"
 #include "service/monitor_service.hpp"
+#include "service/calibration_file.hpp"
 #include "service/projector_service.hpp"
 #include "service/scan_dataset_validator.hpp"
 #include "service/scan_dataset_resolver.hpp"
@@ -25,11 +26,13 @@
 #include <sstream>
 #include <chrono>
 #include <future>
+#include <limits>
 #include <optional>
 #include <string>
 #include <thread>
 #include <variant>
 
+#include <opencv2/core.hpp>
 #include <opencv2/core/persistence.hpp>
 #include <opencv2/imgcodecs.hpp>
 
@@ -1026,6 +1029,90 @@ void testScanDatasetResolver()
     assert(result.dataset.root_dir == sibling_dir);
     assert(result.dataset.left_dir == sibling_dir / "left");
     assert(result.dataset.right_dir == sibling_dir / "right");
+
+    spec = service::scan_dataset::ScanDatasetInputSpec{};
+    spec.input_dir = (sibling_dir / "left").string() + "/";
+    result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.root_dir == sibling_dir);
+    assert(result.dataset.left_dir == sibling_dir / "left");
+    assert(result.dataset.right_dir == sibling_dir / "right");
+
+    spec = service::scan_dataset::ScanDatasetInputSpec{};
+    spec.input_dir = (sibling_dir / "right").string() + "/";
+    result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.root_dir == sibling_dir);
+    assert(result.dataset.left_dir == sibling_dir / "left");
+    assert(result.dataset.right_dir == sibling_dir / "right");
+
+    spec = service::scan_dataset::ScanDatasetInputSpec{};
+    spec.left_dir = (explicit_dir / "scan_L").string() + "/";
+    spec.right_dir = (explicit_dir / "scan_R").string() + "/";
+    result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.left_dir == explicit_dir / "scan_L");
+    assert(result.dataset.right_dir == explicit_dir / "scan_R");
+}
+
+void writeMonoCalibrationFile(const std::filesystem::path& path, const cv::Mat& K, const cv::Mat& D)
+{
+    cv::FileStorage fs(path.string(), cv::FileStorage::WRITE);
+    fs << "RMS" << 0.25;
+    fs << "K" << K;
+    fs << "D" << D;
+}
+
+void assertMonoCalibrationLoadFails(const std::filesystem::path& path)
+{
+    std::string error;
+    const auto loaded = service::calibration_file::loadMonoCalibrationFile(path, error);
+    assert(!loaded);
+    assert(!error.empty());
+}
+
+void testMonoCalibrationFileLoader()
+{
+    const auto dir = testTempDir("mono_calibration_loader");
+    const auto valid_path = dir / "valid.yml";
+    writeMonoCalibrationFile(valid_path, cv::Mat::eye(3, 3, CV_64F), cv::Mat::zeros(1, 5, CV_64F));
+    std::string error;
+    auto loaded = service::calibration_file::loadMonoCalibrationFile(valid_path, error);
+    assert(loaded);
+    assert(error.empty());
+    assert(loaded->K.rows == 3 && loaded->K.cols == 3 && loaded->K.depth() == CV_64F);
+    assert(loaded->D.total() == 5 && loaded->D.depth() == CV_64F);
+
+    const auto valid_float_path = dir / "valid_float.yml";
+    writeMonoCalibrationFile(valid_float_path, cv::Mat::eye(3, 3, CV_32F), cv::Mat::zeros(5, 1, CV_32F));
+    loaded = service::calibration_file::loadMonoCalibrationFile(valid_float_path, error);
+    assert(loaded);
+    assert(loaded->K.depth() == CV_64F);
+    assert(loaded->D.depth() == CV_64F);
+
+    const auto invalid_k_path = dir / "invalid_k.yml";
+    writeMonoCalibrationFile(invalid_k_path, cv::Mat::eye(2, 3, CV_64F), cv::Mat::zeros(1, 5, CV_64F));
+    assertMonoCalibrationLoadFails(invalid_k_path);
+
+    const auto invalid_d_shape_path = dir / "invalid_d_shape.yml";
+    writeMonoCalibrationFile(invalid_d_shape_path, cv::Mat::eye(3, 3, CV_64F), cv::Mat::zeros(2, 3, CV_64F));
+    assertMonoCalibrationLoadFails(invalid_d_shape_path);
+
+    const auto invalid_d_count_path = dir / "invalid_d_count.yml";
+    writeMonoCalibrationFile(invalid_d_count_path, cv::Mat::eye(3, 3, CV_64F), cv::Mat::zeros(1, 3, CV_64F));
+    assertMonoCalibrationLoadFails(invalid_d_count_path);
+
+    const auto nan_k_path = dir / "nan_k.yml";
+    cv::Mat nan_k = cv::Mat::eye(3, 3, CV_64F);
+    nan_k.at<double>(0, 0) = std::numeric_limits<double>::quiet_NaN();
+    writeMonoCalibrationFile(nan_k_path, nan_k, cv::Mat::zeros(1, 5, CV_64F));
+    assertMonoCalibrationLoadFails(nan_k_path);
+
+    const auto inf_d_path = dir / "inf_d.yml";
+    cv::Mat inf_d = cv::Mat::zeros(1, 5, CV_64F);
+    inf_d.at<double>(0, 0) = std::numeric_limits<double>::infinity();
+    writeMonoCalibrationFile(inf_d_path, cv::Mat::eye(3, 3, CV_64F), inf_d);
+    assertMonoCalibrationLoadFails(inf_d_path);
 }
 
 void testScanDatasetValidator()
@@ -1255,6 +1342,7 @@ int main()
     testWindowHandler();
     testProjectorHandler();
     testScanDatasetResolver();
+    testMonoCalibrationFileLoader();
     testScanDatasetHandler();
     testDecodeHandler();
     testProjectorSurfaceConfiguration();

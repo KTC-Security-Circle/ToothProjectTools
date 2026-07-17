@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <opencv2/core.hpp>
+#include <opencv2/core/base.hpp>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -149,7 +150,19 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
 
     LOG_INFO("Stereo: 計算開始 {} pairs", fL.size());
     calib::StereoData res;
-    const double rms = ctx.stereo_calibrator->run(fL, fR, K1, D1, K2, D2, res);
+    double rms = 0.0;
+    try
+    {
+        rms = ctx.stereo_calibrator->run(fL, fR, K1, D1, K2, D2, res);
+    }
+    catch (const cv::Exception& error)
+    {
+        return failure(output_file, "stereo_calibration_failed", error.what());
+    }
+    catch (const std::exception& error)
+    {
+        return failure(output_file, "stereo_calibration_failed", error.what());
+    }
     if (rms <= 0.0 || !res.valid)
     {
         return failure(output_file, "stereo_calibration_failed", "failed to run stereo calibration");
