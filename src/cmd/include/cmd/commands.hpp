@@ -219,16 +219,25 @@ struct CmdStopScan
 
 struct CmdValidateScanDataset
 {
-    /// input_dir <std::string>: scan dataset directory。
+    /// input_dir <std::string>: scan dataset directory。空の場合はleft_dir/right_dirを使う。
     std::string input_dir;
 
     /// allow_partial <bool>: partial datasetをvalid扱いするか。
     bool allow_partial{false};
+
+    /// left_dir <std::string>: 明示指定されたleft画像directory。
+    std::string left_dir;
+
+    /// right_dir <std::string>: 明示指定されたright画像directory。
+    std::string right_dir;
+
+    /// metadata_file <std::string>: 明示指定されたmetadata.json path。
+    std::string metadata_file;
 };
 
 struct CmdDecodePatterns
 {
-    /// input_dir <std::string>: scan dataset directory。
+    /// input_dir <std::string>: scan dataset directory。空の場合はleft_dir/right_dirを使う。
     std::string input_dir;
 
     /// output_dir <std::string>: decode output directory。
@@ -239,6 +248,24 @@ struct CmdDecodePatterns
 
     /// allow_partial <bool>: partial scan datasetをdecode対象として許可するか。
     bool allow_partial{false};
+
+    /// left_dir <std::string>: 明示指定されたleft画像directory。
+    std::string left_dir;
+
+    /// right_dir <std::string>: 明示指定されたright画像directory。
+    std::string right_dir;
+
+    /// metadata_file <std::string>: 明示指定されたmetadata.json path。
+    std::string metadata_file;
+
+    /// projector_width <std::optional<int>>: metadataなしdecode用projector幅。
+    std::optional<int> projector_width;
+
+    /// projector_height <std::optional<int>>: metadataなしdecode用projector高さ。
+    std::optional<int> projector_height;
+
+    /// pattern_count <std::optional<int>>: metadataなしdecode用pattern数。
+    std::optional<int> pattern_count;
 };
 
 struct CmdCalibrate {
@@ -253,6 +280,9 @@ struct CmdCalibrate {
 
   /// role <std::string>: sidecar response/eventへ返すcamera role名。
   std::string role;
+
+  /// apply_to_camera <bool>: trueの場合のみopen済みcameraへ結果を反映する。
+  bool apply_to_camera{false};
 };
 
 // キャリブレーション用フォルダのクリア
@@ -288,6 +318,15 @@ struct CmdStereoCalibrate {
 
     /// right_role <std::string>: sidecar response/eventへ返す右camera role名。
     std::string right_role;
+
+    /// left_calibration_file <std::string>: left mono calibration yml。
+    std::string left_calibration_file;
+
+    /// right_calibration_file <std::string>: right mono calibration yml。
+    std::string right_calibration_file;
+
+    /// apply_to_camera <bool>: trueの場合のみopen済みcameraへ結果を反映する。
+    bool apply_to_camera{false};
 };
 
 struct CmdReconstruct {
