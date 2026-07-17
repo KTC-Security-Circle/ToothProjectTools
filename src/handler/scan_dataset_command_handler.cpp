@@ -19,11 +19,25 @@ common::CommandResult handle(runtime::ScanDatasetHandlerContext& ctx, const cmd:
             using CommandType = std::decay_t<decltype(scan_dataset_command)>;
             if constexpr (std::is_same_v<CommandType, cmd::CmdValidateScanDataset>)
             {
-                return command_result_mapper::scan_dataset::toCommandResult(
-                    ctx.validator.validate(service::scan_dataset::ScanDatasetValidationConfig{
-                        std::filesystem::path{scan_dataset_command.input_dir},
-                        scan_dataset_command.allow_partial,
-                    }));
+                service::scan_dataset::ScanDatasetValidationConfig config;
+                if (!scan_dataset_command.input_dir.empty())
+                {
+                    config.input_dir = std::filesystem::path{scan_dataset_command.input_dir};
+                }
+                if (!scan_dataset_command.left_dir.empty())
+                {
+                    config.left_dir = std::filesystem::path{scan_dataset_command.left_dir};
+                }
+                if (!scan_dataset_command.right_dir.empty())
+                {
+                    config.right_dir = std::filesystem::path{scan_dataset_command.right_dir};
+                }
+                if (!scan_dataset_command.metadata_file.empty())
+                {
+                    config.metadata_file = std::filesystem::path{scan_dataset_command.metadata_file};
+                }
+                config.allow_partial = scan_dataset_command.allow_partial;
+                return command_result_mapper::scan_dataset::toCommandResult(ctx.validator.validate(config));
             }
             return common::notHandled();
         },

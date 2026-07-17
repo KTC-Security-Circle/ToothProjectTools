@@ -71,17 +71,6 @@ std::filesystem::path normalizeOutputPathForCompare(const std::filesystem::path&
     return std::filesystem::absolute(path).lexically_normal();
 }
 
-/// @brief mono calibration output_fileの既定値を作成する。
-///
-/// Args:
-///   role <const std::string&>: mono calibration対象のsidecar role。
-///
-/// Return:
-///   <std::string>: 既定のmono calibration結果file path。
-std::string defaultMonoCalibrationOutputFile(const std::string& role)
-{
-    return "./data/calib/" + role + "_mono.yml";
-}
 
 } // namespace
 
@@ -400,49 +389,88 @@ CommandMapResult HeadlessCommandMapper::mapStopScan(const control::ControlMessag
 
 CommandMapResult HeadlessCommandMapper::mapValidateScanDataset(const control::ControlMessage& message)
 {
-    if (!message.input_dir)
+    const bool has_input_dir = message.input_dir && !message.input_dir->empty();
+    const bool has_left_dir = message.left_dir && !message.left_dir->empty();
+    const bool has_right_dir = message.right_dir && !message.right_dir->empty();
+    if (!has_input_dir && !has_left_dir && !has_right_dir)
     {
-        return mapFailure("missing_field", "missing required field: input_dir");
+        return mapFailure("missing_field", "missing required field: input_dir or left_dir/right_dir");
     }
-    if (message.input_dir->empty())
+    if ((message.input_dir && message.input_dir->empty()) || (message.left_dir && message.left_dir->empty()) ||
+        (message.right_dir && message.right_dir->empty()))
     {
-        return mapFailure("invalid_command", "input_dir must not be empty");
+        return mapFailure("invalid_command", "input_dir/left_dir/right_dir must not be empty");
+    }
+    if (has_left_dir != has_right_dir)
+    {
+        return mapFailure("missing_field", has_left_dir ? "missing required field: right_dir" : "missing required field: left_dir");
     }
 
     CommandMapResult result;
     result.ok = true;
-    result.command = cmd::CmdValidateScanDataset{*message.input_dir, message.allow_partial.value_or(false)};
+    result.command = cmd::CmdValidateScanDataset{
+        message.input_dir.value_or(std::string{}),
+        message.allow_partial.value_or(false),
+        message.left_dir.value_or(std::string{}),
+        message.right_dir.value_or(std::string{}),
+        message.metadata_file.value_or(std::string{}),
+    };
     return result;
 }
 
 CommandMapResult HeadlessCommandMapper::mapDecodePatterns(const control::ControlMessage& message)
 {
-    if (!message.input_dir)
+    const bool has_input_dir = message.input_dir && !message.input_dir->empty();
+    const bool has_left_dir = message.left_dir && !message.left_dir->empty();
+    const bool has_right_dir = message.right_dir && !message.right_dir->empty();
+    if (!has_input_dir && !has_left_dir && !has_right_dir)
     {
-        return mapFailure("missing_field", "missing required field: input_dir");
+        return mapFailure("missing_field", "missing required field: input_dir or left_dir/right_dir");
     }
     if (!message.output_dir)
     {
         return mapFailure("missing_field", "missing required field: output_dir");
     }
-    if (message.input_dir->empty())
+    if ((message.input_dir && message.input_dir->empty()) || (message.left_dir && message.left_dir->empty()) ||
+        (message.right_dir && message.right_dir->empty()) || message.output_dir->empty())
     {
-        return mapFailure("invalid_command", "input_dir must not be empty");
+        return mapFailure("invalid_command", "input_dir/left_dir/right_dir/output_dir must not be empty");
     }
-    if (message.output_dir->empty())
+    if (has_left_dir != has_right_dir)
     {
-        return mapFailure("invalid_command", "output_dir must not be empty");
+        return mapFailure("missing_field", has_left_dir ? "missing required field: right_dir" : "missing required field: left_dir");
     }
     if (message.threshold && *message.threshold < 0)
     {
         return mapFailure("invalid_command", "threshold must be non-negative");
     }
+    if (message.projector_width && *message.projector_width <= 0)
+    {
+        return mapFailure("invalid_command", "projector_width must be positive");
+    }
+    if (message.projector_height && *message.projector_height <= 0)
+    {
+        return mapFailure("invalid_command", "projector_height must be positive");
+    }
+    if (message.pattern_count && *message.pattern_count <= 0)
+    {
+        return mapFailure("invalid_command", "pattern_count must be positive");
+    }
 
     CommandMapResult result;
     result.ok = true;
-    result.command = cmd::CmdDecodePatterns{*message.input_dir, *message.output_dir,
-                                            message.threshold.value_or(15),
-                                            message.allow_partial.value_or(false)};
+    result.command = cmd::CmdDecodePatterns{
+        message.input_dir.value_or(std::string{}),
+        *message.output_dir,
+        message.threshold.value_or(15),
+        message.allow_partial.value_or(false),
+        message.left_dir.value_or(std::string{}),
+        message.right_dir.value_or(std::string{}),
+        message.metadata_file.value_or(std::string{}),
+        message.projector_width,
+        message.projector_height,
+        message.pattern_count,
+    };
     return result;
 }
 
@@ -542,75 +570,64 @@ CommandMapResult HeadlessCommandMapper::mapCalibrationCaptureStereo(const contro
 
 CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlMessage& message)
 {
-    if (auto failure = requireString(message.role, "role"))
-    {
-        return *failure;
-    }
-
     if (auto failure = requireString(message.image_folder, "image_folder"))
     {
         return *failure;
     }
-
-    const auto camera_id = resolveCameraId(camera_service_, *message.role);
-    if (!camera_id)
+    if (auto failure = requireString(message.output_file, "output_file"))
     {
-        return mapFailure("camera_not_open", "role is not opened: " + *message.role);
+        return *failure;
+    }
+
+    const bool apply_to_camera = message.apply_to_camera.value_or(false);
+    video::CameraId camera_id = video::kInvalidCameraId;
+    if (apply_to_camera)
+    {
+        if (auto failure = requireString(message.role, "role"))
+        {
+            return *failure;
+        }
+        const auto resolved_camera_id = resolveCameraId(camera_service_, *message.role);
+        if (!resolved_camera_id)
+        {
+            return mapFailure("camera_not_open", "role is not opened: " + *message.role);
+        }
+        camera_id = *resolved_camera_id;
     }
 
     CommandMapResult result;
     result.ok = true;
     result.command = cmd::CmdCalibrate{
-        *camera_id,
+        camera_id,
         *message.image_folder,
-        message.output_file.value_or(defaultMonoCalibrationOutputFile(*message.role)),
-        *message.role,
+        *message.output_file,
+        message.role.value_or(std::string{}),
+        apply_to_camera,
     };
     return result;
 }
 
 CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::ControlMessage& message)
 {
-    if (auto failure = requireString(message.left_role, "left_role"))
-    {
-        return *failure;
-    }
-
-    if (auto failure = requireString(message.right_role, "right_role"))
-    {
-        return *failure;
-    }
-
     if (auto failure = requireString(message.left_dir, "left_dir"))
     {
         return *failure;
     }
-
     if (auto failure = requireString(message.right_dir, "right_dir"))
     {
         return *failure;
     }
-
-    if (auto failure = requireString(message.output_file, "output_file"))
+    if (auto failure = requireString(message.left_calibration_file, "left_calibration_file"))
     {
         return *failure;
     }
-
-    const auto left_camera_id = resolveCameraId(camera_service_, *message.left_role);
-    if (!left_camera_id)
+    if (auto failure = requireString(message.right_calibration_file, "right_calibration_file"))
     {
-        return mapFailure("camera_not_open", "role is not opened: " + *message.left_role);
+        return *failure;
     }
-
-    const auto right_camera_id = resolveCameraId(camera_service_, *message.right_role);
-    if (!right_camera_id)
+    if (auto failure = requireString(message.output_file, "output_file"))
     {
-        return mapFailure("camera_not_open", "role is not opened: " + *message.right_role);
-    }
-
-    if (*left_camera_id == *right_camera_id)
-    {
-        return mapFailure("invalid_command", "left_role and right_role must resolve to different cameras");
+        return *failure;
     }
 
     const auto left_dir = std::filesystem::path{*message.left_dir};
@@ -620,11 +637,50 @@ CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::Contro
         return mapFailure("invalid_command", "left_dir and right_dir must be different paths");
     }
 
+    const bool apply_to_camera = message.apply_to_camera.value_or(false);
+    video::CameraId left_camera_id = video::kInvalidCameraId;
+    video::CameraId right_camera_id = video::kInvalidCameraId;
+    if (apply_to_camera)
+    {
+        if (auto failure = requireString(message.left_role, "left_role"))
+        {
+            return *failure;
+        }
+        if (auto failure = requireString(message.right_role, "right_role"))
+        {
+            return *failure;
+        }
+        const auto resolved_left_camera_id = resolveCameraId(camera_service_, *message.left_role);
+        if (!resolved_left_camera_id)
+        {
+            return mapFailure("camera_not_open", "role is not opened: " + *message.left_role);
+        }
+        const auto resolved_right_camera_id = resolveCameraId(camera_service_, *message.right_role);
+        if (!resolved_right_camera_id)
+        {
+            return mapFailure("camera_not_open", "role is not opened: " + *message.right_role);
+        }
+        if (*resolved_left_camera_id == *resolved_right_camera_id)
+        {
+            return mapFailure("invalid_command", "left_role and right_role must resolve to different cameras");
+        }
+        left_camera_id = *resolved_left_camera_id;
+        right_camera_id = *resolved_right_camera_id;
+    }
+
     CommandMapResult result;
     result.ok = true;
     result.command = cmd::CmdStereoCalibrate{
-        *left_camera_id,      *right_camera_id,   left_dir.string(),   right_dir.string(),
-        *message.output_file, *message.left_role, *message.right_role,
+        left_camera_id,
+        right_camera_id,
+        left_dir.string(),
+        right_dir.string(),
+        *message.output_file,
+        message.left_role.value_or(std::string{}),
+        message.right_role.value_or(std::string{}),
+        *message.left_calibration_file,
+        *message.right_calibration_file,
+        apply_to_camera,
     };
     return result;
 }

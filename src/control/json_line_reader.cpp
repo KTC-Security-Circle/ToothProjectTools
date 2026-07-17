@@ -110,13 +110,24 @@ ReadResult JsonLineReader::read() {
         !readString(root, "image_folder", message.image_folder, error_message) ||
         !readString(root, "left_dir", message.left_dir, error_message) ||
         !readString(root, "right_dir", message.right_dir, error_message) ||
+        !readString(root, "image_folder_left", message.left_dir, error_message) ||
+        !readString(root, "image_folder_right", message.right_dir, error_message) ||
+        !readString(root, "left_image_folder", message.left_dir, error_message) ||
+        !readString(root, "right_image_folder", message.right_dir, error_message) ||
         !readString(root, "output_file", message.output_file, error_message) ||
+        !readString(root, "left_calibration_file", message.left_calibration_file, error_message) ||
+        !readString(root, "right_calibration_file", message.right_calibration_file, error_message) ||
+        !readString(root, "metadata_file", message.metadata_file, error_message) ||
         !readString(root, "scan_id", message.scan_id, error_message) ||
         !readString(root, "output_dir", message.output_dir, error_message) ||
         !readString(root, "input_dir", message.input_dir, error_message) ||
         !readBool(root, "allow_partial", message.allow_partial, error_message) ||
+        !readBool(root, "apply_to_camera", message.apply_to_camera, error_message) ||
         !readInteger(root, "settle_ms", message.settle_ms, error_message) ||
         !readInteger(root, "threshold", message.threshold, error_message) ||
+        !readInteger(root, "projector_width", message.projector_width, error_message) ||
+        !readInteger(root, "projector_height", message.projector_height, error_message) ||
+        !readInteger(root, "pattern_count", message.pattern_count, error_message) ||
         !readInteger(root, "camera_id", message.camera_id, error_message) ||
         !readString(root, "window_role", message.window_role, error_message) ||
         !readString(root, "title", message.title, error_message) ||
