@@ -180,7 +180,14 @@ ScanDatasetResolveResult ScanDatasetResolver::resolve(const ScanDatasetInputSpec
         result.issues.push_back(issue("right_dir_not_found", "right directory does not exist", dataset.right_dir));
     }
 
-    dataset.pattern_count = spec.pattern_count.value_or(inferPatternCount(dataset.left_dir, dataset.right_dir));
+    if (spec.pattern_count)
+    {
+        dataset.pattern_count = *spec.pattern_count;
+    }
+    else
+    {
+        dataset.pattern_count = inferPatternCount(dataset.left_dir, dataset.right_dir);
+    }
     result.ok = result.issues.empty();
     return result;
 }

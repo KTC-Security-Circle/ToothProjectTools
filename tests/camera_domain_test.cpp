@@ -1053,6 +1053,18 @@ void testScanDatasetResolver()
     assert(result.ok);
     assert(result.dataset.left_dir == explicit_dir / "scan_L");
     assert(result.dataset.right_dir == explicit_dir / "scan_R");
+
+    auto count_override_dir = testTempDir("resolver_count_override");
+    std::filesystem::create_directories(count_override_dir / "left");
+    std::filesystem::create_directories(count_override_dir / "right");
+    writeImage(count_override_dir / "left" / "pattern_099.png", 20, 16);
+    writeImage(count_override_dir / "right" / "pattern_099.png", 20, 16);
+    spec = service::scan_dataset::ScanDatasetInputSpec{};
+    spec.input_dir = count_override_dir;
+    spec.pattern_count = 7;
+    result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.pattern_count == 7);
 }
 
 void writeMonoCalibrationFile(const std::filesystem::path& path, const cv::Mat& K, const cv::Mat& D)
