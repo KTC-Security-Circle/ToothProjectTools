@@ -62,14 +62,18 @@ make clean
 ├── docker-compose.yml
 └── docs
     ├── architecture
-    │   ├── architecture.md         # パッケージ横断の統合ドキュメント（PlantUML）
-    │   └── sequence.png            # シーケンス図などの画像出力
+    │   ├── overview.md             # 全体構成
+    │   ├── concepts.md             # 主要概念
+    │   └── command-flow.md         # command処理の流れ
+    ├── artifacts                   # scan dataset / decode resultなどのartifact仕様
+    ├── control                     # JSONL protocolとcommand仕様
+    ├── testing                     # test方針と手動hardware test
     ├── appパッケージ設計メモ.md       # app/ の設計意図とゲームループ/ディスパッチ構造
     ├── cmdパッケージ設計メモ.md       # cmd/ のエンベロープ方式（Target + Command）
     ├── inputパッケージ設計メモ.md     # 入力→コマンド変換と既定バインディング
-    ├── loggerパッケージ設計メモ.md    # spdlog ベースのロギング（source_loc マクロ等）
+    ├── logger パッケージ設計メモ.md   # spdlog ベースのロギング（source_loc マクロ等）
     ├── videoパッケージ設計メモ.md     # カメラ抽象化/二重バッファ/近似同期(Δt)
-    └── windowパッケージ設計メモ.md    # ウィンドウ抽象/レイアウト/FS化/モニタ移動
+    └── window パッケージ設計メモ.md   # ウィンドウ抽象/レイアウト/FS化/モニタ移動
 
 src/
 ├── app/      # アプリ本体（ループ・dispatch・マウス処理）
@@ -84,45 +88,13 @@ src/
 
 ## 📖 設計ドキュメント
 
-* **全体設計（Architecture）**
-
-  * [`docs/architecture/architecture.md`](./docs/architecture/architecture.md) — 全体の設計概要と PlantUML 図（`sequence.png` も同フォルダ）
-* **パッケージ別メモ**
-
-  * [`docs/appパッケージ設計メモ.md`](./docs/appパッケージ設計メモ.md) — ゲームループ/ディスパッチ/フォーカス管理
-  * [`docs/cmdパッケージ設計メモ.md`](./docs/cmdパッケージ設計メモ.md) — エンベロープ方式（`Target + Command`）
-  * [`docs/inputパッケージ設計メモ.md`](./docs/inputパッケージ設計メモ.md) — 入力→コマンド変換/既定バインディング
-  * [`docs/windowパッケージ設計メモ.md`](./docs/windowパッケージ設計メモ.md) — レイアウト/FS/モニタ移動/テスト項目
-  * [`docs/loggerパッケージ設計メモ.md`](./docs/loggerパッケージ設計メモ.md) — source_loc マクロ/ENV レベル切替/ローテーション
-  * [`docs/videoパッケージ設計メモ.md`](./docs/videoパッケージ設計メモ.md) — 二重バッファ/近似同期/露光固定
-
----
----
-
-## 🎯 今後の想定
-
-1. **ステレオキャリブレーション**
-
-   * チェッカーボードを用いてカメラ2台の外部パラメータを推定
-   * OpenCV `stereoCalibrate` ベースの実装
-
-2. **構造光キャリブレーション**
-
-   * OpenCV `structured_light::GrayCodePattern` を用い、モニタ全画面に投影
-   * カメラウィンドウと同期して撮影・保存
-
-3. **3D復元**
-
-   * 得られたパラメータを基に対象物の点群を生成
-   * 将来的にはメッシュ化／可視化ツールとの連携も想定
-
-4. **機能拡張予定**
-
-   * コマンド記録・リプレイ（自動テスト, デバッグ）
-   * JSON/IPC 経由のコマンド投入（スクリプト制御）
-   * TargetGroupによるウィンドウ群制御（複数画面対応）
-   * GoogleTest によるユニットテスト導入
-   * PCH / Unity Build オプション（ビルド時間短縮）
+* [`docs/architecture/overview.md`](./docs/architecture/overview.md) — 全体構成
+* [`docs/architecture/concepts.md`](./docs/architecture/concepts.md) — 主要概念
+* [`docs/architecture/command-flow.md`](./docs/architecture/command-flow.md) — command処理の流れ
+* [`docs/control/protocol.md`](./docs/control/protocol.md) — JSONL control protocol
+* [`docs/control/command-index.md`](./docs/control/command-index.md) — command一覧
+* [`docs/artifacts/scan-dataset.md`](./docs/artifacts/scan-dataset.md) — scan dataset仕様
+* [`docs/testing/test-strategy.md`](./docs/testing/test-strategy.md) — test方針
 
 ---
 

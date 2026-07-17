@@ -1,4 +1,4 @@
-# video パッケージ設計メモ（刷新版）
+# 映像パッケージ設計メモ（video）（刷新版）
 
 > 対象: `./src/video/{include/video/*.hpp, *.cpp}`（現行: `camera.hpp/.cpp`）
 

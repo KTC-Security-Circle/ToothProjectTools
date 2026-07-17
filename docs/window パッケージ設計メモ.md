@@ -1,4 +1,4 @@
-# window パッケージ設計メモ
+# ウィンドウパッケージ設計メモ（window）
 
 > 対象: `./src/window/{include/window/*.hpp, *.cpp}`
 
