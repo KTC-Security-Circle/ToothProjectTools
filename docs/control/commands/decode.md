@@ -29,7 +29,7 @@ decode_patterns はファイル処理commandである。
 ### return
 
 ```json
-{"id":"90","ok":true,"input_dir":"./data/scan/session_001","output_dir":"./data/decode/session_001","pattern_count":"44","left_valid_pixels":"123456","right_valid_pixels":"123120"}
+{"id":"90","ok":true,"input_dir":"./data/scan/session_001","output_dir":"./data/decode/session_001","scan_id":"session_001","pattern_count":"44","image_width":"1280","image_height":"720","projector_width":"1920","projector_height":"1080","threshold":"10","left_valid_count":"123456","right_valid_count":"123120","left_valid_ratio":"0.1340","right_valid_ratio":"0.1336"}
 ```
 
 | field | 説明 |
@@ -38,9 +38,17 @@ decode_patterns はファイル処理commandである。
 | `ok` | command処理が完了したか。 |
 | `input_dir` | scan dataset root。 |
 | `output_dir` | decode result出力directory。 |
+| `scan_id` | scan session ID。 |
 | `pattern_count` | decodeしたpattern数。 |
-| `left_valid_pixels` | left decodeの有効pixel数。 |
-| `right_valid_pixels` | right decodeの有効pixel数。 |
+| `image_width` | capture画像幅。 |
+| `image_height` | capture画像高さ。 |
+| `projector_width` | projector pattern幅。 |
+| `projector_height` | projector pattern高さ。 |
+| `threshold` | decodeに使用した閾値。 |
+| `left_valid_count` | left decodeの有効pixel数。 |
+| `right_valid_count` | right decodeの有効pixel数。 |
+| `left_valid_ratio` | left decodeの有効pixel率。小数第4位までの文字列。 |
+| `right_valid_ratio` | right decodeの有効pixel率。小数第4位までの文字列。 |
 
 ### event
 
@@ -63,9 +71,11 @@ decode result。
 | code | 条件 |
 | --- | --- |
 | `missing_field` | 必須fieldがない。 |
-| `input_dir_not_found` | scan datasetが存在しない。 |
-| `metadata_missing` | metadata.jsonが存在しない。 |
-| `decode_not_ready` | decodeに必要なmetadataが不足している。 |
+| `invalid_command` | `input_dir`、`output_dir`、`threshold` が不正である。 |
+| `scan_dataset_invalid` | scan dataset検証に失敗した。入力directory欠落、metadata欠落、画像欠損などを含む。 |
+| `decode_pattern_count_mismatch` | decodeに必要なpattern数とdatasetのpattern数が一致しない。 |
+| `decode_image_load_failed` | pattern画像の読み込みに失敗した。 |
+| `decode_image_size_mismatch` | pattern画像のsizeが一致しない、またはleft/right decoded image sizeが一致しない。 |
 | `decode_failed` | GrayCode decodeに失敗した。 |
 | `decode_output_write_failed` | decode resultを書けない。 |
 

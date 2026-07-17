@@ -29,7 +29,7 @@ returnは受付結果である。
 ### return
 
 ```json
-{"id":"70","ok":true,"scan_id":"session_001","status":"running","output_dir":"./data/scan/session_001"}
+{"id":"70","ok":true,"scan_id":"session_001","status":"running","projector_role":"projector","left_role":"left","right_role":"right","output_dir":"./data/scan/session_001","pattern_count":"44","captured_count":"0","current_index":"-1"}
 ```
 
 | field | 説明 |
@@ -38,15 +38,21 @@ returnは受付結果である。
 | `ok` | command受付が完了したか。 |
 | `scan_id` | scan session ID。 |
 | `status` | scan process状態。 |
+| `projector_role` | 使用するprojector role。 |
+| `left_role` | 使用するleft camera role。 |
+| `right_role` | 使用するright camera role。 |
 | `output_dir` | scan dataset出力directory。 |
+| `pattern_count` | 全pattern数。 |
+| `captured_count` | 取得済みpattern数。 |
+| `current_index` | 現在処理中のpattern index。開始直後は `-1`。 |
 
 ### event
 
 ```json
-{"event":"scan_started","scan_id":"session_001"}
-{"event":"scan_frame_captured","scan_id":"session_001","index":0}
-{"event":"scan_completed","scan_id":"session_001","output_dir":"./data/scan/session_001"}
-{"event":"scan_failed","scan_id":"session_001","error":{"code":"capture_failed","message":"failed to capture frame"}}
+{"event":"scan_started","scan_id":"session_001","projector_role":"projector","left_role":"left","right_role":"right","pattern_count":"44","output_dir":"./data/scan/session_001"}
+{"event":"scan_frame_captured","scan_id":"session_001","pattern_index":"0","captured_count":"1","pattern_count":"44","left_path":"./data/scan/session_001/left/pattern_000.png","right_path":"./data/scan/session_001/right/pattern_000.png"}
+{"event":"scan_completed","scan_id":"session_001","captured_count":"44","pattern_count":"44","output_dir":"./data/scan/session_001"}
+{"event":"scan_failed","scan_id":"session_001","error_code":"capture_failed","error_message":"failed to capture frame","captured_count":"12","current_index":"12"}
 ```
 
 ### 読むArtifact
@@ -71,12 +77,18 @@ Scan worker。
 | --- | --- |
 | `missing_field` | 必須fieldがない。 |
 | `invalid_command` | role、output_dir、settle_msが不正である。 |
+| `invalid_scan_config` | scan設定が不正である。 |
+| `invalid_output_path` | `output_dir` が不正、またはcapture出力pathが不正である。 |
 | `camera_not_open` | camera roleがopenされていない。 |
 | `projector_not_open` | projector roleがopenされていない。 |
-| `patterns_not_generated` | patternが生成されていない。 |
+| `pattern_not_generated` | patternが生成されていない。 |
 | `scan_already_running` | scan processが実行中である。 |
+| `directory_create_failed` | scan dataset directoryまたはcapture出力directoryを作成できない。 |
+| `scan_start_failed` | metadata.jsonを書けず、scanを開始できない。 |
+| `pattern_show_failed` | pattern表示に失敗した。 |
 | `capture_failed` | frame取得に失敗した。 |
-| `scan_output_write_failed` | scan datasetを書けない。 |
+| `empty_frame` | captureしたframeが空である。 |
+| `file_write_failed` | capture画像を書けない。 |
 
 ## scan_status
 

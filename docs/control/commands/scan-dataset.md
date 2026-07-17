@@ -28,22 +28,25 @@
 ### return
 
 ```json
-{"id":"80","ok":true,"valid":"true","metadata_complete":"true","decode_ready":"true","reconstruct_ready":"false","pattern_count":"44","left_count":"44","right_count":"44","missing_count":"0","issue_count":"0"}
+{"id":"80","ok":true,"input_dir":"./data/scan/session_001","scan_id":"session_001","valid":"true","partial":"false","pattern_count":"44","left_count":"44","right_count":"44","missing_count":"0","issue_count":"0","width":"1280","height":"720","issues_json":"[]"}
 ```
 
 | field | 説明 |
 | --- | --- |
 | `id` | request ID。 |
 | `ok` | command処理が完了したか。 |
+| `input_dir` | 検証対象directory。 |
+| `scan_id` | metadataから読んだscan session ID。 |
 | `valid` | left/right画像ペアとして成立するか。 |
-| `metadata_complete` | metadata.jsonの必須fieldが揃っているか。 |
-| `decode_ready` | decodeに必要なpattern_countとprojector sizeが分かるか。 |
-| `reconstruct_ready` | decode resultとstereo calibration artifactが揃っているか。 |
+| `partial` | 欠損画像があるが一部は存在する状態か。 |
 | `pattern_count` | pattern数。 |
 | `left_count` | left画像数。 |
 | `right_count` | right画像数。 |
 | `missing_count` | 欠損画像数。 |
 | `issue_count` | 検証issue数。 |
+| `width` | capture画像幅。未確定なら `0`。 |
+| `height` | capture画像高さ。未確定なら `0`。 |
+| `issues_json` | issue一覧JSONを文字列化した値。 |
 
 ### event
 
@@ -74,6 +77,4 @@ scan dataset。
 | field | 定義 |
 | --- | --- |
 | `valid` | left/right画像ペアとして成立している。 |
-| `metadata_complete` | metadata.jsonの必須fieldが揃っている。 |
-| `decode_ready` | decodeに必要なpattern_countとprojector sizeが分かる。 |
-| `reconstruct_ready` | decode resultとstereo calibration artifactが揃っている。 |
+| `partial` | 欠損画像があるが一部は存在する状態である。 |
