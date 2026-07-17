@@ -174,8 +174,13 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
         return failure(output_file, "calibration_output_write_failed", e.what());
     }
 
-    if (auto* cam = ctx.cameras.get(command.target_camera_id))
+    if (command.apply_to_camera)
     {
+        auto* cam = ctx.cameras.get(command.target_camera_id);
+        if (!cam || !cam->isOpened())
+        {
+            return failure(output_file, "camera_not_open", "camera is not open");
+        }
         cam->setIntrinsics(K);
         cam->setDistCoeffs(D);
     }

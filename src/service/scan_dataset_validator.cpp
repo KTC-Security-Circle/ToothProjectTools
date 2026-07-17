@@ -72,48 +72,35 @@ void setValidity(ScanDatasetValidationResult& result, bool allow_partial)
 ScanDatasetValidationResult ScanDatasetValidator::validate(const ScanDatasetValidationConfig& config) const
 {
     ScanDatasetValidationResult result;
-    result.input_dir = config.input_dir.string();
 
-    std::error_code error_code;
-    if (!std::filesystem::exists(config.input_dir, error_code))
+    ScanDatasetResolver resolver;
+    const auto resolved = resolver.resolve(config);
+    result.issues.insert(result.issues.end(), resolved.issues.begin(), resolved.issues.end());
+    result.input_dir = resolved.dataset.root_dir.string();
+
+    std::optional<ScanDatasetMetadata> metadata;
+    if (resolved.dataset.metadata_file)
     {
-        result.issues.push_back(issue("input_dir_not_found", "input_dir does not exist", config.input_dir));
-        setValidity(result, config.allow_partial);
-        return result;
-    }
-    if (!std::filesystem::is_directory(config.input_dir, error_code))
-    {
-        result.issues.push_back(issue("input_dir_not_directory", "input_dir is not a directory", config.input_dir));
-        setValidity(result, config.allow_partial);
-        return result;
+        metadata = readMetadata(*resolved.dataset.metadata_file, result.issues);
     }
 
-    const auto metadata_path = config.input_dir / "metadata.json";
-    const auto metadata = readMetadata(metadata_path, result.issues);
-    if (!metadata)
+    if (metadata)
     {
-        setValidity(result, config.allow_partial);
-        return result;
+        result.scan_id = metadata->scan_id;
+        result.pattern_count = metadata->pattern_count;
+    }
+    else
+    {
+        result.pattern_count = config.pattern_count.value_or(resolved.dataset.pattern_count);
     }
 
-    result.scan_id = metadata->scan_id;
-    result.pattern_count = metadata->pattern_count;
-
-    const auto left_dir = config.input_dir / "left";
-    const auto right_dir = config.input_dir / "right";
-    if (!std::filesystem::exists(left_dir, error_code) || !std::filesystem::is_directory(left_dir, error_code))
+    if (result.pattern_count > 0 && resolved.ok)
     {
-        result.issues.push_back(issue("left_dir_not_found", "left directory does not exist", left_dir));
+        validateExpectedImages(resolved.dataset.left_dir, resolved.dataset.right_dir, result.pattern_count, result);
     }
-    if (!std::filesystem::exists(right_dir, error_code) || !std::filesystem::is_directory(right_dir, error_code))
+    else if (result.pattern_count <= 0 && resolved.ok)
     {
-        result.issues.push_back(issue("right_dir_not_found", "right directory does not exist", right_dir));
-    }
-
-    if (metadata->pattern_count > 0 && std::filesystem::is_directory(left_dir, error_code) &&
-        std::filesystem::is_directory(right_dir, error_code))
-    {
-        validateExpectedImages(config.input_dir, *metadata, result);
+        result.issues.push_back(issue("pattern_count_not_found", "pattern_count could not be inferred", resolved.dataset.root_dir));
     }
 
     setValidity(result, config.allow_partial);
@@ -125,6 +112,13 @@ std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadataForDecode(
     std::vector<ScanDatasetIssue>& issues) const
 {
     return readMetadata(input_dir / "metadata.json", issues);
+}
+
+std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadataFileForDecode(
+    const std::filesystem::path& metadata_file,
+    std::vector<ScanDatasetIssue>& issues) const
+{
+    return readMetadata(metadata_file, issues);
 }
 
 std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadata(
@@ -202,16 +196,17 @@ std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadata(
 }
 
 void ScanDatasetValidator::validateExpectedImages(
-    const std::filesystem::path& input_dir,
-    const ScanDatasetMetadata& metadata,
+    const std::filesystem::path& left_dir,
+    const std::filesystem::path& right_dir,
+    int pattern_count,
     ScanDatasetValidationResult& result) const
 {
     cv::Size expected_size;
 
-    for (int index = 0; index < metadata.pattern_count; ++index)
+    for (int index = 0; index < pattern_count; ++index)
     {
-        const auto left_path = input_dir / "left" / patternFileName(index);
-        const auto right_path = input_dir / "right" / patternFileName(index);
+        const auto left_path = left_dir / patternFileName(index);
+        const auto right_path = right_dir / patternFileName(index);
         std::error_code error_code;
         const bool left_exists = std::filesystem::exists(left_path, error_code);
         const bool right_exists = std::filesystem::exists(right_path, error_code);

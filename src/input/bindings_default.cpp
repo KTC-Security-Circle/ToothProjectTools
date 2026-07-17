@@ -117,7 +117,10 @@ void install_default_bindings(
                   cfg.dir_stereo_left, cfg.dir_stereo_right, // stereoフォルダを使う
                   "calibration_stereo.yml",
                   "",
-                  ""
+                  "",
+                  cfg.dir_mono_left + ".yml",
+                  cfg.dir_mono_right + ".yml",
+                  false
               }
           });
       }

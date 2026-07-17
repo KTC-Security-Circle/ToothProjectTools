@@ -1,6 +1,7 @@
 #pragma once
 
 #include "service/scan_dataset_result.hpp"
+#include "service/scan_dataset_resolver.hpp"
 
 #include <filesystem>
 #include <optional>
@@ -9,13 +10,14 @@
 namespace service::scan_dataset
 {
 
-struct ScanDatasetValidationConfig
+struct ScanDatasetValidationConfig : ScanDatasetInputSpec
 {
-    /// input_dir <std::filesystem::path>: scan dataset directory。
-    std::filesystem::path input_dir;
-
-    /// allow_partial <bool>: 欠損画像があるpartial datasetをvalid扱いするか。
-    bool allow_partial{false};
+    ScanDatasetValidationConfig() = default;
+    ScanDatasetValidationConfig(std::filesystem::path input, bool allow)
+    {
+        input_dir = std::move(input);
+        allow_partial = allow;
+    }
 };
 
 class ScanDatasetValidator
@@ -42,6 +44,11 @@ class ScanDatasetValidator
         const std::filesystem::path& input_dir,
         std::vector<ScanDatasetIssue>& issues) const;
 
+    /// @brief decode処理向けに指定metadata fileを読み取る。
+    std::optional<ScanDatasetMetadata> readMetadataFileForDecode(
+        const std::filesystem::path& metadata_file,
+        std::vector<ScanDatasetIssue>& issues) const;
+
   private:
     /// @brief metadata.jsonを読み取り、固定schemaから必要fieldを取り出す。
     ///
@@ -65,8 +72,9 @@ class ScanDatasetValidator
     /// Return:
     ///   <void>: 戻り値なし。
     void validateExpectedImages(
-        const std::filesystem::path& input_dir,
-        const ScanDatasetMetadata& metadata,
+        const std::filesystem::path& left_dir,
+        const std::filesystem::path& right_dir,
+        int pattern_count,
         ScanDatasetValidationResult& result) const;
 };
 

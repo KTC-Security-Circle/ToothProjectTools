@@ -49,6 +49,18 @@ struct ControlMessage {
   /// output_file <std::optional<std::string>>: calibration結果の保存先file path。
   std::optional<std::string> output_file;
 
+  /// left_calibration_file <std::optional<std::string>>: left mono calibration file。
+  std::optional<std::string> left_calibration_file;
+
+  /// right_calibration_file <std::optional<std::string>>: right mono calibration file。
+  std::optional<std::string> right_calibration_file;
+
+  /// metadata_file <std::optional<std::string>>: scan dataset metadata file。
+  std::optional<std::string> metadata_file;
+
+  /// apply_to_camera <std::optional<bool>>: calibration結果をopen済みcameraへ反映するか。
+  std::optional<bool> apply_to_camera;
+
   /// scan_id <std::optional<std::string>>: scan session識別子。
   std::optional<std::string> scan_id;
 
@@ -66,6 +78,15 @@ struct ControlMessage {
 
   /// threshold <std::optional<int>>: GrayCode decode threshold。
   std::optional<int> threshold;
+
+  /// projector_width <std::optional<int>>: metadataなしdecode用projector幅。
+  std::optional<int> projector_width;
+
+  /// projector_height <std::optional<int>>: metadataなしdecode用projector高さ。
+  std::optional<int> projector_height;
+
+  /// pattern_count <std::optional<int>>: metadataなしdecode用pattern数。
+  std::optional<int> pattern_count;
 
   /// camera_id <std::optional<int>>: open_cameraで使用するcamera識別子。
   std::optional<int> camera_id;

@@ -10,8 +10,10 @@
 #include "service/camera_service.hpp"
 #include "service/decode_service.hpp"
 #include "service/monitor_service.hpp"
+#include "service/calibration_file.hpp"
 #include "service/projector_service.hpp"
 #include "service/scan_dataset_validator.hpp"
+#include "service/scan_dataset_resolver.hpp"
 #include "service/window_service.hpp"
 #include "video/camera_manager.hpp"
 #include "structured_light/structured_light.hpp"
@@ -24,11 +26,13 @@
 #include <sstream>
 #include <chrono>
 #include <future>
+#include <limits>
 #include <optional>
 #include <string>
 #include <thread>
 #include <variant>
 
+#include <opencv2/core.hpp>
 #include <opencv2/core/persistence.hpp>
 #include <opencv2/imgcodecs.hpp>
 
@@ -594,6 +598,56 @@ void testScanMapper()
     assert(decode.output_dir == "./data/decode/session_001");
     assert(decode.threshold == 20);
     assert(decode.allow_partial);
+
+    message = messageWithId();
+    message.left_dir = "./captures/scan_L";
+    message.right_dir = "./captures/scan_R";
+    result = mapper.mapValidateScanDataset(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdValidateScanDataset>(*result.command));
+    validate = std::get<cmd::CmdValidateScanDataset>(*result.command);
+    assert(validate.input_dir.empty());
+    assert(validate.left_dir == "./captures/scan_L");
+    assert(validate.right_dir == "./captures/scan_R");
+
+    message = messageWithId();
+    message.left_dir = "./captures/scan_L";
+    message.right_dir = "./captures/scan_R";
+    message.output_dir = "./data/decode/manual_001";
+    message.projector_width = 8;
+    message.projector_height = 4;
+    result = mapper.mapDecodePatterns(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdDecodePatterns>(*result.command));
+    const auto explicit_decode = std::get<cmd::CmdDecodePatterns>(*result.command);
+    assert(explicit_decode.input_dir.empty());
+    assert(explicit_decode.left_dir == "./captures/scan_L");
+    assert(explicit_decode.right_dir == "./captures/scan_R");
+    assert(explicit_decode.projector_width == 8);
+    assert(explicit_decode.projector_height == 4);
+
+    message = messageWithId();
+    message.image_folder = "./data/calib/mono_left";
+    message.output_file = "./data/calib/mono_left.yml";
+    result = mapper.mapMonoCalibrate(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdCalibrate>(*result.command));
+    const auto mono = std::get<cmd::CmdCalibrate>(*result.command);
+    assert(mono.target_camera_id == video::kInvalidCameraId);
+    assert(!mono.apply_to_camera);
+    assert(mono.role.empty());
+
+    message = messageWithId();
+    message.left_dir = "./data/calib/stereo_left";
+    message.right_dir = "./data/calib/stereo_right";
+    message.left_calibration_file = "./data/calib/mono_left.yml";
+    message.right_calibration_file = "./data/calib/mono_right.yml";
+    message.output_file = "./data/calib/stereo.yml";
+    result = mapper.mapStereoCalibrate(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdStereoCalibrate>(*result.command));
+    const auto stereo = std::get<cmd::CmdStereoCalibrate>(*result.command);
+    assert(stereo.left_cam_id == video::kInvalidCameraId);
+    assert(stereo.right_cam_id == video::kInvalidCameraId);
+    assert(!stereo.apply_to_camera);
+    assert(stereo.left_calibration_file == "./data/calib/mono_left.yml");
+    assert(stereo.right_calibration_file == "./data/calib/mono_right.yml");
 }
 
 void testWindowHandler()
@@ -933,6 +987,146 @@ void testProjectorHandler()
     assert(!other.handled);
 }
 
+void testScanDatasetResolver()
+{
+    service::scan_dataset::ScanDatasetResolver resolver;
+
+    auto dir = testTempDir("resolver_root");
+    writeValidScanDataset(dir, 2);
+    service::scan_dataset::ScanDatasetInputSpec spec;
+    spec.input_dir = dir;
+    auto result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.root_dir == dir);
+    assert(result.dataset.left_dir == dir / "left");
+    assert(result.dataset.right_dir == dir / "right");
+    assert(result.dataset.metadata_present);
+    assert(result.dataset.pattern_count == 2);
+
+    auto explicit_dir = testTempDir("resolver_explicit");
+    std::filesystem::create_directories(explicit_dir / "scan_L");
+    std::filesystem::create_directories(explicit_dir / "scan_R");
+    writeImage(explicit_dir / "scan_L" / "pattern_000.png", 20, 16);
+    writeImage(explicit_dir / "scan_R" / "pattern_000.png", 20, 16);
+    spec = service::scan_dataset::ScanDatasetInputSpec{};
+    spec.left_dir = explicit_dir / "scan_L";
+    spec.right_dir = explicit_dir / "scan_R";
+    result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.left_dir == explicit_dir / "scan_L");
+    assert(result.dataset.right_dir == explicit_dir / "scan_R");
+    assert(result.dataset.pattern_count == 1);
+
+    auto sibling_dir = testTempDir("resolver_sibling");
+    std::filesystem::create_directories(sibling_dir / "left");
+    std::filesystem::create_directories(sibling_dir / "right");
+    writeImage(sibling_dir / "left" / "pattern_000.png", 20, 16);
+    writeImage(sibling_dir / "right" / "pattern_000.png", 20, 16);
+    spec = service::scan_dataset::ScanDatasetInputSpec{};
+    spec.input_dir = sibling_dir / "left";
+    result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.root_dir == sibling_dir);
+    assert(result.dataset.left_dir == sibling_dir / "left");
+    assert(result.dataset.right_dir == sibling_dir / "right");
+
+    spec = service::scan_dataset::ScanDatasetInputSpec{};
+    spec.input_dir = (sibling_dir / "left").string() + "/";
+    result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.root_dir == sibling_dir);
+    assert(result.dataset.left_dir == sibling_dir / "left");
+    assert(result.dataset.right_dir == sibling_dir / "right");
+
+    spec = service::scan_dataset::ScanDatasetInputSpec{};
+    spec.input_dir = (sibling_dir / "right").string() + "/";
+    result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.root_dir == sibling_dir);
+    assert(result.dataset.left_dir == sibling_dir / "left");
+    assert(result.dataset.right_dir == sibling_dir / "right");
+
+    spec = service::scan_dataset::ScanDatasetInputSpec{};
+    spec.left_dir = (explicit_dir / "scan_L").string() + "/";
+    spec.right_dir = (explicit_dir / "scan_R").string() + "/";
+    result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.left_dir == explicit_dir / "scan_L");
+    assert(result.dataset.right_dir == explicit_dir / "scan_R");
+
+    auto count_override_dir = testTempDir("resolver_count_override");
+    std::filesystem::create_directories(count_override_dir / "left");
+    std::filesystem::create_directories(count_override_dir / "right");
+    writeImage(count_override_dir / "left" / "pattern_099.png", 20, 16);
+    writeImage(count_override_dir / "right" / "pattern_099.png", 20, 16);
+    spec = service::scan_dataset::ScanDatasetInputSpec{};
+    spec.input_dir = count_override_dir;
+    spec.pattern_count = 7;
+    result = resolver.resolve(spec);
+    assert(result.ok);
+    assert(result.dataset.pattern_count == 7);
+}
+
+void writeMonoCalibrationFile(const std::filesystem::path& path, const cv::Mat& K, const cv::Mat& D)
+{
+    cv::FileStorage fs(path.string(), cv::FileStorage::WRITE);
+    fs << "RMS" << 0.25;
+    fs << "K" << K;
+    fs << "D" << D;
+}
+
+void assertMonoCalibrationLoadFails(const std::filesystem::path& path)
+{
+    std::string error;
+    const auto loaded = service::calibration_file::loadMonoCalibrationFile(path, error);
+    assert(!loaded);
+    assert(!error.empty());
+}
+
+void testMonoCalibrationFileLoader()
+{
+    const auto dir = testTempDir("mono_calibration_loader");
+    const auto valid_path = dir / "valid.yml";
+    writeMonoCalibrationFile(valid_path, cv::Mat::eye(3, 3, CV_64F), cv::Mat::zeros(1, 5, CV_64F));
+    std::string error;
+    auto loaded = service::calibration_file::loadMonoCalibrationFile(valid_path, error);
+    assert(loaded);
+    assert(error.empty());
+    assert(loaded->K.rows == 3 && loaded->K.cols == 3 && loaded->K.depth() == CV_64F);
+    assert(loaded->D.total() == 5 && loaded->D.depth() == CV_64F);
+
+    const auto valid_float_path = dir / "valid_float.yml";
+    writeMonoCalibrationFile(valid_float_path, cv::Mat::eye(3, 3, CV_32F), cv::Mat::zeros(5, 1, CV_32F));
+    loaded = service::calibration_file::loadMonoCalibrationFile(valid_float_path, error);
+    assert(loaded);
+    assert(loaded->K.depth() == CV_64F);
+    assert(loaded->D.depth() == CV_64F);
+
+    const auto invalid_k_path = dir / "invalid_k.yml";
+    writeMonoCalibrationFile(invalid_k_path, cv::Mat::eye(2, 3, CV_64F), cv::Mat::zeros(1, 5, CV_64F));
+    assertMonoCalibrationLoadFails(invalid_k_path);
+
+    const auto invalid_d_shape_path = dir / "invalid_d_shape.yml";
+    writeMonoCalibrationFile(invalid_d_shape_path, cv::Mat::eye(3, 3, CV_64F), cv::Mat::zeros(2, 3, CV_64F));
+    assertMonoCalibrationLoadFails(invalid_d_shape_path);
+
+    const auto invalid_d_count_path = dir / "invalid_d_count.yml";
+    writeMonoCalibrationFile(invalid_d_count_path, cv::Mat::eye(3, 3, CV_64F), cv::Mat::zeros(1, 3, CV_64F));
+    assertMonoCalibrationLoadFails(invalid_d_count_path);
+
+    const auto nan_k_path = dir / "nan_k.yml";
+    cv::Mat nan_k = cv::Mat::eye(3, 3, CV_64F);
+    nan_k.at<double>(0, 0) = std::numeric_limits<double>::quiet_NaN();
+    writeMonoCalibrationFile(nan_k_path, nan_k, cv::Mat::zeros(1, 5, CV_64F));
+    assertMonoCalibrationLoadFails(nan_k_path);
+
+    const auto inf_d_path = dir / "inf_d.yml";
+    cv::Mat inf_d = cv::Mat::zeros(1, 5, CV_64F);
+    inf_d.at<double>(0, 0) = std::numeric_limits<double>::infinity();
+    writeMonoCalibrationFile(inf_d_path, cv::Mat::eye(3, 3, CV_64F), inf_d);
+    assertMonoCalibrationLoadFails(inf_d_path);
+}
+
 void testScanDatasetValidator()
 {
     service::scan_dataset::ScanDatasetValidator validator;
@@ -955,7 +1149,7 @@ void testScanDatasetValidator()
     std::filesystem::create_directories(dir / "left");
     std::filesystem::create_directories(dir / "right");
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
-    assert(!result.valid && result.issues[0].code == "metadata_not_found");
+    assert(!result.valid && result.issues[0].code == "pattern_count_not_found");
 
     dir = testTempDir("invalid_pattern_count");
     writeValidScanDataset(dir, 1);
@@ -1041,7 +1235,7 @@ void testScanDatasetHandler()
     writeValidScanDataset(dir, 1);
 
     auto result = handler::scan_dataset::handle(
-        context, cmd::Command{cmd::CmdValidateScanDataset{dir.string(), false}});
+        context, cmd::Command{cmd::CmdValidateScanDataset{dir.string(), false, {}, {}, {}}});
     assert(result.handled && result.ok);
     assert(result.values.at("valid") == "true");
     assert(result.values.at("issues_json") == "[]");
@@ -1125,7 +1319,7 @@ void testDecodeHandler()
     const auto output_dir = testTempDir("decode_handler_output");
     writeSyntheticGrayCodeDataset(input_dir, 8, 4);
 
-    auto result = handler::decode::handle(context, cmd::Command{cmd::CmdDecodePatterns{input_dir.string(), output_dir.string(), 15, false}});
+    auto result = handler::decode::handle(context, cmd::Command{cmd::CmdDecodePatterns{input_dir.string(), output_dir.string(), 15, false, {}, {}, {}, std::nullopt, std::nullopt, std::nullopt}});
     assert(result.handled && result.ok);
     assert(result.values.at("projector_width") == "8");
     assert(result.values.at("projector_height") == "4");
@@ -1159,6 +1353,8 @@ int main()
     testHandler();
     testWindowHandler();
     testProjectorHandler();
+    testScanDatasetResolver();
+    testMonoCalibrationFileLoader();
     testScanDatasetHandler();
     testDecodeHandler();
     testProjectorSurfaceConfiguration();

@@ -1,6 +1,6 @@
 # スキャンデータセット
 
-scan dataset はGrayCode scanで取得した左右画像の集合である。
+scan dataset はGrayCode scanで取得した左右画像の集合である。metadata.jsonはscan_start生成datasetでは存在するが、手動保存datasetでは任意である。
 
 ## 構成
 
@@ -23,7 +23,7 @@ scan_dataset/
 - `scan_validate`
 - `decode_patterns`
 
-## 必須field
+## metadata field
 
 | field | 説明 |
 | --- | --- |
@@ -47,7 +47,7 @@ scan_dataset/
 | `surface.pattern_y` | active pattern Y座標。 |
 | `surface.clamped` | active pattern areaがmonitor内へclampされたか。 |
 
-## 任意field
+## metadata任意field
 
 | field | 説明 |
 | --- | --- |
@@ -57,5 +57,6 @@ scan_dataset/
 ## file format
 
 `metadata.json` はJSONである。
-pattern画像はPNGである。
+pattern画像はPNGであり、`pattern_NNN.png` 形式で読む。
+metadataが無い場合、`scan_validate` と `decode_patterns` はleft/right directoryからpattern数を推定する。
 left/rightのpattern indexは一致する。

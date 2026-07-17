@@ -1,5 +1,7 @@
 #include "service/stereo_calibration_service.hpp"
 
+#include "service/calibration_file.hpp"
+
 #include "calibration/stereo_calibrator.hpp"
 #include "calibration/stereo_data.hpp"
 #include "logger/logger_macros.hpp"
@@ -10,6 +12,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <opencv2/core.hpp>
+#include <opencv2/core/base.hpp>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -85,37 +88,39 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     {
         return failure(output_file, "stereo_calibration_failed", "stereo calibrator is not available");
     }
-    LOG_INFO("step2: Stereo: カメラ準備");
+    LOG_INFO("step2: Stereo: mono calibration file読込");
 
-    auto* cL = ctx.cameras.get(command.left_cam_id);
-    auto* cR = ctx.cameras.get(command.right_cam_id);
-    if (!cL || !cL->isOpened())
+    std::string calibration_error;
+    const auto left_calibration = service::calibration_file::loadMonoCalibrationFile(command.left_calibration_file, calibration_error);
+    if (!left_calibration)
     {
-        return failure(output_file, "camera_not_open", "left camera is not open");
+        const auto code = fs::exists(command.left_calibration_file) ? "calibration_file_invalid" : "calibration_file_not_found";
+        return failure(output_file, code, calibration_error);
     }
-    if (!cR || !cR->isOpened())
+    const auto right_calibration = service::calibration_file::loadMonoCalibrationFile(command.right_calibration_file, calibration_error);
+    if (!right_calibration)
     {
-        return failure(output_file, "camera_not_open", "right camera is not open");
+        const auto code = fs::exists(command.right_calibration_file) ? "calibration_file_invalid" : "calibration_file_not_found";
+        return failure(output_file, code, calibration_error);
     }
-    LOG_INFO("step3: Stereo: カメラ内部パラメータ取得");
 
-    cv::Mat K1 = cL->intrinsics();
-    cv::Mat D1 = cL->distCoeffs();
-    cv::Mat K2 = cR->intrinsics();
-    cv::Mat D2 = cR->distCoeffs();
-    
-    if (K1.empty() || D1.empty() || K2.empty() || D2.empty())
+    cv::Mat K1 = left_calibration->K;
+    cv::Mat D1 = left_calibration->D;
+    cv::Mat K2 = right_calibration->K;
+    cv::Mat D2 = right_calibration->D;
+
+    if (command.apply_to_camera)
     {
-        LOG_WARN("Stereo: intrinsics are not ready. "
-             "Run mono calibration for both cameras first. "
-             "left_id={} right_id={} K1_empty={} D1_empty={} K2_empty={} D2_empty={}",
-             command.left_cam_id,
-             command.right_cam_id,
-             K1.empty(),
-             D1.empty(),
-             K2.empty(),
-             D2.empty());
-        return failure(output_file, "stereo_calibration_failed", "left/right camera intrinsics are not ready");
+        auto* cL = ctx.cameras.get(command.left_cam_id);
+        auto* cR = ctx.cameras.get(command.right_cam_id);
+        if (!cL || !cL->isOpened())
+        {
+            return failure(output_file, "camera_not_open", "left camera is not open");
+        }
+        if (!cR || !cR->isOpened())
+        {
+            return failure(output_file, "camera_not_open", "right camera is not open");
+        }
     }
     LOG_INFO("step4: Stereo: 左右画像pairの取得");
 
@@ -140,12 +145,24 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     }
     if (fL.size() != fR.size())
     {
-        return failure(output_file, "calibration_image_count_mismatch", "left/right calibration image counts do not match");
+        return failure(output_file, "stereo_image_pair_mismatch", "left/right calibration image counts do not match");
     }
 
     LOG_INFO("Stereo: 計算開始 {} pairs", fL.size());
     calib::StereoData res;
-    const double rms = ctx.stereo_calibrator->run(fL, fR, K1, D1, K2, D2, res);
+    double rms = 0.0;
+    try
+    {
+        rms = ctx.stereo_calibrator->run(fL, fR, K1, D1, K2, D2, res);
+    }
+    catch (const cv::Exception& error)
+    {
+        return failure(output_file, "stereo_calibration_failed", error.what());
+    }
+    catch (const std::exception& error)
+    {
+        return failure(output_file, "stereo_calibration_failed", error.what());
+    }
     if (rms <= 0.0 || !res.valid)
     {
         return failure(output_file, "stereo_calibration_failed", "failed to run stereo calibration");
@@ -155,19 +172,19 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     {
         if (!ensureOutputParent(output_file))
         {
-            return failure(output_file, "calibration_output_write_failed", "failed to create stereo calibration output directory");
+            return failure(output_file, "file_write_failed", "failed to create stereo calibration output directory");
         }
         cv::FileStorage fs_out(output_file.string(), cv::FileStorage::WRITE);
         if (!fs_out.isOpened())
         {
-            return failure(output_file, "calibration_output_write_failed", "failed to open stereo calibration output file");
+            return failure(output_file, "file_write_failed", "failed to open stereo calibration output file");
         }
         fs_out << "RMS" << rms << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R
                << "T" << res.T << "Q" << res.Q;
     }
     catch (const std::exception& e)
     {
-        return failure(output_file, "calibration_output_write_failed", e.what());
+        return failure(output_file, "file_write_failed", e.what());
     }
 
     LOG_INFO("Stereo: 成功! RMS={}", rms);
