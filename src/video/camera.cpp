@@ -105,7 +105,17 @@ void Camera::startThread() {
     
     // スレッド起動
     is_streaming_ = true;
-    worker_thread_ = std::thread(&Camera::workerLoop, this);
+    worker_thread_ = std::thread([this]() {
+        try {
+            workerLoop();
+        } catch (const cv::Exception& e) {
+            LOG_ERROR("Camera Worker OpenCV exception: name={}, error={}", name_, e.what());
+        } catch (const std::exception& e) {
+            LOG_ERROR("Camera Worker exception: name={}, error={}", name_, e.what());
+        } catch (...) {
+            LOG_ERROR("Camera Worker unknown exception: name={}", name_);
+        }
+    });
     LOG_INFO("Camera Worker Started: {}", name_);
 }
 
@@ -122,6 +132,7 @@ void Camera::stopThread() {
 
 void Camera::workerLoop() {
     cv::Mat temp_frame; // スレッドローカルなバッファ
+    std::uint64_t consecutive_read_failures = 0;
     
     while (is_streaming_) {
         if (!capture_ptr_ || !capture_ptr_->isOpened()) {
@@ -130,16 +141,51 @@ void Camera::workerLoop() {
         }
 
         // 1. 撮影 (ここで33ms待たされるが、UIスレッドではないのでOK)
-        if (capture_ptr_->read(temp_frame) && !temp_frame.empty()) {
-            
-            // 2. 最新フレームを保護しながら更新 (一瞬で終わる)
-            std::lock_guard<std::mutex> lock(frame_mutex_);
-            temp_frame.copyTo(last_frame_);
-            
-        } else {
+        bool read_ok = false;
+        bool read_threw = false;
+        try {
+            read_ok = capture_ptr_->read(temp_frame);
+        } catch (const cv::Exception& e) {
+            read_threw = true;
+            ++consecutive_read_failures;
+            if (consecutive_read_failures == 1 || consecutive_read_failures % 100 == 0) {
+                LOG_WARN("Camera read OpenCV exception: name={}, consecutive_failures={}, error={}",
+                         name_, consecutive_read_failures, e.what());
+            }
+        } catch (const std::exception& e) {
+            read_threw = true;
+            ++consecutive_read_failures;
+            if (consecutive_read_failures == 1 || consecutive_read_failures % 100 == 0) {
+                LOG_WARN("Camera read exception: name={}, consecutive_failures={}, error={}",
+                         name_, consecutive_read_failures, e.what());
+            }
+        }
+
+        if (!read_ok || temp_frame.empty()) {
+            if (read_ok) {
+                ++consecutive_read_failures;
+                if (consecutive_read_failures == 1 || consecutive_read_failures % 100 == 0) {
+                    LOG_WARN("Camera read returned an empty frame: name={}, consecutive_failures={}",
+                             name_, consecutive_read_failures);
+                }
+            } else if (!read_threw) {
+                ++consecutive_read_failures;
+                if (consecutive_read_failures == 1 || consecutive_read_failures % 100 == 0) {
+                    LOG_WARN("Camera read failed: name={}, consecutive_failures={}",
+                             name_, consecutive_read_failures);
+                }
+            }
+
             // エラー時はCPU負荷を下げるため少し待つ
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            continue;
         }
+
+        consecutive_read_failures = 0;
+
+        // 2. 正常なフレームだけを保護しながら更新 (一瞬で終わる)
+        std::lock_guard<std::mutex> lock(frame_mutex_);
+        temp_frame.copyTo(last_frame_);
     }
 }
 

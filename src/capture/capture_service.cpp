@@ -65,7 +65,7 @@ CaptureResult CaptureService::captureFrame(video::CameraId camera_id, const std:
     cv::Mat frame = camera->getFrame();
     if (frame.empty())
     {
-        result.error = CaptureError{CaptureErrorCode::EmptyFrame, "取得したframeが空です"};
+        result.error = CaptureError{CaptureErrorCode::EmptyFrame, "有効なframeがまだありません"};
         return result;
     }
 
@@ -127,7 +127,7 @@ CaptureStereoResult CaptureService::captureStereo(video::CameraId left_camera_id
     cv::Mat right_frame = right_camera->getFrame();
     if (left_frame.empty() || right_frame.empty())
     {
-        result.error = CaptureError{CaptureErrorCode::EmptyFrame, "左右いずれかのframeが空です"};
+        result.error = CaptureError{CaptureErrorCode::EmptyFrame, "左右いずれかの有効なframeがまだありません"};
         return result;
     }
 
