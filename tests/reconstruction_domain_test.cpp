@@ -1,8 +1,10 @@
 #include "reconstruction/reconstruction_service.hpp"
+#include "projector_index_memory.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
 
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <filesystem>
@@ -34,14 +36,18 @@ void writeMatrix(const fs::path& path, const char* key, const cv::Mat& matrix)
     storage << key << matrix;
 }
 
-void writeDecodeResult(bool multiple_candidates = false, bool multiple_buckets = false,
-                       bool out_of_range_candidates = false)
+void writeDecodeResult(bool multiple_candidates = false,
+                       bool multiple_buckets = false,
+                       bool out_of_range_candidates = false,
+                       int projector_width = 8,
+                       int projector_height = 4)
 {
     fs::create_directories(decode_dir / "left");
     fs::create_directories(decode_dir / "right");
     std::ofstream(decode_dir / "metadata.json")
         << "{\"version\":\"0.1.0\",\"image_width\":4,\"image_height\":2,"
-           "\"projector_width\":8,\"projector_height\":4}";
+        << "\"projector_width\":" << projector_width << ",\"projector_height\":"
+        << projector_height << '}';
     cv::Mat lx(2, 4, CV_32S, cv::Scalar(-1));
     cv::Mat ly(2, 4, CV_32S, cv::Scalar(-1));
     cv::Mat rx = lx.clone();
@@ -92,13 +98,14 @@ void writeCalibration(const cv::Mat& d1,
                       const cv::Mat& translation =
                           (cv::Mat_<double>(3, 1) << -10.0, 0.0, 0.0),
                       std::optional<int> image_width = 4,
-                      std::optional<int> image_height = 2)
+                      std::optional<int> image_height = 2,
+                      const cv::Mat& rotation = cv::Mat::eye(3, 3, CV_64F))
 {
     const cv::Mat camera =
         (cv::Mat_<double>(3, 3) << 100.0, 0.0, 1.5, 0.0, 100.0, 0.5, 0.0, 0.0, 1.0);
     cv::FileStorage storage(calibration_file.string(), cv::FileStorage::WRITE);
     storage << "K1" << camera << "D1" << d1 << "K2" << camera << "D2" << d2
-            << "R" << cv::Mat::eye(3, 3, CV_64F) << "T" << translation;
+            << "R" << rotation << "T" << translation;
     if (image_width)
     {
         storage << "image_width" << *image_width;
@@ -315,6 +322,97 @@ void testInvalidTranslationVectors()
     const auto result = validateWithoutThrow();
     REQUIRE(!result.valid && result.issues.front().code == "calibration_file_invalid");
 }
+
+void testRotationMatrixValidation()
+{
+    const cv::Mat distortion = cv::Mat::zeros(1, 5, CV_64F);
+    const cv::Mat translation = (cv::Mat_<double>(3, 1) << -10.0, 0.0, 0.0);
+
+    writeCalibration(distortion, distortion, translation, 4, 2, cv::Mat::eye(3, 3, CV_64F));
+    REQUIRE(validateWithoutThrow().valid);
+
+    const double radians = 30.0 * CV_PI / 180.0;
+    const cv::Mat rotation_z =
+        (cv::Mat_<double>(3, 3) << std::cos(radians), -std::sin(radians), 0.0,
+         std::sin(radians), std::cos(radians), 0.0, 0.0, 0.0, 1.0);
+    writeCalibration(distortion, distortion, translation, 4, 2, rotation_z);
+    REQUIRE(validateWithoutThrow().valid);
+
+    for (const cv::Mat rotation : {
+             (cv::Mat_<double>(3, 3) << 2.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0),
+             (cv::Mat_<double>(3, 3) << 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, -1.0),
+             (cv::Mat_<double>(3, 3) << 1.0, 0.25, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)})
+    {
+        writeCalibration(distortion, distortion, translation, 4, 2, rotation);
+        const auto result = validateWithoutThrow();
+        REQUIRE(!result.valid && result.issues.front().code == "calibration_file_invalid");
+        REQUIRE(result.issues.front().path == calibration_file);
+    }
+
+    cv::Mat nonfinite = cv::Mat::eye(3, 3, CV_64F);
+    nonfinite.at<double>(1, 1) = std::numeric_limits<double>::quiet_NaN();
+    writeCalibration(distortion, distortion, translation, 4, 2, nonfinite);
+    const auto result = validateWithoutThrow();
+    REQUIRE(!result.valid && result.issues.front().code == "calibration_file_invalid");
+    REQUIRE(result.issues.front().path == calibration_file);
+}
+
+void testProjectorIndexMemoryPolicy()
+{
+    using reconstruction::detail::estimateProjectorIndexMemory;
+    using reconstruction::detail::isProjectorIndexMemoryHardLimitExceeded;
+    using reconstruction::detail::isProjectorIndexMemoryWarningLevel;
+    using reconstruction::detail::kProjectorIndexMemoryHardLimitBytes;
+    using reconstruction::detail::kProjectorIndexMemoryWarningBytes;
+
+    auto estimate = estimateProjectorIndexMemory(1920, 1080, 1024U * 768U);
+    REQUIRE(estimate.has_value());
+    REQUIRE(!isProjectorIndexMemoryWarningLevel(*estimate));
+    REQUIRE(!isProjectorIndexMemoryHardLimitExceeded(*estimate));
+
+    estimate = estimateProjectorIndexMemory(3840, 2160, 3840U * 2160U);
+    REQUIRE(estimate.has_value());
+    REQUIRE(!isProjectorIndexMemoryHardLimitExceeded(*estimate));
+
+    estimate = estimateProjectorIndexMemory(4096, 4096, 0);
+    REQUIRE(estimate.has_value());
+    REQUIRE(estimate->estimated_peak_bytes >= kProjectorIndexMemoryWarningBytes);
+    REQUIRE(isProjectorIndexMemoryWarningLevel(*estimate));
+
+    estimate = estimateProjectorIndexMemory(8192, 8192, 0);
+    REQUIRE(estimate.has_value());
+    REQUIRE(estimate->estimated_peak_bytes >= kProjectorIndexMemoryHardLimitBytes);
+    REQUIRE(isProjectorIndexMemoryHardLimitExceeded(*estimate));
+
+    REQUIRE(!estimateProjectorIndexMemory(std::numeric_limits<int>::max(),
+                                          std::numeric_limits<int>::max(),
+                                          0)
+                 .has_value());
+    REQUIRE(!estimateProjectorIndexMemory(1,
+                                          1,
+                                          std::numeric_limits<std::size_t>::max())
+                 .has_value());
+
+    std::size_t output = 0;
+    REQUIRE(!reconstruction::detail::checkedAdd(std::numeric_limits<std::size_t>::max(),
+                                                1,
+                                                output));
+    REQUIRE(!reconstruction::detail::checkedMultiply(std::numeric_limits<std::size_t>::max(),
+                                                     2,
+                                                     output));
+}
+
+void testHugeProjectorMetadataRejectedBeforeAllocation()
+{
+    writeDecodeResult(false, false, false, 100000, 100000);
+    writeCalibration(cv::Mat::zeros(1, 5, CV_64F));
+    const auto result = validateWithoutThrow();
+    REQUIRE(!result.valid && !result.issues.empty());
+    REQUIRE(result.issues.front().code == "decode_result_invalid");
+    REQUIRE(result.issues.front().path == decode_dir / "metadata.json");
+    writeDecodeResult();
+}
+
 } // namespace
 
 int main()
@@ -330,5 +428,8 @@ int main()
     testMalformedCalibrationFile();
     testMalformedDecodeMetadata();
     testInvalidTranslationVectors();
+    testRotationMatrixValidation();
+    testProjectorIndexMemoryPolicy();
+    testHugeProjectorMetadataRejectedBeforeAllocation();
     fs::remove_all(root);
 }

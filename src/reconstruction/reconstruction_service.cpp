@@ -1,4 +1,5 @@
 #include "reconstruction/reconstruction_service.hpp"
+#include "projector_index_memory.hpp"
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
@@ -7,13 +8,19 @@
 #include <cmath>
 #include <fstream>
 #include <iomanip>
-#include <limits>
+#include <new>
+#include <sstream>
+#include <stdexcept>
 #include <utility>
 
 namespace reconstruction
 {
 namespace
 {
+constexpr double kRotationOrthogonalityTolerance = 1e-4;
+constexpr double kRotationDeterminantTolerance = 1e-4;
+constexpr double kBytesPerMib = 1024.0 * 1024.0;
+
 struct Side
 {
     cv::Mat x;
@@ -94,24 +101,70 @@ bool isValidDistortionCoefficients(const cv::Mat& coefficients)
     }
 }
 
-std::optional<std::size_t> checkedProjectorBucketCount(int width, int height)
+bool isValidRotationMatrix(const cv::Mat& rotation)
 {
-    if (width <= 0 || height <= 0)
+    if (!isValidFloatingMatrix(rotation, 3, 3))
     {
-        return std::nullopt;
+        return false;
     }
-    const auto unsigned_width = static_cast<std::size_t>(width);
-    const auto unsigned_height = static_cast<std::size_t>(height);
-    if (unsigned_width > std::numeric_limits<std::size_t>::max() / unsigned_height)
+
+    cv::Mat rotation64;
+    rotation.convertTo(rotation64, CV_64F);
+    const cv::Mat identity = cv::Mat::eye(3, 3, CV_64F);
+    const cv::Mat gram = rotation64.t() * rotation64;
+    const double orthogonality_error = cv::norm(gram - identity, cv::NORM_INF);
+    const double determinant = cv::determinant(rotation64);
+
+    return std::isfinite(orthogonality_error) && std::isfinite(determinant) &&
+           orthogonality_error <= kRotationOrthogonalityTolerance &&
+           std::abs(determinant - 1.0) <= kRotationDeterminantTolerance;
+}
+
+std::string projectorIndexMemoryWarningMessage(const detail::ProjectorIndexMemoryEstimate& estimate,
+                                               int projector_width,
+                                               int projector_height)
+{
+    std::ostringstream message;
+    message << "projector candidate index may require approximately "
+            << static_cast<unsigned long long>(
+                   std::ceil(static_cast<double>(estimate.estimated_peak_bytes) / kBytesPerMib))
+            << " MiB for projector size " << projector_width << 'x' << projector_height;
+    return message.str();
+}
+
+bool validateProjectorIndexMemory(const ReconstructionInput& input,
+                                  ReconstructionValidationResult& result,
+                                  const Data& data,
+                                  std::size_t maximum_candidate_count)
+{
+    const auto estimate = detail::estimateProjectorIndexMemory(data.projector_width,
+                                                               data.projector_height,
+                                                               maximum_candidate_count);
+    const auto metadata_path = input.decode_dir / "metadata.json";
+    if (!estimate)
     {
-        return std::nullopt;
+        addIssue(result,
+                 "decode_result_invalid",
+                 "projector dimensions require excessive index memory",
+                 metadata_path);
+        return false;
     }
-    const auto bucket_count = unsigned_width * unsigned_height;
-    if (bucket_count >= std::vector<std::size_t>{}.max_size())
+    if (detail::isProjectorIndexMemoryHardLimitExceeded(*estimate))
     {
-        return std::nullopt;
+        addIssue(result,
+                 "decode_result_invalid",
+                 "projector dimensions require excessive index memory",
+                 metadata_path);
+        return false;
     }
-    return bucket_count;
+    if (detail::isProjectorIndexMemoryWarningLevel(*estimate))
+    {
+        result.warnings.push_back({"projector_index_memory_usage_high",
+                                   projectorIndexMemoryWarningMessage(*estimate,
+                                                                      data.projector_width,
+                                                                      data.projector_height)});
+    }
+    return true;
 }
 
 std::size_t projectorCoordinateIndex(int x, int y, int width)
@@ -372,7 +425,7 @@ bool validateCalibration(const ReconstructionInput& input,
 {
     if (!isValidFloatingMatrix(data.K1, 3, 3) ||
         !isValidFloatingMatrix(data.K2, 3, 3) ||
-        !isValidFloatingMatrix(data.R, 3, 3) ||
+        !isValidRotationMatrix(data.R) ||
         !isValidDistortionCoefficients(data.D1) ||
         !isValidDistortionCoefficients(data.D2) ||
         !isValidTranslationVector(data.T))
@@ -466,19 +519,50 @@ bool calculate(const ReconstructionInput& input,
                ReconstructionValidationResult& result,
                Data& data)
 {
-    const auto bucket_count =
-        checkedProjectorBucketCount(data.projector_width, data.projector_height);
-    if (!bucket_count)
+    result.left_valid_count = cv::countNonZero(data.left.mask);
+    result.right_valid_count = cv::countNonZero(data.right.mask);
+    if (!validateProjectorIndexMemory(input,
+                                      result,
+                                      data,
+                                      static_cast<std::size_t>(result.right_valid_count)))
+    {
+        return false;
+    }
+
+    const auto estimate = detail::estimateProjectorIndexMemory(data.projector_width,
+                                                               data.projector_height,
+                                                               static_cast<std::size_t>(
+                                                                   result.right_valid_count));
+    if (!estimate)
     {
         addIssue(result,
                  "decode_result_invalid",
-                 "projector dimensions are too large to index safely",
+                 "projector dimensions require excessive index memory",
                  input.decode_dir / "metadata.json");
         return false;
     }
-    const auto right_index = buildProjectorCandidateIndex(data, *bucket_count);
-    result.left_valid_count = cv::countNonZero(data.left.mask);
-    result.right_valid_count = cv::countNonZero(data.right.mask);
+
+    ProjectorCandidateIndex right_index;
+    try
+    {
+        right_index = buildProjectorCandidateIndex(data, estimate->bucket_count);
+    }
+    catch (const std::bad_alloc&)
+    {
+        addIssue(result,
+                 "decode_result_invalid",
+                 "failed to allocate projector candidate index",
+                 input.decode_dir / "metadata.json");
+        return false;
+    }
+    catch (const std::length_error&)
+    {
+        addIssue(result,
+                 "decode_result_invalid",
+                 "failed to allocate projector candidate index",
+                 input.decode_dir / "metadata.json");
+        return false;
+    }
 
     cv::Mat P1 = cv::Mat::zeros(3, 4, CV_64F);
     data.K1.copyTo(P1(cv::Rect(0, 0, 3, 3)));
