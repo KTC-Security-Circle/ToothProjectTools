@@ -7,7 +7,7 @@
 #include <cmath>
 #include <fstream>
 #include <iomanip>
-#include <map>
+#include <limits>
 #include <utility>
 
 namespace reconstruction
@@ -19,6 +19,13 @@ struct Side
     cv::Mat x;
     cv::Mat y;
     cv::Mat mask;
+};
+
+struct ProjectorCandidateIndex
+{
+    // bucket iの候補はcandidates[offsets[i], offsets[i + 1])へ連続格納する。
+    std::vector<std::size_t> offsets;
+    std::vector<cv::Point2f> candidates;
 };
 
 struct Data
@@ -85,6 +92,89 @@ bool isValidDistortionCoefficients(const cv::Mat& coefficients)
     default:
         return false;
     }
+}
+
+std::optional<std::size_t> checkedProjectorBucketCount(int width, int height)
+{
+    if (width <= 0 || height <= 0)
+    {
+        return std::nullopt;
+    }
+    const auto unsigned_width = static_cast<std::size_t>(width);
+    const auto unsigned_height = static_cast<std::size_t>(height);
+    if (unsigned_width > std::numeric_limits<std::size_t>::max() / unsigned_height)
+    {
+        return std::nullopt;
+    }
+    const auto bucket_count = unsigned_width * unsigned_height;
+    if (bucket_count >= std::vector<std::size_t>{}.max_size())
+    {
+        return std::nullopt;
+    }
+    return bucket_count;
+}
+
+std::size_t projectorCoordinateIndex(int x, int y, int width)
+{
+    return static_cast<std::size_t>(y) * static_cast<std::size_t>(width) +
+           static_cast<std::size_t>(x);
+}
+
+bool isProjectorCoordinateInRange(int x, int y, const Data& data)
+{
+    return x >= 0 && x < data.projector_width && y >= 0 && y < data.projector_height;
+}
+
+ProjectorCandidateIndex buildProjectorCandidateIndex(const Data& data, std::size_t bucket_count)
+{
+    ProjectorCandidateIndex index;
+    index.offsets.assign(bucket_count + 1, 0);
+
+    for (int y = 0; y < data.image_height; ++y)
+    {
+        for (int x = 0; x < data.image_width; ++x)
+        {
+            if (!data.right.mask.at<uchar>(y, x))
+            {
+                continue;
+            }
+            const int projector_x = data.right.x.at<int>(y, x);
+            const int projector_y = data.right.y.at<int>(y, x);
+            if (isProjectorCoordinateInRange(projector_x, projector_y, data))
+            {
+                const auto bucket =
+                    projectorCoordinateIndex(projector_x, projector_y, data.projector_width);
+                ++index.offsets[bucket + 1];
+            }
+        }
+    }
+
+    for (std::size_t bucket = 0; bucket < bucket_count; ++bucket)
+    {
+        index.offsets[bucket + 1] += index.offsets[bucket];
+    }
+    index.candidates.resize(index.offsets.back());
+    std::vector<std::size_t> cursors(index.offsets.begin(), index.offsets.end() - 1);
+
+    for (int y = 0; y < data.image_height; ++y)
+    {
+        for (int x = 0; x < data.image_width; ++x)
+        {
+            if (!data.right.mask.at<uchar>(y, x))
+            {
+                continue;
+            }
+            const int projector_x = data.right.x.at<int>(y, x);
+            const int projector_y = data.right.y.at<int>(y, x);
+            if (isProjectorCoordinateInRange(projector_x, projector_y, data))
+            {
+                const auto bucket =
+                    projectorCoordinateIndex(projector_x, projector_y, data.projector_width);
+                index.candidates[cursors[bucket]++] = cv::Point2f(x, y);
+            }
+        }
+    }
+    return index;
 }
 
 bool isValidTranslationVector(const cv::Mat& translation)
@@ -221,11 +311,37 @@ bool loadCalibration(const ReconstructionInput& input,
 
         const auto width = calibration["image_width"];
         const auto height = calibration["image_height"];
-        has_calibration_size = !width.empty() && !height.empty();
+        const bool has_width = !width.empty();
+        const bool has_height = !height.empty();
+        if (has_width != has_height)
+        {
+            addIssue(result,
+                     "calibration_file_invalid",
+                     "image_width and image_height must both be present or both be absent",
+                     input.calibration_file);
+            return false;
+        }
+        has_calibration_size = has_width;
         if (has_calibration_size)
         {
+            if (!width.isInt() || !height.isInt())
+            {
+                addIssue(result,
+                         "calibration_file_invalid",
+                         "calibration image dimensions must be positive integers",
+                         input.calibration_file);
+                return false;
+            }
             calibration_width = static_cast<int>(width);
             calibration_height = static_cast<int>(height);
+            if (calibration_width <= 0 || calibration_height <= 0)
+            {
+                addIssue(result,
+                         "calibration_file_invalid",
+                         "calibration image dimensions must be positive integers",
+                         input.calibration_file);
+                return false;
+            }
         }
     }
     catch (const cv::Exception&)
@@ -346,32 +462,23 @@ bool loadInput(const ReconstructionInput& input,
                                has_calibration_size);
 }
 
-void calculate(const ReconstructionInput& input,
+bool calculate(const ReconstructionInput& input,
                ReconstructionValidationResult& result,
                Data& data)
 {
-    using ProjectorCoordinate = std::pair<int, int>;
-    std::map<ProjectorCoordinate, std::vector<cv::Point2f>> right_index;
+    const auto bucket_count =
+        checkedProjectorBucketCount(data.projector_width, data.projector_height);
+    if (!bucket_count)
+    {
+        addIssue(result,
+                 "decode_result_invalid",
+                 "projector dimensions are too large to index safely",
+                 input.decode_dir / "metadata.json");
+        return false;
+    }
+    const auto right_index = buildProjectorCandidateIndex(data, *bucket_count);
     result.left_valid_count = cv::countNonZero(data.left.mask);
     result.right_valid_count = cv::countNonZero(data.right.mask);
-
-    for (int y = 0; y < data.image_height; ++y)
-    {
-        for (int x = 0; x < data.image_width; ++x)
-        {
-            if (!data.right.mask.at<uchar>(y, x))
-            {
-                continue;
-            }
-            const int projector_x = data.right.x.at<int>(y, x);
-            const int projector_y = data.right.y.at<int>(y, x);
-            if (projector_x >= 0 && projector_x < data.projector_width && projector_y >= 0 &&
-                projector_y < data.projector_height)
-            {
-                right_index[{projector_x, projector_y}].emplace_back(x, y);
-            }
-        }
-    }
 
     cv::Mat P1 = cv::Mat::zeros(3, 4, CV_64F);
     data.K1.copyTo(P1(cv::Rect(0, 0, 3, 3)));
@@ -392,13 +499,21 @@ void calculate(const ReconstructionInput& input,
             {
                 continue;
             }
-            const auto candidates = right_index.find(
-                {data.left.x.at<int>(y, x), data.left.y.at<int>(y, x)});
-            if (candidates == right_index.end())
+            const int projector_x = data.left.x.at<int>(y, x);
+            const int projector_y = data.left.y.at<int>(y, x);
+            if (!isProjectorCoordinateInRange(projector_x, projector_y, data))
             {
                 continue;
             }
-            result.diagnostics.exact_match_candidate_count += candidates->second.size();
+            const auto bucket =
+                projectorCoordinateIndex(projector_x, projector_y, data.projector_width);
+            const auto candidate_begin = right_index.offsets[bucket];
+            const auto candidate_end = right_index.offsets[bucket + 1];
+            if (candidate_begin == candidate_end)
+            {
+                continue;
+            }
+            result.diagnostics.exact_match_candidate_count += candidate_end - candidate_begin;
 
             std::vector<cv::Point2f> left_raw{{static_cast<float>(x), static_cast<float>(y)}};
             std::vector<cv::Point2f> left;
@@ -410,9 +525,9 @@ void calculate(const ReconstructionInput& input,
             const double denominator = std::hypot(A, B);
             double best_error = input.config.max_epipolar_error_px;
             std::optional<cv::Point2f> best_point;
-            for (const auto raw : candidates->second)
+            for (auto candidate = candidate_begin; candidate < candidate_end; ++candidate)
             {
-                std::vector<cv::Point2f> right_raw{raw};
+                std::vector<cv::Point2f> right_raw{right_index.candidates[candidate]};
                 std::vector<cv::Point2f> right;
                 cv::undistortPoints(right_raw, right, data.K2, data.D2, cv::noArray(), data.K2);
                 const double error = denominator
@@ -464,6 +579,7 @@ void calculate(const ReconstructionInput& input,
             data.points.push_back(point);
         }
     }
+    return true;
 }
 
 ReconstructionValidationResult prepare(const ReconstructionInput& input, Data& data)
@@ -496,7 +612,10 @@ ReconstructionValidationResult prepare(const ReconstructionInput& input, Data& d
     result.image_height = data.image_height;
     result.projector_width = data.projector_width;
     result.projector_height = data.projector_height;
-    calculate(input, result, data);
+    if (!calculate(input, result, data))
+    {
+        return result;
+    }
     result.reconstructable_point_count = data.points.size();
     if (!result.diagnostics.valid_correspondence_count)
     {
@@ -527,6 +646,16 @@ ReconstructionResult ReconstructionService::reconstruct(const ReconstructionRequ
 {
     ReconstructionResult result;
     result.output_file = request.output_file;
+    std::error_code error;
+    const bool output_exists = std::filesystem::exists(request.output_file, error);
+    if (!error && output_exists && !request.overwrite)
+    {
+        result.error = ReconstructionIssue{"output_file_exists",
+                                           "output file already exists; set overwrite=true to replace it",
+                                           request.output_file};
+        return result;
+    }
+
     Data data;
     const auto validation = prepare(request.input, data);
     result.warnings = validation.warnings;
@@ -534,15 +663,6 @@ ReconstructionResult ReconstructionService::reconstruct(const ReconstructionRequ
     if (!validation.valid)
     {
         result.error = validation.issues.front();
-        return result;
-    }
-
-    std::error_code error;
-    if (std::filesystem::exists(request.output_file, error) && !request.overwrite)
-    {
-        result.error = ReconstructionIssue{"output_file_exists",
-                                           "output file already exists; set overwrite=true to replace it",
-                                           request.output_file};
         return result;
     }
 
