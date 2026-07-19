@@ -74,18 +74,23 @@ void FramePublisher::run() {
     // Camera::getFrame() 側がmutex保護されたcloneを返すなら、
     // captureFrame() と同時に呼ばれてもCamera内部状態は壊れにくい。
     auto frame = camera_.getFrame();
-    if (!frame.empty()) {
-      try {
-        std::vector<unsigned char> jpeg;
-        const std::vector<int> options{cv::IMWRITE_JPEG_QUALITY, jpeg_quality_};
-        if (cv::imencode(".jpg", frame, jpeg, options)) {
-          registry_.publish(role_, std::move(jpeg));
-        }
-      } catch (const cv::Exception& error) {
-        LOG_ERROR("MJPEG encode failed for role '{}': {}", role_, error.what());
-      }
+    if (frame.empty()) {
+      std::this_thread::sleep_until(next_frame_at);
+      continue;
     }
 
+    std::vector<unsigned char> jpeg;
+    const std::vector<int> options{cv::IMWRITE_JPEG_QUALITY, jpeg_quality_};
+    bool encode_ok = false;
+    try {
+      encode_ok = cv::imencode(".jpg", frame, jpeg, options);
+    } catch (const cv::Exception& error) {
+      LOG_WARN("JPEG encode OpenCV exception: role={}, error={}", role_, error.what());
+    }
+
+    if (encode_ok && !jpeg.empty()) {
+      registry_.publish(role_, std::move(jpeg));
+    }
     std::this_thread::sleep_until(next_frame_at);
   }
 }
