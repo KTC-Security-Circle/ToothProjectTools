@@ -221,6 +221,8 @@ class HeadlessCommandMapper
     /// Return:
     ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
     CommandMapResult mapStereoCalibrate(const control::ControlMessage& message);
+    CommandMapResult mapValidateReconstruction(const control::ControlMessage& message);
+    CommandMapResult mapReconstructPointCloud(const control::ControlMessage& message);
 
   private:
     /// camera_service_ <service::camera::CameraService&>: role bindingを保持するdomain service。

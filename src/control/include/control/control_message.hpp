@@ -123,6 +123,13 @@ struct ControlMessage {
 
   /// index <std::optional<int>>: 表示するpattern index。
   std::optional<int> index;
+
+  std::optional<std::string> decode_dir;
+  std::optional<std::string> calibration_file;
+  std::optional<double> max_epipolar_error_px;
+  std::optional<double> min_depth_mm;
+  std::optional<double> max_depth_mm;
+  std::optional<bool> overwrite;
 };
 
 struct ControlError {

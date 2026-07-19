@@ -40,6 +40,8 @@ bool readInteger(
   return true;
 }
 
+bool readNumber(const cv::FileNode& root,const char* name,std::optional<double>& value,std::string& error_message) { const auto node=root[name]; if(node.empty()) return true; if(!node.isInt()&&!node.isReal()){error_message=std::string("field must be a number: ")+name;return false;} value=(double)node; return true; }
+
 bool readBool(
     const cv::FileNode& root,
     const char* name,
@@ -139,7 +141,13 @@ ReadResult JsonLineReader::read() {
         !readString(root, "placement", message.placement, error_message) ||
         !readBool(root, "fullscreen", message.fullscreen, error_message) ||
         !readString(root, "projector_role", message.projector_role, error_message) ||
-        !readInteger(root, "index", message.index, error_message)) {
+        !readInteger(root, "index", message.index, error_message) ||
+        !readString(root, "decode_dir", message.decode_dir, error_message) ||
+        !readString(root, "calibration_file", message.calibration_file, error_message) ||
+        !readNumber(root, "max_epipolar_error_px", message.max_epipolar_error_px, error_message) ||
+        !readNumber(root, "min_depth_mm", message.min_depth_mm, error_message) ||
+        !readNumber(root, "max_depth_mm", message.max_depth_mm, error_message) ||
+        !readBool(root, "overwrite", message.overwrite, error_message)) {
       return ReadResult{
           ReadStatus::invalid,
           {},

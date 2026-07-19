@@ -50,6 +50,8 @@ class DecodeService;
 }
 } // namespace service
 
+namespace reconstruction { class ReconstructionService; }
+
 namespace headless
 {
 
@@ -75,7 +77,7 @@ class HeadlessDispatcher
                        service::decode::DecodeService& decode_service,
                        capture::CaptureService& capture_service,
                        video::CameraManager& cameras, calib::Calibrator* calibrator,
-                       calib::StereoCalibrator* stereo_calibrator, calib::StereoData& stereo_data);
+                       calib::StereoCalibrator* stereo_calibrator, calib::StereoData& stereo_data, reconstruction::ReconstructionService& reconstruction_service);
 
     /// @brief headlessで実行可能なcommandを実行する。
     ///
@@ -121,6 +123,7 @@ class HeadlessDispatcher
 
     /// stereo_data_ <calib::StereoData&>: stereo calibration計算結果の保存先。
     calib::StereoData& stereo_data_;
+    reconstruction::ReconstructionService& reconstruction_service_;
 };
 
 } // namespace headless

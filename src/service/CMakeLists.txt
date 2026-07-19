@@ -104,6 +104,7 @@ target_link_libraries(sidecar_service
     decode_service
     capture
     calibration
+    reconstruction
     mjpeg_stream
     video
   PRIVATE

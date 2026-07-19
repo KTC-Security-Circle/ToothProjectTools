@@ -686,3 +686,8 @@ CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::Contro
 }
 
 } // namespace headless
+
+namespace headless {
+CommandMapResult HeadlessCommandMapper::mapValidateReconstruction(const control::ControlMessage& m) { if(!m.decode_dir||m.decode_dir->empty()) return mapFailure("missing_field","missing required field: decode_dir"); if(!m.calibration_file||m.calibration_file->empty()) return mapFailure("missing_field","missing required field: calibration_file"); const double e=m.max_epipolar_error_px.value_or(2.0); if(!(e>0.0)) return mapFailure("invalid_command","max_epipolar_error_px must be positive"); if(m.min_depth_mm&&*m.min_depth_mm<=0) return mapFailure("invalid_command","min_depth_mm must be positive"); if(m.max_depth_mm&&*m.max_depth_mm<=0) return mapFailure("invalid_command","max_depth_mm must be positive"); if(m.min_depth_mm&&m.max_depth_mm&&*m.min_depth_mm>=*m.max_depth_mm) return mapFailure("invalid_command","min_depth_mm must be less than max_depth_mm"); CommandMapResult r;r.ok=true;r.command=cmd::CmdValidateReconstruction{*m.decode_dir,*m.calibration_file,{e,m.min_depth_mm,m.max_depth_mm}};return r; }
+CommandMapResult HeadlessCommandMapper::mapReconstructPointCloud(const control::ControlMessage& m) { auto r=mapValidateReconstruction(m); if(!r.ok)return r; if(!m.output_file||m.output_file->empty())return mapFailure("missing_field","missing required field: output_file");auto v=std::get<cmd::CmdValidateReconstruction>(*r.command);r.command=cmd::CmdReconstructPointCloud{v.decode_dir,v.calibration_file,*m.output_file,v.config,m.overwrite.value_or(false)};return r; }
+}
