@@ -1,0 +1,4 @@
+add_library(reconstruction STATIC reconstruction_service.cpp)
+target_include_directories(reconstruction PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(reconstruction PUBLIC cv_lib)
+target_compile_features(reconstruction PUBLIC cxx_std_20)
