@@ -109,6 +109,7 @@ add_subdirectory(src/capture)
 add_subdirectory(src/stream)
 add_subdirectory(src/structured_light)
 add_subdirectory(src/calibration)
+add_subdirectory(src/reconstruction)
 add_subdirectory(src/cmd)
 add_subdirectory(src/input)
 add_subdirectory(src/runtime)  # INTERFACE ターゲット（依存の伝播先）

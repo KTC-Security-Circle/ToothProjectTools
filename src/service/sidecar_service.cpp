@@ -247,6 +247,8 @@ calib::StereoCalibrator* SidecarService::stereoCalibrator()
     return &stereo_calibrator_;
 }
 
+reconstruction::ReconstructionService& SidecarService::reconstructionService() { return reconstruction_service_; }
+
 calib::StereoData& SidecarService::stereoData()
 {
     return stereo_data_;

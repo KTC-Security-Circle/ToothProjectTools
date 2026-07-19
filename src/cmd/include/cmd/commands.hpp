@@ -329,6 +329,10 @@ struct CmdStereoCalibrate {
     bool apply_to_camera{false};
 };
 
+struct ReconstructionGeometryConfig { double max_epipolar_error_px{2.0}; std::optional<double> min_depth_mm; std::optional<double> max_depth_mm; };
+struct CmdValidateReconstruction { std::filesystem::path decode_dir; std::filesystem::path calibration_file; ReconstructionGeometryConfig config; };
+struct CmdReconstructPointCloud { std::filesystem::path decode_dir; std::filesystem::path calibration_file; std::filesystem::path output_file; ReconstructionGeometryConfig config; bool overwrite{false}; };
+
 struct CmdReconstruct {
     std::string calib_file = "calibration_stereo.yml";
     std::string scan_dir_L = "scans/L";
@@ -368,7 +372,9 @@ using Command = std::variant<
   CmdCalibClear,
   CmdCalibCapture,
   CmdStereoCalibrate,
-  CmdReconstruct
+  CmdReconstruct,
+  CmdValidateReconstruction,
+  CmdReconstructPointCloud
 >;
 
 } // namespace cmd

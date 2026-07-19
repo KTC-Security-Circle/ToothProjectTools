@@ -179,7 +179,7 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
         {
             return failure(output_file, "file_write_failed", "failed to open stereo calibration output file");
         }
-        fs_out << "RMS" << rms << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R
+        fs_out << "version" << "0.1.0" << "image_width" << res.mapL_x.cols << "image_height" << res.mapL_x.rows << "RMS" << rms << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R
                << "T" << res.T << "Q" << res.Q;
     }
     catch (const std::exception& e)

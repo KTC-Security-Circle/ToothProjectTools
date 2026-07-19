@@ -14,6 +14,7 @@
 #include "service/decode_service.hpp"
 #include "video/camera_manager.hpp"
 #include "window/window_manager.hpp"
+#include "reconstruction/reconstruction_service.hpp"
 
 #include <map>
 #include <memory>
@@ -236,6 +237,7 @@ class SidecarService
     /// Return:
     ///   <calib::StereoData&>: stereo calibration結果の保存先。
     calib::StereoData& stereoData();
+    reconstruction::ReconstructionService& reconstructionService();
 
     /// @brief sidecar serviceを停止し、cameraとstreamを解放する。
     ///
@@ -304,6 +306,7 @@ class SidecarService
 
     /// stereo_data_ <calib::StereoData>: sidecar用stereo calibration結果。
     calib::StereoData stereo_data_;
+    reconstruction::ReconstructionService reconstruction_service_;
 
     /// bindings_ <std::map<std::string, CameraBinding>>: roleごとのMJPEG publisherを保持するsidecar binding。
     std::map<std::string, CameraBinding> bindings_;

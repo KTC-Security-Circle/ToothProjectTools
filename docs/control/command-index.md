@@ -29,4 +29,5 @@
 | `scan_stop` | 状態管理 | `id`, `cmd` | scan status | `scan_stopping`, `scan_stopped` | なし | なし | ScanService worker | 実装済み | [scan.md](./commands/scan.md#scan_stop) |
 | `scan_validate` | ファイル処理 | `id`, `cmd`, `input_dir`, `allow_partial` | validation fields | なし | scan dataset | なし | なし | 実装済み | [scan-dataset.md](./commands/scan-dataset.md#scan_validate) |
 | `decode_patterns` | ファイル処理 | `id`, `cmd`, `input_dir`, `output_dir`, `threshold` | decode fields | なし | scan dataset | decode result | なし | 実装済み | [decode.md](./commands/decode.md#decode_patterns) |
-| `reconstruct_point_cloud` | ファイル処理 | `id`, `cmd`, `decode_dir`, `calibration_file`, `output_file` | `output_file`, `point_count` | なし | decode result、stereo calibration file | PLY file | なし | 未実装 | [reconstruction.md](./commands/reconstruction.md#reconstruct_point_cloud) |
+| `reconstruct_validate` | ファイル処理 | `id`, `cmd`, `decode_dir`, `calibration_file` | validation fields | なし | decode result、stereo calibration file | なし | なし | 実装済み | [reconstruction.md](./commands/reconstruction.md#reconstruct_validate) |
+| `reconstruct_point_cloud` | ファイル処理 | `id`, `cmd`, `decode_dir`, `calibration_file`, `output_file` | `output_file`, `point_count` | なし | decode result、stereo calibration file | PLY file | なし | 実装済み | [reconstruction.md](./commands/reconstruction.md#reconstruct_point_cloud) |

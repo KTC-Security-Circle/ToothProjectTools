@@ -45,7 +45,7 @@ ControlInputAdapter::ControlInputAdapter(service::SidecarService& service, JsonL
     : service_(service), writer_(writer), headless_mapper_(service.cameraService()),
       headless_dispatcher_(service.cameraService(), service.windowService(), service.projectorService(), service.scanService(),
                            service.scanDatasetValidator(), service.decodeService(), service.captureService(), service.cameraManager(),
-                           service.calibrator(), service.stereoCalibrator(), service.stereoData())
+                           service.calibrator(), service.stereoCalibrator(), service.stereoData(), service.reconstructionService())
 {
 }
 
@@ -153,6 +153,14 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
     if (*message.cmd == "decode_patterns")
     {
         return handleDecodeCommand(id, message);
+    }
+
+    if (*message.cmd == "reconstruct_validate" || *message.cmd == "reconstruct_point_cloud")
+    {
+        const auto mapped = *message.cmd == "reconstruct_validate" ? headless_mapper_.mapValidateReconstruction(message) : headless_mapper_.mapReconstructPointCloud(message);
+        if (!mapped.ok) { writeHeadlessFailure(id, *mapped.error); return AdapterResult::continue_running; }
+        writer_.writeResponse(toControlResponse(id, headless_dispatcher_.execute(*mapped.command)));
+        return AdapterResult::continue_running;
     }
 
     if (*message.cmd == "start_stream")

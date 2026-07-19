@@ -487,6 +487,7 @@ bool DecodeService::writeMetadata(
 
         output << std::fixed << std::setprecision(6);
         output << "{\n"
+               << "  \"version\": \"0.1.0\",\n"
                << "  \"scan_id\": \"" << jsonEscape(result.scan_id) << "\",\n"
                << "  \"input_dir\": \"" << jsonEscape(result.input_dir) << "\",\n"
                << "  \"output_dir\": \"" << jsonEscape(config.output_dir.string()) << "\",\n"

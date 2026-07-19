@@ -60,6 +60,8 @@ namespace win
 class WindowManager;
 }
 
+namespace reconstruction { class ReconstructionService; }
+
 namespace runtime
 {
 
@@ -161,6 +163,8 @@ struct StereoCalibrationCalcContext
     /// stereo_data <calib::StereoData&>: stereo calibration計算結果の保存先。
     calib::StereoData& stereo_data;
 };
+
+struct ReconstructionPointCloudHandlerContext { reconstruction::ReconstructionService& reconstruction_service; };
 
 struct ReconstructionHandlerContext
 {

@@ -13,6 +13,7 @@ add_library(handler STATIC
     capture_command_handler.cpp
     stereo_calibration_command_handler.cpp
     reconstruction_command_handler.cpp
+    reconstruction_point_cloud_command_handler.cpp
 )
 
 target_include_directories(handler
@@ -41,6 +42,7 @@ target_link_libraries(handler
     scan_service
     scan_dataset_service
     decode_service
+    reconstruction
     cv_lib
     logger
 )

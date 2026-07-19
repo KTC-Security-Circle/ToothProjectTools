@@ -24,6 +24,7 @@ target_link_libraries(headless_dispatch
     scan_service
     scan_dataset_service
     decode_service
+    reconstruction
     logger
 )
 
