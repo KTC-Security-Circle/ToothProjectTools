@@ -1,19 +1,583 @@
 #include "reconstruction/reconstruction_service.hpp"
+
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
+
 #include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <map>
-namespace reconstruction { namespace {
-struct Side{cv::Mat x,y,mask;}; struct Data{Side l,r;cv::Mat K1,D1,K2,D2,R,T;int iw{},ih{},pw{},ph{};std::vector<cv::Point3d> points;};
-void add(ReconstructionValidationResult&r,std::string c,std::string m,const std::filesystem::path&p){r.issues.push_back({std::move(c),std::move(m),p});}
-bool readMat(const std::filesystem::path&p,const char*k,cv::Mat&m){cv::FileStorage f(p.string(),cv::FileStorage::READ);if(!f.isOpened())return false;f[k]>>m;return !m.empty();}
-bool fm(const cv::Mat&m,int r,int c){return !m.empty()&&m.rows==r&&m.cols==c&&m.channels()==1&&(m.depth()==CV_32F||m.depth()==CV_64F)&&cv::checkRange(m,true);}
-bool load(const ReconstructionInput&i,ReconstructionValidationResult&r,Data&d){std::error_code ec;if(!std::filesystem::is_directory(i.decode_dir,ec)){add(r,"decode_dir_not_found","decode directory does not exist",i.decode_dir);return false;}if(!std::filesystem::is_regular_file(i.calibration_file,ec)){add(r,"calibration_file_not_found","stereo calibration file does not exist",i.calibration_file);return false;}try{auto mp=i.decode_dir/"metadata.json";cv::FileStorage m(mp.string(),cv::FileStorage::READ);if(!m.isOpened()){add(r,"decode_result_invalid","failed to open decode metadata",mp);return false;}auto v=m["version"];if(v.empty())r.warnings.push_back({"decode_version_missing","metadata.version is missing; treated as legacy v0"});else if(!v.isString()||(std::string)v!="0.1.0"){add(r,"decode_result_version_unsupported","unsupported decode metadata version",mp);return false;}d.iw=(int)m["image_width"];d.ih=(int)m["image_height"];d.pw=(int)m["projector_width"];d.ph=(int)m["projector_height"];if(d.iw<=0||d.ih<=0||d.pw<=0||d.ph<=0){add(r,"decode_result_invalid","decode metadata dimensions must be positive",mp);return false;}auto side=[&](const char*n,Side&s){auto p=i.decode_dir/n;return readMat(p/"projector_x.yml","projector_x",s.x)&&readMat(p/"projector_y.yml","projector_y",s.y)&&!(s.mask=cv::imread((p/"valid_mask.png").string(),0)).empty();};if(!side("left",d.l)||!side("right",d.r)){add(r,"decode_result_invalid","decode map or mask is missing or malformed",i.decode_dir);return false;}cv::Size z(d.iw,d.ih);auto ok=[&](Side&s){return s.x.type()==CV_32SC1&&s.y.type()==CV_32SC1&&s.mask.type()==CV_8UC1&&s.x.size()==z&&s.y.size()==z&&s.mask.size()==z;};if(!ok(d.l)||!ok(d.r)){add(r,"decoded_map_mismatch","decode map/mask dimensions or types do not match metadata",i.decode_dir);return false;}cv::FileStorage c(i.calibration_file.string(),cv::FileStorage::READ);c["K1"]>>d.K1;c["D1"]>>d.D1;c["K2"]>>d.K2;c["D2"]>>d.D2;c["R"]>>d.R;c["T"]>>d.T;if(!fm(d.K1,3,3)||!fm(d.K2,3,3)||!fm(d.R,3,3)||d.D1.empty()||d.D2.empty()||d.T.total()!=3||!cv::checkRange(d.D1,true)||!cv::checkRange(d.D2,true)||!cv::checkRange(d.T,true)){add(r,"calibration_file_invalid","stereo calibration matrices are missing or invalid",i.calibration_file);return false;}d.K1.convertTo(d.K1,CV_64F);d.K2.convertTo(d.K2,CV_64F);d.D1.convertTo(d.D1,CV_64F);d.D2.convertTo(d.D2,CV_64F);d.R.convertTo(d.R,CV_64F);d.T=d.T.reshape(1,3);d.T.convertTo(d.T,CV_64F);if(std::abs(cv::determinant(d.K1))<1e-12||std::abs(cv::determinant(d.K2))<1e-12||cv::norm(d.T)<1e-9){add(r,"calibration_file_invalid","camera matrix is singular or stereo baseline is zero",i.calibration_file);return false;}auto w=c["image_width"],h=c["image_height"];if(w.empty()||h.empty())r.warnings.push_back({"calibration_image_size_unavailable","calibration image size is unavailable; dimension check was skipped"});else if((int)w!=d.iw||(int)h!=d.ih){add(r,"image_size_mismatch","decode image size does not match calibration image size",i.calibration_file);return false;}}catch(const cv::Exception&){add(r,"decode_result_invalid","failed to parse reconstruction input",i.decode_dir);return false;}return true;}
-void calc(const ReconstructionInput&i,ReconstructionValidationResult&r,Data&d){using K=std::pair<int,int>;std::map<K,std::vector<cv::Point2f>> idx;r.left_valid_count=cv::countNonZero(d.l.mask);r.right_valid_count=cv::countNonZero(d.r.mask);for(int y=0;y<d.ih;y++)for(int x=0;x<d.iw;x++)if(d.r.mask.at<uchar>(y,x)){int a=d.r.x.at<int>(y,x),b=d.r.y.at<int>(y,x);if(a>=0&&a<d.pw&&b>=0&&b<d.ph)idx[{a,b}].emplace_back(x,y);}cv::Mat P1=cv::Mat::zeros(3,4,CV_64F);d.K1.copyTo(P1(cv::Rect(0,0,3,3)));cv::Mat RT;cv::hconcat(d.R,d.T,RT);cv::Mat P2=d.K2*RT;cv::Mat tx=(cv::Mat_<double>(3,3)<<0,-d.T.at<double>(2),d.T.at<double>(1),d.T.at<double>(2),0,-d.T.at<double>(0),-d.T.at<double>(1),d.T.at<double>(0),0);cv::Mat F=d.K2.inv().t()*tx*d.R*d.K1.inv();for(int y=0;y<d.ih;y++)for(int x=0;x<d.iw;x++){if(!d.l.mask.at<uchar>(y,x))continue;auto q=idx.find({d.l.x.at<int>(y,x),d.l.y.at<int>(y,x)});if(q==idx.end())continue;r.diagnostics.exact_match_candidate_count+=q->second.size();std::vector<cv::Point2f> a{{(float)x,(float)y}},lp;cv::undistortPoints(a,lp,d.K1,d.D1,cv::noArray(),d.K1);cv::Mat line=F*cv::Mat(cv::Vec3d(lp[0].x,lp[0].y,1));double A=line.at<double>(0),B=line.at<double>(1),C=line.at<double>(2),den=std::hypot(A,B),best=i.config.max_epipolar_error_px;std::optional<cv::Point2f> bp;for(auto raw:q->second){std::vector<cv::Point2f>b{raw},rp;cv::undistortPoints(b,rp,d.K2,d.D2,cv::noArray(),d.K2);double e=den?std::abs(A*rp[0].x+B*rp[0].y+C)/den:INFINITY;if(e<best){best=e;bp=rp[0];}}if(!bp){r.diagnostics.epipolar_rejected_count++;continue;}r.diagnostics.valid_correspondence_count++;cv::Mat h;cv::triangulatePoints(P1,P2,std::vector<cv::Point2f>{lp[0]},std::vector<cv::Point2f>{*bp},h);h.convertTo(h,CV_64F);double w=h.at<double>(3);if(!std::isfinite(w)||std::abs(w)<1e-12){r.diagnostics.triangulation_rejected_count++;continue;}cv::Point3d p(h.at<double>(0)/w,h.at<double>(1)/w,h.at<double>(2)/w);cv::Mat pr=d.R*(cv::Mat_<double>(3,1)<<p.x,p.y,p.z)+d.T;if(!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.z)||p.z<=0||pr.at<double>(2)<=0){r.diagnostics.triangulation_rejected_count++;continue;}if((i.config.min_depth_mm&&p.z<*i.config.min_depth_mm)||(i.config.max_depth_mm&&p.z>*i.config.max_depth_mm)){r.diagnostics.depth_rejected_count++;continue;}d.points.push_back(p);}}
-ReconstructionValidationResult prep(const ReconstructionInput&i,Data&d){ReconstructionValidationResult r;if(!(i.config.max_epipolar_error_px>0)||!std::isfinite(i.config.max_epipolar_error_px))add(r,"invalid_command","max_epipolar_error_px must be positive and finite",{});if(i.config.min_depth_mm&&*i.config.min_depth_mm<=0)add(r,"invalid_command","min_depth_mm must be positive",{});if(i.config.max_depth_mm&&*i.config.max_depth_mm<=0)add(r,"invalid_command","max_depth_mm must be positive",{});if(i.config.min_depth_mm&&i.config.max_depth_mm&&*i.config.min_depth_mm>=*i.config.max_depth_mm)add(r,"invalid_command","min_depth_mm must be less than max_depth_mm",{});if(!r.issues.empty()||!load(i,r,d))return r;r.image_width=d.iw;r.image_height=d.ih;r.projector_width=d.pw;r.projector_height=d.ph;calc(i,r,d);r.reconstructable_point_count=d.points.size();if(!r.diagnostics.valid_correspondence_count)add(r,"insufficient_valid_correspondence","no correspondence passed exact and epipolar matching",i.decode_dir);else if(d.points.empty())add(r,"triangulation_failed","no finite positive-depth point could be triangulated",i.decode_dir);r.valid=r.issues.empty();return r;}
+#include <utility>
+
+namespace reconstruction
+{
+namespace
+{
+struct Side
+{
+    cv::Mat x;
+    cv::Mat y;
+    cv::Mat mask;
+};
+
+struct Data
+{
+    Side left;
+    Side right;
+    cv::Mat K1;
+    cv::Mat D1;
+    cv::Mat K2;
+    cv::Mat D2;
+    cv::Mat R;
+    cv::Mat T;
+    int image_width{};
+    int image_height{};
+    int projector_width{};
+    int projector_height{};
+    std::vector<cv::Point3d> points;
+};
+
+void addIssue(ReconstructionValidationResult& result,
+              std::string code,
+              std::string message,
+              const std::filesystem::path& path)
+{
+    result.issues.push_back({std::move(code), std::move(message), path});
 }
-ReconstructionValidationResult ReconstructionService::validate(const ReconstructionInput&i)const{Data d;return prep(i,d);} ReconstructionResult ReconstructionService::reconstruct(const ReconstructionRequest&q)const{ReconstructionResult r;r.output_file=q.output_file;Data d;auto v=prep(q.input,d);r.warnings=v.warnings;r.diagnostics=v.diagnostics;if(!v.valid){r.error=v.issues.front();return r;}std::error_code ec;if(std::filesystem::exists(q.output_file,ec)&&!q.overwrite){r.error=ReconstructionIssue{"output_file_exists","output file already exists; set overwrite=true to replace it",q.output_file};return r;}try{if(!q.output_file.parent_path().empty())std::filesystem::create_directories(q.output_file.parent_path());auto t=q.output_file;t+=".tmp";std::ofstream o(t);o<<"ply\nformat ascii 1.0\nelement vertex "<<d.points.size()<<"\nproperty double x\nproperty double y\nproperty double z\nend_header\n"<<std::setprecision(12);for(auto&p:d.points)o<<p.x<<' '<<p.y<<' '<<p.z<<'\n';o.close();if(!o)throw std::runtime_error("write");std::filesystem::rename(t,q.output_file);}catch(...){r.error=ReconstructionIssue{"file_write_failed","failed to write reconstruction output",q.output_file};return r;}r.ok=true;r.point_count=d.points.size();return r;}
+
+bool readMatrix(const std::filesystem::path& path, const char* key, cv::Mat& matrix)
+{
+    cv::FileStorage storage(path.string(), cv::FileStorage::READ);
+    if (!storage.isOpened())
+    {
+        return false;
+    }
+    storage[key] >> matrix;
+    return !matrix.empty();
 }
+
+bool isValidFloatingMatrix(const cv::Mat& matrix, int rows, int columns)
+{
+    return !matrix.empty() && matrix.rows == rows && matrix.cols == columns &&
+           matrix.channels() == 1 &&
+           (matrix.depth() == CV_32F || matrix.depth() == CV_64F) &&
+           cv::checkRange(matrix, true);
+}
+
+bool isValidDistortionCoefficients(const cv::Mat& coefficients)
+{
+    if (coefficients.empty() || coefficients.channels() != 1 ||
+        (coefficients.depth() != CV_32F && coefficients.depth() != CV_64F) ||
+        (coefficients.rows != 1 && coefficients.cols != 1))
+    {
+        return false;
+    }
+
+    switch (coefficients.total())
+    {
+    case 4:
+    case 5:
+    case 8:
+    case 12:
+    case 14:
+        return cv::checkRange(coefficients, true);
+    default:
+        return false;
+    }
+}
+
+bool isValidTranslationVector(const cv::Mat& translation)
+{
+    const bool vector_shape =
+        (translation.rows == 3 && translation.cols == 1) ||
+        (translation.rows == 1 && translation.cols == 3);
+    return !translation.empty() && translation.channels() == 1 && vector_shape &&
+           (translation.depth() == CV_32F || translation.depth() == CV_64F) &&
+           cv::checkRange(translation, true);
+}
+
+bool loadDecodeResult(const ReconstructionInput& input,
+                      ReconstructionValidationResult& result,
+                      Data& data)
+{
+    const auto metadata_path = input.decode_dir / "metadata.json";
+    try
+    {
+        cv::FileStorage metadata(metadata_path.string(), cv::FileStorage::READ);
+        if (!metadata.isOpened())
+        {
+            addIssue(result,
+                     "decode_result_invalid",
+                     "failed to open decode metadata",
+                     metadata_path);
+            return false;
+        }
+
+        const auto version = metadata["version"];
+        if (version.empty())
+        {
+            result.warnings.push_back(
+                {"decode_version_missing", "metadata.version is missing; treated as legacy v0"});
+        }
+        else if (!version.isString() || static_cast<std::string>(version) != "0.1.0")
+        {
+            addIssue(result,
+                     "decode_result_version_unsupported",
+                     "unsupported decode metadata version",
+                     metadata_path);
+            return false;
+        }
+
+        data.image_width = static_cast<int>(metadata["image_width"]);
+        data.image_height = static_cast<int>(metadata["image_height"]);
+        data.projector_width = static_cast<int>(metadata["projector_width"]);
+        data.projector_height = static_cast<int>(metadata["projector_height"]);
+        if (data.image_width <= 0 || data.image_height <= 0 || data.projector_width <= 0 ||
+            data.projector_height <= 0)
+        {
+            addIssue(result,
+                     "decode_result_invalid",
+                     "decode metadata dimensions must be positive",
+                     metadata_path);
+            return false;
+        }
+
+        const auto loadSide = [&](const char* name, Side& side) {
+            const auto side_dir = input.decode_dir / name;
+            return readMatrix(side_dir / "projector_x.yml", "projector_x", side.x) &&
+                   readMatrix(side_dir / "projector_y.yml", "projector_y", side.y) &&
+                   !(side.mask = cv::imread((side_dir / "valid_mask.png").string(),
+                                           cv::IMREAD_GRAYSCALE))
+                        .empty();
+        };
+        if (!loadSide("left", data.left) || !loadSide("right", data.right))
+        {
+            addIssue(result,
+                     "decode_result_invalid",
+                     "decode map or mask is missing or malformed",
+                     input.decode_dir);
+            return false;
+        }
+
+        const cv::Size expected_size(data.image_width, data.image_height);
+        const auto validSide = [&](const Side& side) {
+            return side.x.type() == CV_32SC1 && side.y.type() == CV_32SC1 &&
+                   side.mask.type() == CV_8UC1 && side.x.size() == expected_size &&
+                   side.y.size() == expected_size && side.mask.size() == expected_size;
+        };
+        if (!validSide(data.left) || !validSide(data.right))
+        {
+            addIssue(result,
+                     "decoded_map_mismatch",
+                     "decode map/mask dimensions or types do not match metadata",
+                     input.decode_dir);
+            return false;
+        }
+    }
+    catch (const cv::Exception&)
+    {
+        addIssue(result,
+                 "decode_result_invalid",
+                 "failed to parse decode result",
+                 metadata_path);
+        return false;
+    }
+    catch (const std::exception&)
+    {
+        addIssue(result,
+                 "decode_result_invalid",
+                 "failed to parse decode result",
+                 metadata_path);
+        return false;
+    }
+    return true;
+}
+
+bool loadCalibration(const ReconstructionInput& input,
+                     ReconstructionValidationResult& result,
+                     Data& data,
+                     int& calibration_width,
+                     int& calibration_height,
+                     bool& has_calibration_size)
+{
+    try
+    {
+        cv::FileStorage calibration(input.calibration_file.string(), cv::FileStorage::READ);
+        if (!calibration.isOpened())
+        {
+            addIssue(result,
+                     "calibration_file_invalid",
+                     "failed to parse stereo calibration file",
+                     input.calibration_file);
+            return false;
+        }
+        calibration["K1"] >> data.K1;
+        calibration["D1"] >> data.D1;
+        calibration["K2"] >> data.K2;
+        calibration["D2"] >> data.D2;
+        calibration["R"] >> data.R;
+        calibration["T"] >> data.T;
+
+        const auto width = calibration["image_width"];
+        const auto height = calibration["image_height"];
+        has_calibration_size = !width.empty() && !height.empty();
+        if (has_calibration_size)
+        {
+            calibration_width = static_cast<int>(width);
+            calibration_height = static_cast<int>(height);
+        }
+    }
+    catch (const cv::Exception&)
+    {
+        addIssue(result,
+                 "calibration_file_invalid",
+                 "failed to parse stereo calibration file",
+                 input.calibration_file);
+        return false;
+    }
+    catch (const std::exception&)
+    {
+        addIssue(result,
+                 "calibration_file_invalid",
+                 "failed to parse stereo calibration file",
+                 input.calibration_file);
+        return false;
+    }
+    return true;
+}
+
+bool validateCalibration(const ReconstructionInput& input,
+                         ReconstructionValidationResult& result,
+                         Data& data,
+                         int calibration_width,
+                         int calibration_height,
+                         bool has_calibration_size)
+{
+    if (!isValidFloatingMatrix(data.K1, 3, 3) ||
+        !isValidFloatingMatrix(data.K2, 3, 3) ||
+        !isValidFloatingMatrix(data.R, 3, 3) ||
+        !isValidDistortionCoefficients(data.D1) ||
+        !isValidDistortionCoefficients(data.D2) ||
+        !isValidTranslationVector(data.T))
+    {
+        addIssue(result,
+                 "calibration_file_invalid",
+                 "stereo calibration matrices are missing or invalid",
+                 input.calibration_file);
+        return false;
+    }
+
+    data.K1.convertTo(data.K1, CV_64F);
+    data.K2.convertTo(data.K2, CV_64F);
+    data.D1.convertTo(data.D1, CV_64F);
+    data.D2.convertTo(data.D2, CV_64F);
+    data.R.convertTo(data.R, CV_64F);
+    data.T = data.T.reshape(1, 3);
+    data.T.convertTo(data.T, CV_64F);
+
+    if (std::abs(cv::determinant(data.K1)) < 1e-12 ||
+        std::abs(cv::determinant(data.K2)) < 1e-12 || cv::norm(data.T) < 1e-9)
+    {
+        addIssue(result,
+                 "calibration_file_invalid",
+                 "camera matrix is singular or stereo baseline is zero",
+                 input.calibration_file);
+        return false;
+    }
+
+    if (!has_calibration_size)
+    {
+        result.warnings.push_back(
+            {"calibration_image_size_unavailable",
+             "calibration image size is unavailable; dimension check was skipped"});
+    }
+    else if (calibration_width != data.image_width || calibration_height != data.image_height)
+    {
+        addIssue(result,
+                 "image_size_mismatch",
+                 "decode image size does not match calibration image size",
+                 input.calibration_file);
+        return false;
+    }
+    return true;
+}
+
+bool loadInput(const ReconstructionInput& input,
+               ReconstructionValidationResult& result,
+               Data& data)
+{
+    std::error_code error;
+    if (!std::filesystem::is_directory(input.decode_dir, error))
+    {
+        addIssue(result,
+                 "decode_dir_not_found",
+                 "decode directory does not exist",
+                 input.decode_dir);
+        return false;
+    }
+    if (!std::filesystem::is_regular_file(input.calibration_file, error))
+    {
+        addIssue(result,
+                 "calibration_file_not_found",
+                 "stereo calibration file does not exist",
+                 input.calibration_file);
+        return false;
+    }
+    if (!loadDecodeResult(input, result, data))
+    {
+        return false;
+    }
+
+    int calibration_width = 0;
+    int calibration_height = 0;
+    bool has_calibration_size = false;
+    return loadCalibration(input,
+                           result,
+                           data,
+                           calibration_width,
+                           calibration_height,
+                           has_calibration_size) &&
+           validateCalibration(input,
+                               result,
+                               data,
+                               calibration_width,
+                               calibration_height,
+                               has_calibration_size);
+}
+
+void calculate(const ReconstructionInput& input,
+               ReconstructionValidationResult& result,
+               Data& data)
+{
+    using ProjectorCoordinate = std::pair<int, int>;
+    std::map<ProjectorCoordinate, std::vector<cv::Point2f>> right_index;
+    result.left_valid_count = cv::countNonZero(data.left.mask);
+    result.right_valid_count = cv::countNonZero(data.right.mask);
+
+    for (int y = 0; y < data.image_height; ++y)
+    {
+        for (int x = 0; x < data.image_width; ++x)
+        {
+            if (!data.right.mask.at<uchar>(y, x))
+            {
+                continue;
+            }
+            const int projector_x = data.right.x.at<int>(y, x);
+            const int projector_y = data.right.y.at<int>(y, x);
+            if (projector_x >= 0 && projector_x < data.projector_width && projector_y >= 0 &&
+                projector_y < data.projector_height)
+            {
+                right_index[{projector_x, projector_y}].emplace_back(x, y);
+            }
+        }
+    }
+
+    cv::Mat P1 = cv::Mat::zeros(3, 4, CV_64F);
+    data.K1.copyTo(P1(cv::Rect(0, 0, 3, 3)));
+    cv::Mat rotation_translation;
+    cv::hconcat(data.R, data.T, rotation_translation);
+    const cv::Mat P2 = data.K2 * rotation_translation;
+    const cv::Mat translation_cross =
+        (cv::Mat_<double>(3, 3) << 0, -data.T.at<double>(2), data.T.at<double>(1),
+         data.T.at<double>(2), 0, -data.T.at<double>(0), -data.T.at<double>(1),
+         data.T.at<double>(0), 0);
+    const cv::Mat fundamental = data.K2.inv().t() * translation_cross * data.R * data.K1.inv();
+
+    for (int y = 0; y < data.image_height; ++y)
+    {
+        for (int x = 0; x < data.image_width; ++x)
+        {
+            if (!data.left.mask.at<uchar>(y, x))
+            {
+                continue;
+            }
+            const auto candidates = right_index.find(
+                {data.left.x.at<int>(y, x), data.left.y.at<int>(y, x)});
+            if (candidates == right_index.end())
+            {
+                continue;
+            }
+            result.diagnostics.exact_match_candidate_count += candidates->second.size();
+
+            std::vector<cv::Point2f> left_raw{{static_cast<float>(x), static_cast<float>(y)}};
+            std::vector<cv::Point2f> left;
+            cv::undistortPoints(left_raw, left, data.K1, data.D1, cv::noArray(), data.K1);
+            const cv::Mat line = fundamental * cv::Mat(cv::Vec3d(left[0].x, left[0].y, 1));
+            const double A = line.at<double>(0);
+            const double B = line.at<double>(1);
+            const double C = line.at<double>(2);
+            const double denominator = std::hypot(A, B);
+            double best_error = input.config.max_epipolar_error_px;
+            std::optional<cv::Point2f> best_point;
+            for (const auto raw : candidates->second)
+            {
+                std::vector<cv::Point2f> right_raw{raw};
+                std::vector<cv::Point2f> right;
+                cv::undistortPoints(right_raw, right, data.K2, data.D2, cv::noArray(), data.K2);
+                const double error = denominator
+                    ? std::abs(A * right[0].x + B * right[0].y + C) / denominator
+                    : INFINITY;
+                if (error < best_error)
+                {
+                    best_error = error;
+                    best_point = right[0];
+                }
+            }
+            if (!best_point)
+            {
+                ++result.diagnostics.epipolar_rejected_count;
+                continue;
+            }
+            ++result.diagnostics.valid_correspondence_count;
+
+            cv::Mat homogeneous;
+            cv::triangulatePoints(P1,
+                                  P2,
+                                  std::vector<cv::Point2f>{left[0]},
+                                  std::vector<cv::Point2f>{*best_point},
+                                  homogeneous);
+            homogeneous.convertTo(homogeneous, CV_64F);
+            const double w = homogeneous.at<double>(3);
+            if (!std::isfinite(w) || std::abs(w) < 1e-12)
+            {
+                ++result.diagnostics.triangulation_rejected_count;
+                continue;
+            }
+            const cv::Point3d point(homogeneous.at<double>(0) / w,
+                                    homogeneous.at<double>(1) / w,
+                                    homogeneous.at<double>(2) / w);
+            const cv::Mat right_point =
+                data.R * (cv::Mat_<double>(3, 1) << point.x, point.y, point.z) + data.T;
+            if (!std::isfinite(point.x) || !std::isfinite(point.y) ||
+                !std::isfinite(point.z) || point.z <= 0 || right_point.at<double>(2) <= 0)
+            {
+                ++result.diagnostics.triangulation_rejected_count;
+                continue;
+            }
+            if ((input.config.min_depth_mm && point.z < *input.config.min_depth_mm) ||
+                (input.config.max_depth_mm && point.z > *input.config.max_depth_mm))
+            {
+                ++result.diagnostics.depth_rejected_count;
+                continue;
+            }
+            data.points.push_back(point);
+        }
+    }
+}
+
+ReconstructionValidationResult prepare(const ReconstructionInput& input, Data& data)
+{
+    ReconstructionValidationResult result;
+    if (!(input.config.max_epipolar_error_px > 0) ||
+        !std::isfinite(input.config.max_epipolar_error_px))
+    {
+        addIssue(result, "invalid_command", "max_epipolar_error_px must be positive and finite", {});
+    }
+    if (input.config.min_depth_mm && *input.config.min_depth_mm <= 0)
+    {
+        addIssue(result, "invalid_command", "min_depth_mm must be positive", {});
+    }
+    if (input.config.max_depth_mm && *input.config.max_depth_mm <= 0)
+    {
+        addIssue(result, "invalid_command", "max_depth_mm must be positive", {});
+    }
+    if (input.config.min_depth_mm && input.config.max_depth_mm &&
+        *input.config.min_depth_mm >= *input.config.max_depth_mm)
+    {
+        addIssue(result, "invalid_command", "min_depth_mm must be less than max_depth_mm", {});
+    }
+    if (!result.issues.empty() || !loadInput(input, result, data))
+    {
+        return result;
+    }
+
+    result.image_width = data.image_width;
+    result.image_height = data.image_height;
+    result.projector_width = data.projector_width;
+    result.projector_height = data.projector_height;
+    calculate(input, result, data);
+    result.reconstructable_point_count = data.points.size();
+    if (!result.diagnostics.valid_correspondence_count)
+    {
+        addIssue(result,
+                 "insufficient_valid_correspondence",
+                 "no correspondence passed exact and epipolar matching",
+                 input.decode_dir);
+    }
+    else if (data.points.empty())
+    {
+        addIssue(result,
+                 "triangulation_failed",
+                 "no finite positive-depth point could be triangulated",
+                 input.decode_dir);
+    }
+    result.valid = result.issues.empty();
+    return result;
+}
+} // namespace
+
+ReconstructionValidationResult ReconstructionService::validate(const ReconstructionInput& input) const
+{
+    Data data;
+    return prepare(input, data);
+}
+
+ReconstructionResult ReconstructionService::reconstruct(const ReconstructionRequest& request) const
+{
+    ReconstructionResult result;
+    result.output_file = request.output_file;
+    Data data;
+    const auto validation = prepare(request.input, data);
+    result.warnings = validation.warnings;
+    result.diagnostics = validation.diagnostics;
+    if (!validation.valid)
+    {
+        result.error = validation.issues.front();
+        return result;
+    }
+
+    std::error_code error;
+    if (std::filesystem::exists(request.output_file, error) && !request.overwrite)
+    {
+        result.error = ReconstructionIssue{"output_file_exists",
+                                           "output file already exists; set overwrite=true to replace it",
+                                           request.output_file};
+        return result;
+    }
+
+    try
+    {
+        if (!request.output_file.parent_path().empty())
+        {
+            std::filesystem::create_directories(request.output_file.parent_path());
+        }
+        auto temporary = request.output_file;
+        temporary += ".tmp";
+        std::ofstream output(temporary);
+        output << "ply\nformat ascii 1.0\nelement vertex " << data.points.size()
+               << "\nproperty double x\nproperty double y\nproperty double z\nend_header\n"
+               << std::setprecision(12);
+        for (const auto& point : data.points)
+        {
+            output << point.x << ' ' << point.y << ' ' << point.z << '\n';
+        }
+        output.close();
+        if (!output)
+        {
+            throw std::runtime_error("write");
+        }
+        std::filesystem::rename(temporary, request.output_file);
+    }
+    catch (...)
+    {
+        result.error = ReconstructionIssue{
+            "file_write_failed", "failed to write reconstruction output", request.output_file};
+        return result;
+    }
+
+    result.ok = true;
+    result.point_count = data.points.size();
+    return result;
+}
+} // namespace reconstruction
