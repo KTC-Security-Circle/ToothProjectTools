@@ -25,7 +25,7 @@ mono calibration file は単眼cameraの内部parameterを保存するfileであ
 
 | field | 説明 |
 | --- | --- |
-| `version` | file format version。 |
+| `version` | file format version。新規stereo calibrationは`0.1.0`。 |
 | `role` | camera role。 |
 | `created_at` | 生成時刻。 |
 | `source_image_folder` | 入力画像directory。 |
@@ -64,7 +64,9 @@ stereo calibration file はleft/right camera間の外部parameterを保存する
 
 | field | 説明 |
 | --- | --- |
-| `version` | file format version。 |
+| `version` | file format version。新規出力は`0.1.0`。 |
+| `image_width` | calibration画像幅。単位pixel。 |
+| `image_height` | calibration画像高さ。単位pixel。 |
 | `left_role` | left camera role。 |
 | `right_role` | right camera role。 |
 | `created_at` | 生成時刻。 |

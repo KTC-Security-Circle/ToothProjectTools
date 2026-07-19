@@ -212,7 +212,9 @@ serve app。
 - `scan_stop`
 - `scan_validate`
 - `decode_patterns`
+- `reconstruct_validate`
+- `reconstruct_point_cloud`
 
 ## 未実装command
 
-- `reconstruct_point_cloud`
+なし

@@ -29,6 +29,7 @@ decode_result/
 
 | field | 説明 |
 | --- | --- |
+| `metadata.version` | decode result format version。新規出力は`0.1.0`。versionなしはlegacy v0として扱う。 |
 | `metadata.input_dir` | 元のscan dataset root。 |
 | `metadata.pattern_count` | decodeしたpattern数。 |
 | `metadata.projector_width` | projector座標の幅。 |
