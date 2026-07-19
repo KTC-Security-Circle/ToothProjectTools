@@ -674,15 +674,19 @@ ReconstructionValidationResult prepare(const ReconstructionInput& input, Data& d
     {
         addIssue(result, "invalid_command", "max_epipolar_error_px must be positive and finite", {});
     }
-    if (input.config.min_depth_mm && *input.config.min_depth_mm <= 0)
+    if (input.config.min_depth_mm &&
+        (!(*input.config.min_depth_mm > 0) || !std::isfinite(*input.config.min_depth_mm)))
     {
-        addIssue(result, "invalid_command", "min_depth_mm must be positive", {});
+        addIssue(result, "invalid_command", "min_depth_mm must be positive and finite", {});
     }
-    if (input.config.max_depth_mm && *input.config.max_depth_mm <= 0)
+    if (input.config.max_depth_mm &&
+        (!(*input.config.max_depth_mm > 0) || !std::isfinite(*input.config.max_depth_mm)))
     {
-        addIssue(result, "invalid_command", "max_depth_mm must be positive", {});
+        addIssue(result, "invalid_command", "max_depth_mm must be positive and finite", {});
     }
     if (input.config.min_depth_mm && input.config.max_depth_mm &&
+        std::isfinite(*input.config.min_depth_mm) &&
+        std::isfinite(*input.config.max_depth_mm) &&
         *input.config.min_depth_mm >= *input.config.max_depth_mm)
     {
         addIssue(result, "invalid_command", "min_depth_mm must be less than max_depth_mm", {});

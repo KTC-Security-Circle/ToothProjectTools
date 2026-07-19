@@ -323,6 +323,28 @@ void testInvalidTranslationVectors()
     REQUIRE(!result.valid && result.issues.front().code == "calibration_file_invalid");
 }
 
+
+void testDepthFilterConfigRequiresFiniteValues()
+{
+    writeDecodeResult();
+    writeCalibration(cv::Mat::zeros(1, 5, CV_64F));
+    const double infinity = std::numeric_limits<double>::infinity();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+
+    for (const auto config : {reconstruction::ReconstructionConfig{2.0, infinity, {}},
+                              reconstruction::ReconstructionConfig{2.0, nan, {}},
+                              reconstruction::ReconstructionConfig{2.0, {}, infinity},
+                              reconstruction::ReconstructionConfig{2.0, {}, nan}})
+    {
+        const reconstruction::ReconstructionInput invalid_input{decode_dir,
+                                                                calibration_file,
+                                                                config};
+        const auto result = reconstruction::ReconstructionService{}.validate(invalid_input);
+        REQUIRE(!result.valid && !result.issues.empty());
+        REQUIRE(result.issues.front().code == "invalid_command");
+    }
+}
+
 void testRotationMatrixValidation()
 {
     const cv::Mat distortion = cv::Mat::zeros(1, 5, CV_64F);
@@ -428,6 +450,7 @@ int main()
     testMalformedCalibrationFile();
     testMalformedDecodeMetadata();
     testInvalidTranslationVectors();
+    testDepthFilterConfigRequiresFiniteValues();
     testRotationMatrixValidation();
     testProjectorIndexMemoryPolicy();
     testHugeProjectorMetadataRejectedBeforeAllocation();
