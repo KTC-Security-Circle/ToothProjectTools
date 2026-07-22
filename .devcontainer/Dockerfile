@@ -15,15 +15,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     mold \
     ccache \
     git \
+    file \
     curl \
     ca-certificates \
     openssh-client \
     jq \
     ripgrep \
     python3 \
-    libopencv-dev \
     libspdlog-dev \
     libgtest-dev \
+    libgtk-3-dev \
     libx11-dev \
     libxrandr-dev \
     x11-xserver-utils \

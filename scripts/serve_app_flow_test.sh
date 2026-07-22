@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-BIN="${BIN:-./build/src/serve/tooth-backend}"
+BIN="${BIN:-./build/release-opencv-4.10-static/src/serve/tooth-backend}"
 MJPEG_HOST="${MJPEG_HOST:-127.0.0.1}"
 MJPEG_PORT="${MJPEG_PORT:-39010}"
 LEFT_CAMERA="${LEFT_CAMERA:-0}"

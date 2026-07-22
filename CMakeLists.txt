@@ -38,15 +38,26 @@ endif()
 # Dependencies (OpenCV / spdlog via FetchContent)
 # =============================================================================
 # OpenCV（配布版を find_package）
-find_package(OpenCV REQUIRED COMPONENTS
-  core imgproc highgui videoio imgcodecs calib3d features2d flann)
+find_package(
+  OpenCV 4.10.0 EXACT
+  REQUIRED
+  CONFIG
+  COMPONENTS
+    core
+    imgproc
+    highgui
+    videoio
+    imgcodecs
+    calib3d
+    features2d
+    flann
+    structured_light
+    phase_unwrapping
+)
 
-# （任意）contrib の存在チェックだけ
-find_library(OPENCV_STRUCTURED_LIGHT NAMES opencv_structured_light)
-find_library(OPENCV_PHASE_UNWRAPPING NAMES opencv_phase_unwrapping)
-if(NOT OPENCV_STRUCTURED_LIGHT OR NOT OPENCV_PHASE_UNWRAPPING)
-  message(STATUS "opencv_contrib 未検出（structured_light / phase_unwrapping）。必要なら 'libopencv-contrib-dev' を追加してください。")
-endif()
+message(STATUS "OpenCV version: ${OpenCV_VERSION}")
+message(STATUS "OpenCV config: ${OpenCV_CONFIG_PATH}")
+message(STATUS "OpenCV libraries: ${OpenCV_LIBS}")
 
 # spdlog を FetchContent で取得（バージョン固定）
 include(FetchContent)
@@ -70,11 +81,17 @@ target_link_libraries(spd_lib
 )
 
 add_library(cv_lib INTERFACE)
-target_link_libraries(cv_lib
+
+target_include_directories(
+  cv_lib
+  INTERFACE
+    ${OpenCV_INCLUDE_DIRS}
+)
+
+target_link_libraries(
+  cv_lib
   INTERFACE
     ${OpenCV_LIBS}
-    $<$<BOOL:${OPENCV_STRUCTURED_LIGHT}>:${OPENCV_STRUCTURED_LIGHT}>
-    $<$<BOOL:${OPENCV_PHASE_UNWRAPPING}>:${OPENCV_PHASE_UNWRAPPING}>
 )
 
 # =============================================================================

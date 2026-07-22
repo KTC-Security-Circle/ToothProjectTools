@@ -69,5 +69,7 @@
         "typeinfo": "cpp",
         "variant": "cpp"
     },
-    "C_Cpp.errorSquiggles": "disabled"
+    "C_Cpp.errorSquiggles": "disabled",
+    "dev.containers.showLog": false,
+    "remote.containers.showLog": false
 }
