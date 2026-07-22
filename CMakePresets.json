@@ -31,6 +31,14 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
       }
+    },
+    {
+      "name": "release-opencv-4.10-static",
+      "displayName": "Release (OpenCV 4.10 static)",
+      "inherits": "release",
+      "cacheVariables": {
+        "OpenCV_DIR": "$env{OpenCV_DIR}"
+      }
     }
   ],
   "buildPresets": [
@@ -41,6 +49,10 @@
     {
       "name": "release",
       "configurePreset": "release"
+    },
+    {
+      "name": "release-opencv-4.10-static",
+      "configurePreset": "release-opencv-4.10-static"
     }
   ],
   "testPresets": [
@@ -54,6 +66,13 @@
     {
       "name": "release",
       "configurePreset": "release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "release-opencv-4.10-static",
+      "configurePreset": "release-opencv-4.10-static",
       "output": {
         "outputOnFailure": true
       }
