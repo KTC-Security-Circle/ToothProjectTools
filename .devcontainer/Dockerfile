@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     mold \
     ccache \
     git \
+    file \
     curl \
     ca-certificates \
     openssh-client \
