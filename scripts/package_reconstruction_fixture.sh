@@ -21,17 +21,48 @@ STEREO_RIGHT_DIR="${STEREO_RIGHT_DIR:-${REPO_ROOT}/capture_test/stereo_R}"
 SCAN_LEFT_DIR="${SCAN_LEFT_DIR:-${REPO_ROOT}/data/scan/imported/left}"
 SCAN_RIGHT_DIR="${SCAN_RIGHT_DIR:-${REPO_ROOT}/data/scan/imported/right}"
 
-DIST_DIR="${DIST_DIR:-${REPO_ROOT}/dist}"
-CHECKSUM_RECORD="${CHECKSUM_RECORD:-${REPO_ROOT}/fixtures/reconstruction/SHA256SUMS}"
-
 WORK_DIR=""
 STAGING_ROOT=""
-ARCHIVE_PATH="${DIST_DIR}/${FIXTURE_NAME}.zip"
-ARCHIVE_CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
+ARCHIVE_PATH=""
+ARCHIVE_CHECKSUM_PATH=""
 
 log() { printf '[INFO] %s\n' "$*"; }
 ok() { printf '[OK] %s\n' "$*"; }
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
+
+usage() {
+  cat <<EOF
+Usage:
+  $0 OUTPUT_ARCHIVE
+  OUTPUT_ARCHIVE=/path/to/${FIXTURE_NAME}.zip $0
+
+Example:
+  $0 "$HOME/Downloads/${FIXTURE_NAME}.zip"
+EOF
+}
+
+resolve_archive_path() {
+  local requested_path="${1:-${OUTPUT_ARCHIVE:-}}"
+  local output_dir
+  local output_name
+
+  [[ -n "${requested_path}" ]] || {
+    usage >&2
+    die "OUTPUT_ARCHIVE is required"
+  }
+
+  [[ "${requested_path}" == *.zip ]] ||
+    die "output archive must have a .zip extension: ${requested_path}"
+
+  output_dir="$(dirname -- "${requested_path}")"
+  output_name="$(basename -- "${requested_path}")"
+
+  mkdir -p -- "${output_dir}"
+  output_dir="$(cd -- "${output_dir}" && pwd)"
+
+  ARCHIVE_PATH="${output_dir}/${output_name}"
+  ARCHIVE_CHECKSUM_PATH="${ARCHIVE_PATH}.sha256"
+}
 
 cleanup() {
   if [[ -n "${WORK_DIR}" && -d "${WORK_DIR}" ]]; then
@@ -205,7 +236,14 @@ write_fixture_checksums() {
 }
 
 create_archive() {
-  mkdir -p -- "${DIST_DIR}"
+  local archive_directory
+  local archive_filename
+  local checksum_filename
+
+  archive_directory="$(dirname -- "${ARCHIVE_PATH}")"
+  archive_filename="$(basename -- "${ARCHIVE_PATH}")"
+  checksum_filename="$(basename -- "${ARCHIVE_CHECKSUM_PATH}")"
+
   rm -f -- "${ARCHIVE_PATH}" "${ARCHIVE_CHECKSUM_PATH}"
 
   (
@@ -214,19 +252,25 @@ create_archive() {
   )
 
   (
-    cd "${DIST_DIR}"
-    sha256sum "$(basename -- "${ARCHIVE_PATH}")" > "$(basename -- "${ARCHIVE_CHECKSUM_PATH}")"
+    cd "${archive_directory}"
+    sha256sum "${archive_filename}" > "${checksum_filename}"
   )
-
-  mkdir -p -- "$(dirname -- "${CHECKSUM_RECORD}")"
-  cp -- "${ARCHIVE_CHECKSUM_PATH}" "${CHECKSUM_RECORD}"
 
   ok "archive created: ${ARCHIVE_PATH}"
   ok "archive checksum: ${ARCHIVE_CHECKSUM_PATH}"
-  ok "checksum record updated: ${CHECKSUM_RECORD}"
 }
 
 main() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    usage
+    exit 0
+  fi
+
+  (( $# <= 1 )) || {
+    usage >&2
+    die "too many arguments"
+  }
+
   for command_name in find file sha256sum zip cp comm sort xargs tr; do
     require_command "${command_name}"
   done
@@ -237,6 +281,8 @@ main() {
   require_positive_integer PROJECTOR_HEIGHT "${PROJECTOR_HEIGHT}"
   require_positive_integer PATTERN_COUNT "${PATTERN_COUNT}"
   require_positive_integer DECODE_THRESHOLD "${DECODE_THRESHOLD}"
+
+  resolve_archive_path "${1:-}"
 
   WORK_DIR="$(mktemp -d)"
   STAGING_ROOT="${WORK_DIR}/${FIXTURE_NAME}"
