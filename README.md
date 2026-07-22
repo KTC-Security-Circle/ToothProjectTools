@@ -222,7 +222,7 @@ PATTERN_COUNT=46 \
 PROJECTOR_WIDTH=1920 \
 PROJECTOR_HEIGHT=1080 \
 ./scripts/run_structured_light_scan_test.sh \
-  "$HOME/Downloads/tooth-scan-test"
+  "$HOME/tooth-scan-test"
 ```
 
 生成されるscan dataset:

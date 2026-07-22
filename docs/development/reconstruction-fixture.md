@@ -17,33 +17,85 @@
 
 fixtureはGitリポジトリには含まれていません。
 
-- [tooth-reconstruction-fixture-v1.zip](https://drive.google.com/file/d/19mctoKUiOA4YyCviAxavXwbGoCNjAB0m/view?usp=sharing)
+配布物:
 
-コマンドで取得する場合:
+- [tooth-reconstruction-fixture-v1.zip](https://drive.google.com/file/d/1Gm6vJCaQ6eL5y25IezgKyYi8kF1xMvdW/view?usp=sharing)
+- [tooth-reconstruction-fixture-v1.zip.sha256](https://drive.google.com/file/d/1W_ru6hRdH0rYD__1yXI1zvDtKgEWigKI/view?usp=sharing)
+
+### コマンドで取得する
 
 ```bash
 FIXTURE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/tooth-project-tools"
 FIXTURE_FILE="$FIXTURE_DIR/tooth-reconstruction-fixture-v1.zip"
+FIXTURE_CHECKSUM_FILE="${FIXTURE_FILE}.sha256"
 
 mkdir -p "$FIXTURE_DIR"
 
 curl -L \
-  'https://drive.usercontent.google.com/download?id=19mctoKUiOA4YyCviAxavXwbGoCNjAB0m&export=download&confirm=t' \
+  'https://drive.usercontent.google.com/download?id=1Gm6vJCaQ6eL5y25IezgKyYi8kF1xMvdW&export=download&confirm=t' \
   -o "$FIXTURE_FILE"
+
+curl -L \
+  'https://drive.usercontent.google.com/download?id=1W_ru6hRdH0rYD__1yXI1zvDtKgEWigKI&export=download&confirm=t' \
+  -o "$FIXTURE_CHECKSUM_FILE"
 ```
 
-取得結果:
+### ZIP全体のchecksumを確認する
+
+```bash
+(
+  cd "$FIXTURE_DIR"
+  sha256sum -c "$(basename "$FIXTURE_CHECKSUM_FILE")"
+)
+```
+
+正常な場合:
+
+```text
+tooth-reconstruction-fixture-v1.zip: OK
+```
+
+### 取得結果を確認する
 
 ```bash
 file "$FIXTURE_FILE"
-ls -lh "$FIXTURE_FILE"
+
+ls -lh \
+  "$FIXTURE_FILE" \
+  "$FIXTURE_CHECKSUM_FILE"
 ```
 
 ## Smoke test
 
+以降のコマンドはリポジトリルートで実行します。
+
+Dev Container内では通常、次のディレクトリです。
+
+```bash
+cd /workspace
+```
+
+現在位置を確認します。
+
+```bash
+pwd
+```
+
+期待値:
+
+```text
+/workspace
+```
+
+実行権限を付与します。
+
 ```bash
 chmod +x scripts/check_reconstruction_fixture.sh
+```
 
+fixture testを実行します。
+
+```bash
 ./scripts/check_reconstruction_fixture.sh \
   "$FIXTURE_FILE"
 ```
@@ -142,9 +194,27 @@ Point cloud:
 
 元データを保持する管理者のみ実行します。
 
+出力先を引数で指定します。
+
 ```bash
 ./scripts/package_reconstruction_fixture.sh \
-  "$HOME/Downloads/tooth-reconstruction-fixture-v1.zip"
+  "$HOME/tooth-reconstruction-fixture-v1.zip"
+```
+
+生成物:
+
+```text
+$HOME/tooth-reconstruction-fixture-v1.zip
+$HOME/tooth-reconstruction-fixture-v1.zip.sha256
+```
+
+生成後、checksumを確認します。
+
+```bash
+(
+  cd "$HOME"
+  sha256sum -c tooth-reconstruction-fixture-v1.zip.sha256
+)
 ```
 
 生成されるZIPと`.sha256`は別媒体へ配置し、Gitには追加しません。
