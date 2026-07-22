@@ -3,3 +3,4 @@ logs/*
 .ccache/*
 .env
 .data/*
+CMakeUserPresets.json

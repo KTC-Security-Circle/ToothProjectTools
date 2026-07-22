@@ -12,6 +12,8 @@ services:
     environment:
       - DISPLAY=${DISPLAY}
       - QT_X11_NO_MITSHM=1
+      - OpenCV_DIR=/home/vscode/.local/opencv/4.10.0-static/lib/cmake/opencv4
+
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       # Xauthority を使う場合（推奨／ホストで `xhost +SI:localuser:${USER}` 等）
@@ -20,6 +22,7 @@ services:
       # ソースと ccache を永続化
       - ../:/workspace
       - ccache:/opt/ccache
+      - opencv-4-10-static:/home/vscode/.local/opencv/4.10.0-static
 
     # 明示的にデバイスを渡す
     devices:
@@ -44,3 +47,5 @@ services:
 
 volumes:
   ccache:
+  opencv-4-10-static:
+    name: tooth-project-tools-opencv-4-10-static
