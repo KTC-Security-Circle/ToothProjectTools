@@ -432,7 +432,7 @@ cppcheck:
 
 ```bash
 cmake --preset release-opencv-4.10-static
-cmake --build --preset release-opencv-4.10-static --target cppcheck
+cmake --build --preset release-opencv-4.10-static --target cppcheck-project
 ```
 
 target名が異なる場合は、次で確認してください。
