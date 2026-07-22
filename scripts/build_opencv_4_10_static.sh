@@ -76,13 +76,27 @@ configure() {
 }
 
 verify_configuration() {
-  grep -q '^WITH_GTK:BOOL=ON$' "${BUILD_DIR}/CMakeCache.txt" || die "WITH_GTK is not enabled"
+  local cache_file="${BUILD_DIR}/CMakeCache.txt"
+  local highgui_config="${BUILD_DIR}/modules/highgui/opencv_highgui_config.hpp"
 
-  if [[ -f "${BUILD_DIR}/cvconfig.h" ]]; then
-    grep -q 'define HAVE_GTK' "${BUILD_DIR}/cvconfig.h" || die "OpenCV was configured without GTK support"
-  fi
+  [[ -f "${cache_file}" ]] ||
+    die "CMakeCache.txt not found: ${cache_file}"
 
-  ok "OpenCV configured with GTK support"
+  grep -q '^WITH_GTK:BOOL=ON$' "${cache_file}" ||
+    die "WITH_GTK is not enabled"
+
+  grep -q '^GTK3_FOUND:INTERNAL=1$' "${cache_file}" ||
+    die "GTK3 was not detected by pkg-config"
+
+  [[ -f "${highgui_config}" ]] ||
+    die "HighGUI configuration not found: ${highgui_config}"
+
+  grep -Eq \
+    '^#define OPENCV_HIGHGUI_BUILTIN_BACKEND_STR "GTK3"$' \
+    "${highgui_config}" ||
+    die "OpenCV HighGUI was not configured with the GTK3 backend"
+
+  ok "OpenCV configured with GTK3 HighGUI backend"
 }
 
 build_and_install() {
