@@ -68,6 +68,37 @@ capture_size() {
   file -b -- "$1" | sed -nE 's/.* ([0-9]+) x ([0-9]+).*/\1x\2/p'
 }
 
+check_mjpeg_endpoint() {
+  local role="$1"
+  local url="http://${MJPEG_HOST}:${MJPEG_PORT}/${role}.mjpg"
+  local sample_file="${WORK_DIR}/${role}.mjpeg.sample"
+  local curl_status
+
+  set +e
+  timeout 5s curl \
+    --fail \
+    --silent \
+    --show-error \
+    --max-time 4 \
+    --output "${sample_file}" \
+    "${url}"
+  curl_status=$?
+  set -e
+
+  case "${curl_status}" in
+    0|28)
+      ;;
+    *)
+      die "${role} MJPEG endpoint request failed: status=${curl_status}, url=${url}"
+      ;;
+  esac
+
+  [[ -s "${sample_file}" ]] ||
+    die "${role} MJPEG endpoint returned no data: ${url}"
+
+  ok "${role} MJPEG endpoint reachable"
+}
+
 main() {
   for cmd in mkfifo curl timeout file grep date; do
     require_command "${cmd}"
@@ -104,15 +135,8 @@ main() {
   send_json '{"id":"stream-right","cmd":"start_stream","role":"right"}'
   check_response_ok "stream-right"
 
-  timeout 5s curl --fail --silent \
-    "http://${MJPEG_HOST}:${MJPEG_PORT}/left.mjpg" |
-    head -c 1024 >/dev/null || true
-  ok "left MJPEG endpoint reachable"
-
-  timeout 5s curl --fail --silent \
-    "http://${MJPEG_HOST}:${MJPEG_PORT}/right.mjpg" |
-    head -c 1024 >/dev/null || true
-  ok "right MJPEG endpoint reachable"
+  check_mjpeg_endpoint "left"
+  check_mjpeg_endpoint "right"
 
   send_json "{\"id\":\"capture-left\",\"cmd\":\"capture_frame\",\"role\":\"left\",\"output\":\"${WORK_DIR}/capture/left.png\"}"
   check_response_ok "capture-left"
