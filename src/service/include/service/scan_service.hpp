@@ -23,7 +23,7 @@ namespace service::projector
 {
 class ProjectorService;
 struct ProjectorSurface;
-}
+} // namespace service::projector
 
 namespace service::scan
 {
@@ -87,8 +87,9 @@ class ScanService
     void workerLoop(std::stop_token stop_token, ScanStartConfig config, std::string scan_id, int pattern_count);
     ScanResult snapshotLocked() const;
     void pushEvent(std::string event, std::map<std::string, std::string> values);
-    bool writeMetadata(const ScanStartConfig& config, const std::string& scan_id, int pattern_count,
-                       const service::projector::ProjectorSurface& surface, std::string& error_message) const;
+    bool writeMetadata(const ScanStartConfig& config, const std::string& scan_id, int pattern_count, int code_width,
+                       int code_height, const service::projector::ProjectorSurface& surface,
+                       std::string& error_message) const;
     static std::string generateScanId();
     static std::string patternFileName(int index);
 
