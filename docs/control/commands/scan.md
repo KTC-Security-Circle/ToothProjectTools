@@ -61,14 +61,14 @@ returnは受付結果である。
 
 ### 書くArtifact
 
-scan dataset。
+scan dataset。`metadata.json` にはDecode用の `projector_width` / `projector_height` と `pattern_count` をGray Code論理解像度として保存し、monitor/display設定は `surface.surface_*` と `surface.display_*` に分けて保存する。
 
 ### 必要なruntime resource
 
 open済みleft camera。
 open済みright camera。
 open済みprojector。
-生成済みpattern。
+生成済みpattern。`scan_start` は生成済みpattern列を使用し、surface設定を使って暗黙に再生成しない。表示時だけdisplay regionへnearest-neighborで拡大する。
 Scan worker。
 
 ### error code
@@ -190,7 +190,7 @@ Scan worker。
 
 ### 書くArtifact
 
-停止時点までのscan dataset。
+停止時点までのscan dataset。`metadata.json` にはDecode用の `projector_width` / `projector_height` と `pattern_count` をGray Code論理解像度として保存し、monitor/display設定は `surface.surface_*` と `surface.display_*` に分けて保存する。
 
 ### 必要なruntime resource
 

@@ -7,7 +7,7 @@
 decode_patterns はファイル処理commandである。
 保存済みscan datasetだけを読む。
 カメラ、Window、プロジェクタ表示、scan processには依存しない。
-metadata.jsonが無い場合は、`projector_width` / `projector_height` を指定してdecodeできる。
+metadata.jsonが無い場合は、`projector_width` / `projector_height` を指定してdecodeできる。これらはdisplay regionではなく、Gray Code論理解像度である。
 
 ### args(JSONL)
 
@@ -30,8 +30,8 @@ metadata.jsonが無い場合は、`projector_width` / `projector_height` を指�
 | `metadata_file` | 任意 | 明示metadata file。省略時はrootの`metadata.json`を探す。 |
 | `threshold` | 任意 | GrayCode decodeの閾値。 |
 | `allow_partial` | 任意 | 欠損画像を許可するか。 |
-| `projector_width` | metadataなし時は必須 | metadataがない場合のprojector幅。 |
-| `projector_height` | metadataなし時は必須 | metadataがない場合のprojector高さ。 |
+| `projector_width` | metadataなし時は必須 | metadataがない場合のGray Code論理解像度の幅。 |
+| `projector_height` | metadataなし時は必須 | metadataがない場合のGray Code論理解像度の高さ。 |
 | `pattern_count` | 任意 | metadataがない場合のpattern数。省略時は`pattern_*.png`から推定する。 |
 
 ### return
@@ -50,8 +50,8 @@ metadata.jsonが無い場合は、`projector_width` / `projector_height` を指�
 | `pattern_count` | decodeしたpattern数。 |
 | `image_width` | capture画像幅。 |
 | `image_height` | capture画像高さ。 |
-| `projector_width` | projector pattern幅。 |
-| `projector_height` | projector pattern高さ。 |
+| `projector_width` | Decodeに使用したGray Code論理解像度の幅。 |
+| `projector_height` | Decodeに使用したGray Code論理解像度の高さ。 |
 | `threshold` | decodeに使用した閾値。 |
 | `left_valid_count` | left decodeの有効pixel数。 |
 | `right_valid_count` | right decodeの有効pixel数。 |
@@ -68,7 +68,7 @@ scan dataset。
 
 ### 書くArtifact
 
-decode result。
+decode result。metadataにはDecode用の `projector_width` / `projector_height` と、scan metadataから引き継いだ表示設定 `surface.display_*` を分けて保存する。
 
 ### 必要なruntime resource
 

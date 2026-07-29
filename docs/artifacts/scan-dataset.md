@@ -33,7 +33,9 @@ scan_dataset/
 | `projector_role` | projector role。 |
 | `left_role` | left camera role。 |
 | `right_role` | right camera role。 |
-| `pattern_count` | pattern画像数。 |
+| `pattern_count` | Gray Code論理解像度から生成したpattern画像数。 |
+| `projector_width` | Decode用Gray Code論理解像度の幅。 |
+| `projector_height` | Decode用Gray Code論理解像度の高さ。 |
 | `settle_ms` | pattern表示後に待つ時間。 |
 | `output_dir` | dataset root。 |
 | `surface.monitor_index` | monitor index。 |
@@ -41,10 +43,14 @@ scan_dataset/
 | `surface.monitor_height` | monitor高さ。 |
 | `surface.surface_width` | surface幅。 |
 | `surface.surface_height` | surface高さ。 |
-| `surface.pattern_width` | active pattern幅。 |
-| `surface.pattern_height` | active pattern高さ。 |
-| `surface.pattern_x` | active pattern X座標。 |
-| `surface.pattern_y` | active pattern Y座標。 |
+| `surface.pattern_width` | display region幅。互換field。 |
+| `surface.display_width` | display region幅。 |
+| `surface.pattern_height` | display region高さ。互換field。 |
+| `surface.display_height` | display region高さ。 |
+| `surface.pattern_x` | display region X座標。互換field。 |
+| `surface.display_x` | display region X座標。 |
+| `surface.pattern_y` | display region Y座標。互換field。 |
+| `surface.display_y` | display region Y座標。 |
 | `surface.clamped` | active pattern areaがmonitor内へclampされたか。 |
 
 ## metadata任意field
