@@ -1,5 +1,6 @@
 #pragma once
 
+#include "service/monitor_service.hpp"
 #include "service/window_result.hpp"
 
 #include <condition_variable>
@@ -7,9 +8,9 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <opencv2/core/mat.hpp>
 #include <optional>
 #include <string>
-#include <opencv2/core/mat.hpp>
 #include <thread>
 #include <unordered_map>
 
@@ -89,8 +90,8 @@ class WindowBackend
     ///
     /// Return:
     ///   <win::WindowId>: 作成されたwindow id。
-    virtual win::WindowId openWindow(const std::string& title, int width, int height,
-                                     std::optional<int> monitor_index, bool fullscreen) = 0;
+    virtual win::WindowId openWindow(const std::string& title, int width, int height, std::optional<int> monitor_index,
+                                     bool fullscreen) = 0;
 
     /// @brief windowをcloseする。
     ///
@@ -112,8 +113,8 @@ class WindowBackend
     virtual bool showImage(win::WindowId window_id, const cv::Mat& image) = 0;
 
     /// @brief window surfaceを再設定する。
-    virtual bool configureWindowSurface(win::WindowId window_id, int monitor_index, int x, int y, int width,
-                                        int height, bool fullscreen) = 0;
+    virtual bool configureWindowSurface(win::WindowId window_id, int monitor_index, int x, int y, int width, int height,
+                                        bool fullscreen) = 0;
 
     /// @brief window event処理を進める。
     ///
@@ -136,6 +137,7 @@ class WindowService
     /// Return:
     ///   <WindowService>: WindowManagerを参照するwindow service。
     explicit WindowService(win::WindowManager& windows);
+    WindowService(win::WindowManager& windows, service::monitor::MonitorService& monitor_service);
 
     /// @brief test用backendを利用するWindowServiceを構築する。
     ///
@@ -145,6 +147,7 @@ class WindowService
     /// Return:
     ///   <WindowService>: backend参照を保持するwindow service。
     explicit WindowService(WindowBackend& backend);
+    WindowService(WindowBackend& backend, service::monitor::MonitorService& monitor_service);
 
     /// @brief WindowServiceを破棄する。
     ///
@@ -333,6 +336,9 @@ class WindowService
 
     /// backend_ <WindowBackend&>: window resourceを管理するbackend。
     WindowBackend& backend_;
+
+    std::unique_ptr<service::monitor::MonitorService> owned_monitor_service_;
+    service::monitor::MonitorService& monitor_service_;
 
     /// gui_thread_id_ <std::thread::id>: HighGUI操作を実行するprocess main thread id。
     std::thread::id gui_thread_id_;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <functional>
 #include <optional>
 #include <string>
@@ -35,6 +36,13 @@ struct MonitorInfo
     bool fallback{false};
 };
 
+struct ResolvedMonitor
+{
+    MonitorInfo monitor;
+    bool fallback{false};
+    std::size_t detected_count{0};
+};
+
 class MonitorService
 {
   public:
@@ -51,6 +59,9 @@ class MonitorService
 
     /// @brief monitor_indexに対応するmonitor情報を取得する。
     std::optional<MonitorInfo> getMonitor(int monitor_index) const;
+
+    /// @brief 0-based monitor indexを解決し、範囲外ならprimary monitorへfallbackする。
+    std::optional<ResolvedMonitor> resolveMonitor(std::optional<int> requested_monitor_index) const;
 
   private:
     MonitorProvider provider_;

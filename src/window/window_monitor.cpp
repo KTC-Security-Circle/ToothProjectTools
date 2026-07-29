@@ -57,9 +57,7 @@ void Window::setMonitorIndex(int new_index) {
 Size Window::getMonitorSize() const {
   // ★修正3: 生の列挙関数ではなく、共通のヘルパーを使う
   // これによりソート順が統一されます
-  int target_index = (monitor_index_ > 0) ? monitor_index_ : 1;
-  
-  auto rect_opt = get_monitor_rect(target_index);
+  auto rect_opt = get_monitor_rect(monitor_index_);
   
   if (rect_opt) {
       return Size{rect_opt->width, rect_opt->height};
@@ -87,12 +85,12 @@ std::optional<MonitorRect> get_monitor_rect(int monitor_index) {
     return a.y < b.y;
   });
 
-  // 3. インデックス境界チェック (1-based index -> 0-based index)
-  int idx = monitor_index - 1;
+  // 3. 0-based indexの境界を確認する
+  int idx = monitor_index;
   
   // 範囲外ならメインモニタ(0)へフォールバックしつつ警告
   if (idx < 0 || idx >= static_cast<int>(monitors.size())) {
-    LOG_WARN("指定されたモニタ番号 {} は無効です (検出数: {}) -> Main(1)を使用", 
+    LOG_WARN("requested monitor index {} is unavailable; falling back to monitor 0 (detected monitor count: {})",
              monitor_index, monitors.size());
     if (!monitors.empty()) {
         return monitors[0];
