@@ -65,7 +65,7 @@ public:
   void setLayout(LayoutMode m) noexcept { layout_ = m; }
   void setZIndex(int z)       noexcept { z_index_ = z; } // HighGUIでは実質ダミー
   void setRefreshRate(int hz) noexcept { refresh_rate_hz_ = hz; }
-  // モニタ切り替え（指定 index が無効なら 1 にフォールバック）
+  // モニタ切り替え（0-based。指定 index が無効なら 0 にフォールバック）
   void setMonitorIndex(int new_index);
   void setImage(const cv::Mat& img);
   void setImage(cv::Mat&& img);
@@ -103,7 +103,7 @@ private:
 
   Size  size_{};
   Point pos_{};
-  int   monitor_index_{1};
+  int   monitor_index_{0};
   LayoutMode layout_{LayoutMode::Free};
   bool   visible_{true};
   int    camera_id{-1};   // ★ このウィンドウに紐づくカメラ（-1: 未割当）

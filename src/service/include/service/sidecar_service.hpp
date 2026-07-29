@@ -4,17 +4,17 @@
 #include "calibration/stereo_calibrator.hpp"
 #include "calibration/stereo_data.hpp"
 #include "capture/capture_service.hpp"
+#include "reconstruction/reconstruction_service.hpp"
 #include "service/camera_service.hpp"
+#include "service/decode_service.hpp"
 #include "service/monitor_service.hpp"
-#include "service/window_service.hpp"
 #include "service/projector_service.hpp"
+#include "service/scan_dataset_validator.hpp"
 #include "service/scan_event.hpp"
 #include "service/scan_service.hpp"
-#include "service/scan_dataset_validator.hpp"
-#include "service/decode_service.hpp"
+#include "service/window_service.hpp"
 #include "video/camera_manager.hpp"
 #include "window/window_manager.hpp"
-#include "reconstruction/reconstruction_service.hpp"
 
 #include <map>
 #include <memory>
@@ -274,11 +274,11 @@ class SidecarService
     /// camera_service_ <service::camera::CameraService>: camera resourceとrole bindingを管理するdomain service。
     camera::CameraService camera_service_{cameras_};
 
-    /// window_service_ <service::window::WindowService>: window resourceとrole bindingを管理するdomain service。
-    window::WindowService window_service_{window_manager_};
-
     /// monitor_service_ <service::monitor::MonitorService>: monitor情報を取得するdomain service。
     monitor::MonitorService monitor_service_;
+
+    /// window_service_ <service::window::WindowService>: window resourceとrole bindingを管理するdomain service。
+    window::WindowService window_service_{window_manager_, monitor_service_};
 
     /// projector_service_ <service::projector::ProjectorService>: projector roleとpattern表示を管理するdomain service。
     projector::ProjectorService projector_service_{window_service_, monitor_service_};

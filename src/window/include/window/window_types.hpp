@@ -36,7 +36,7 @@ struct WindowProps {
   int         y{0};
   
   // モニタ・表示設定
-  int         monitor_index{0}; // 0=未指定, 1~=モニタ番号
+  int         monitor_index{0}; // 0-based monitor index
   LayoutMode  layout{LayoutMode::Free};
   bool        visible{true};
   bool        fullscreen{false};

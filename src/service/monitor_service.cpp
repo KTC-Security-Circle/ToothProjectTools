@@ -14,7 +14,8 @@ namespace
 std::vector<MonitorInfo> defaultMonitorProvider()
 {
     auto rects = win::enumerate_monitors_x11();
-    std::sort(rects.begin(), rects.end(), [](const win::MonitorRect& left, const win::MonitorRect& right)
+    std::sort(rects.begin(), rects.end(),
+              [](const win::MonitorRect& left, const win::MonitorRect& right)
               {
                   if (left.x != right.x)
                   {
@@ -40,13 +41,7 @@ std::vector<MonitorInfo> defaultMonitorProvider()
         });
     }
 
-    if (!monitors.empty())
-    {
-        return monitors;
-    }
-
-    LOG_DEBUG("MonitorService fallback monitor used: 1920x1080 default");
-    return {MonitorInfo{0, 0, 0, 1920, 1080, true, "default", true}};
+    return monitors;
 }
 
 } // namespace
@@ -67,13 +62,44 @@ std::vector<MonitorInfo> MonitorService::listMonitors() const
 std::optional<MonitorInfo> MonitorService::getMonitor(int monitor_index) const
 {
     const auto monitors = listMonitors();
-    const auto it = std::find_if(monitors.begin(), monitors.end(), [monitor_index](const MonitorInfo& monitor)
-                                 { return monitor.monitor_index == monitor_index; });
+    const auto it =
+        std::find_if(monitors.begin(), monitors.end(),
+                     [monitor_index](const MonitorInfo& monitor) { return monitor.monitor_index == monitor_index; });
     if (it == monitors.end())
     {
         return std::nullopt;
     }
     return *it;
+}
+
+std::optional<ResolvedMonitor> MonitorService::resolveMonitor(std::optional<int> requested_monitor_index) const
+{
+    const auto monitors = listMonitors();
+    if (monitors.empty())
+    {
+        return std::nullopt;
+    }
+
+    const auto primary =
+        std::find_if(monitors.begin(), monitors.end(), [](const MonitorInfo& monitor) { return monitor.primary; });
+    const auto fallback_monitor = primary != monitors.end() ? primary : monitors.begin();
+
+    if (!requested_monitor_index)
+    {
+        return ResolvedMonitor{*fallback_monitor, false, monitors.size()};
+    }
+
+    const auto requested =
+        std::find_if(monitors.begin(), monitors.end(),
+                     [&](const MonitorInfo& monitor) { return monitor.monitor_index == *requested_monitor_index; });
+    if (requested != monitors.end())
+    {
+        return ResolvedMonitor{*requested, false, monitors.size()};
+    }
+
+    LOG_WARN("requested monitor index {} is unavailable; falling back to monitor {} (detected monitor count: {})",
+             *requested_monitor_index, fallback_monitor->monitor_index, monitors.size());
+    return ResolvedMonitor{*fallback_monitor, true, monitors.size()};
 }
 
 } // namespace service::monitor

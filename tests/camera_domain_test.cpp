@@ -485,8 +485,17 @@ void testMonitorService()
     assert(existing && existing->width == 1920);
     assert(!service.getMonitor(99));
 
+    const auto primary = service.resolveMonitor(std::nullopt);
+    assert(primary && primary->monitor.monitor_index == 0 && !primary->fallback);
+    const auto valid = service.resolveMonitor(1);
+    assert(valid && valid->monitor.monitor_index == 1 && !valid->fallback);
+    const auto fallback = service.resolveMonitor(2);
+    assert(fallback && fallback->monitor.monitor_index == 0 && fallback->fallback);
+
     service::monitor::MonitorService empty_service{[] { return std::vector<service::monitor::MonitorInfo>{}; }};
     assert(empty_service.listMonitors().empty());
+    assert(!empty_service.resolveMonitor(std::nullopt));
+    assert(!empty_service.resolveMonitor(1));
 }
 
 
@@ -695,6 +704,37 @@ void testHandler()
     assert(close.handled);
     const auto other = handler::camera::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
     assert(!other.handled);
+}
+
+void testMonitorFallbackAcrossServices()
+{
+    FakeWindowBackend backend;
+    service::monitor::MonitorService one_monitor{[]
+        { return std::vector<service::monitor::MonitorInfo>{{0, 0, 0, 2240, 1400, true, "primary", false}}; }};
+    service::window::WindowService window_service{backend, one_monitor};
+
+    auto result = window_service.openWindow(
+        service::window::WindowOpenConfig{"default", "", 640, 480, std::nullopt, false});
+    assert(result.ok && backend.last_monitor_index == 0);
+    result = window_service.openWindow(service::window::WindowOpenConfig{"valid", "", 640, 480, 0, false});
+    assert(result.ok && backend.last_monitor_index == 0);
+    result = window_service.openWindow(service::window::WindowOpenConfig{"fallback", "", 640, 480, 1, false});
+    assert(result.ok && backend.last_monitor_index == 0);
+
+    FakeWindowBackend empty_backend;
+    service::monitor::MonitorService no_monitors{[]
+        { return std::vector<service::monitor::MonitorInfo>{}; }};
+    service::window::WindowService empty_window_service{empty_backend, no_monitors};
+    result = empty_window_service.openWindow(
+        service::window::WindowOpenConfig{"missing", "", 640, 480, 0, false});
+    assert(!result.ok && result.error->code == "monitor_not_found");
+    assert(empty_backend.next_id == 1 && !empty_backend.opened);
+
+    service::projector::ProjectorService empty_projector{window_service, no_monitors};
+    auto projector_result = empty_projector.openProjector(
+        service::projector::ProjectorOpenConfig{"missing", "default", 640, 480});
+    assert(!projector_result.ok && projector_result.error->code == "monitor_not_found");
+    assert(!empty_projector.scanSnapshot("missing"));
 }
 
 void testWindowServiceValidation()
@@ -918,7 +958,8 @@ void testProjectorSurfaceConfiguration()
 
     result = projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
         "projector", 99, 640, 480, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
-    assert(!result.ok && result.error->code == "monitor_not_found");
+    assert(result.ok && result.monitor_index == 0);
+    assert(backend.last_configured_monitor_index == 0);
 
     service::monitor::MonitorService invalid_monitor_service{[]
                                                             {
@@ -1348,8 +1389,9 @@ int main()
     testMapper();
     testWindowMapper();
     testProjectorMapper();
-    testScanMapper();
     testMonitorService();
+    testMonitorFallbackAcrossServices();
+    testScanMapper();
     testHandler();
     testWindowHandler();
     testProjectorHandler();

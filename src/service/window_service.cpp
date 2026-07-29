@@ -1,8 +1,8 @@
 #include "service/window_service.hpp"
 
 #include "logger/logger_macros.hpp"
-#include "window/window.hpp"
 #include "window/monitor.hpp"
+#include "window/window.hpp"
 #include "window/window_manager.hpp"
 
 #include <algorithm>
@@ -34,8 +34,8 @@ bool isValidRole(const std::string& role)
     {
         return false;
     }
-    return std::all_of(role.begin(), role.end(), [](unsigned char ch)
-                       { return std::isalnum(ch) || ch == '_' || ch == '-'; });
+    return std::all_of(role.begin(), role.end(),
+                       [](unsigned char ch) { return std::isalnum(ch) || ch == '_' || ch == '-'; });
 }
 
 /// @brief OpenCV HighGUI backend名を取得する。
@@ -122,8 +122,7 @@ struct WindowService::OpenWindowRequest final : WindowRequest
     ///
     /// Return:
     ///   <OpenWindowRequest>: open request。
-    explicit OpenWindowRequest(WindowOpenConfig open_config)
-        : WindowRequest(Kind::Open), config(std::move(open_config))
+    explicit OpenWindowRequest(WindowOpenConfig open_config) : WindowRequest(Kind::Open), config(std::move(open_config))
     {
     }
 };
@@ -229,15 +228,15 @@ class WindowService::WindowManagerBackend final : public WindowBackend
     ///
     /// Return:
     ///   <win::WindowId>: 作成されたwindow id。
-    win::WindowId openWindow(const std::string& title, int width, int height,
-                             std::optional<int> monitor_index, bool fullscreen) override
+    win::WindowId openWindow(const std::string& title, int width, int height, std::optional<int> monitor_index,
+                             bool fullscreen) override
     {
         const auto id = windows_.createWindow(title, cv::Size{width, height}, cv::Point{0, 0});
         if (auto* window = windows_.get(id))
         {
             if (monitor_index)
             {
-                window->setMonitorIndex(toBackendMonitorIndex(*monitor_index));
+                window->setMonitorIndex(*monitor_index);
             }
             window->resize(win::Size{width, height});
             if (fullscreen)
@@ -293,11 +292,10 @@ class WindowService::WindowManagerBackend final : public WindowBackend
         {
             window->setFullscreen(false);
         }
-        const auto backend_monitor_index = toBackendMonitorIndex(monitor_index);
-        window->setMonitorIndex(backend_monitor_index);
+        window->setMonitorIndex(monitor_index);
         int local_x = x;
         int local_y = y;
-        if (const auto rect = win::get_monitor_rect(backend_monitor_index))
+        if (const auto rect = win::get_monitor_rect(monitor_index))
         {
             local_x = x - rect->x;
             local_y = y - rect->y;
@@ -321,24 +319,42 @@ class WindowService::WindowManagerBackend final : public WindowBackend
     }
 
   private:
-    static int toBackendMonitorIndex(int public_monitor_index)
-    {
-        return public_monitor_index + 1;
-    }
-
     /// windows_ <win::WindowManager&>: 実window管理backend。
     win::WindowManager& windows_;
 };
 
 WindowService::WindowService(win::WindowManager& windows)
     : backend_(*(owned_backend_ = std::make_unique<WindowManagerBackend>(windows))),
+      monitor_service_(*(owned_monitor_service_ = std::make_unique<service::monitor::MonitorService>())),
       gui_thread_id_(std::this_thread::get_id())
 {
     LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
     LOG_INFO("WindowService GUI thread={}", threadIdToString(gui_thread_id_));
 }
 
-WindowService::WindowService(WindowBackend& backend) : backend_(backend), gui_thread_id_(std::this_thread::get_id())
+WindowService::WindowService(WindowBackend& backend)
+    : backend_(backend),
+      monitor_service_(*(
+          owned_monitor_service_ = std::make_unique<service::monitor::MonitorService>(
+              [] {
+                  return std::vector<service::monitor::MonitorInfo>{{0, 0, 0, 1920, 1080, true, "test-monitor", false}};
+              }))),
+      gui_thread_id_(std::this_thread::get_id())
+{
+    LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
+    LOG_INFO("WindowService GUI thread={}", threadIdToString(gui_thread_id_));
+}
+
+WindowService::WindowService(win::WindowManager& windows, service::monitor::MonitorService& monitor_service)
+    : backend_(*(owned_backend_ = std::make_unique<WindowManagerBackend>(windows))), monitor_service_(monitor_service),
+      gui_thread_id_(std::this_thread::get_id())
+{
+    LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
+    LOG_INFO("WindowService GUI thread={}", threadIdToString(gui_thread_id_));
+}
+
+WindowService::WindowService(WindowBackend& backend, service::monitor::MonitorService& monitor_service)
+    : backend_(backend), monitor_service_(monitor_service), gui_thread_id_(std::this_thread::get_id())
 {
     LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
     LOG_INFO("WindowService GUI thread={}", threadIdToString(gui_thread_id_));
@@ -511,11 +527,12 @@ void WindowService::processPendingRequests()
                     executeConfigureWindowSurface(static_cast<ConfigureWindowSurfaceRequest&>(*request)));
                 break;
             case WindowRequest::Kind::CheckWindowOpen:
-                request->promise.set_value(executeCheckWindowOpen(static_cast<CheckWindowOpenRequest&>(*request))
-                                               ? WindowResult::success(static_cast<CheckWindowOpenRequest&>(*request).role,
-                                                                       win::kInvalidWindowId, 0, 0)
-                                               : WindowResult::failure(static_cast<CheckWindowOpenRequest&>(*request).role,
-                                                                       "window_not_open", "window role is not open"));
+                request->promise.set_value(
+                    executeCheckWindowOpen(static_cast<CheckWindowOpenRequest&>(*request))
+                        ? WindowResult::success(static_cast<CheckWindowOpenRequest&>(*request).role,
+                                                win::kInvalidWindowId, 0, 0)
+                        : WindowResult::failure(static_cast<CheckWindowOpenRequest&>(*request).role, "window_not_open",
+                                                "window role is not open"));
                 break;
             }
         }
@@ -606,10 +623,16 @@ WindowResult WindowService::executeOpenWindow(OpenWindowRequest& request)
                                      "window title is already used by role: " + title_it->second);
     }
 
+    const auto resolved_monitor = monitor_service_.resolveMonitor(config.monitor_index);
+    if (!resolved_monitor)
+    {
+        return WindowResult::failure(config.role, "monitor_not_found", "no monitors are available");
+    }
+
     try
     {
-        const auto window_id = backend_.openWindow(title, config.width, config.height, config.monitor_index,
-                                                  config.fullscreen);
+        const auto window_id = backend_.openWindow(title, config.width, config.height,
+                                                   resolved_monitor->monitor.monitor_index, config.fullscreen);
         if (window_id == win::kInvalidWindowId)
         {
             return WindowResult::failure(config.role, "window_open_failed", "window backend returned invalid id");
@@ -691,8 +714,14 @@ WindowResult WindowService::executeConfigureWindowSurface(ConfigureWindowSurface
                                      "window role is not open: " + config.window_role);
     }
 
-    if (!backend_.configureWindowSurface(it->second, config.monitor_index, config.x, config.y, config.width,
-                                         config.height, config.fullscreen))
+    const auto resolved_monitor = monitor_service_.resolveMonitor(config.monitor_index);
+    if (!resolved_monitor)
+    {
+        return WindowResult::failure(config.window_role, "monitor_not_found", "no monitors are available");
+    }
+
+    if (!backend_.configureWindowSurface(it->second, resolved_monitor->monitor.monitor_index, config.x, config.y,
+                                         config.width, config.height, config.fullscreen))
     {
         return WindowResult::failure(config.window_role, "window_configure_failed",
                                      "failed to configure window surface: " + config.window_role);

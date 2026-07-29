@@ -59,10 +59,17 @@ ProjectorResult ProjectorService::openProjector(const ProjectorOpenConfig& confi
                                         "window role is not open: " + config.window_role);
     }
 
+    const auto resolved_monitor = monitor_service_.resolveMonitor(std::nullopt);
+    if (!resolved_monitor)
+    {
+        return ProjectorResult::failure(config.projector_role, "monitor_not_found", "no monitors are available");
+    }
+
     ProjectorSession session;
     session.projector_role = config.projector_role;
     session.window_role = config.window_role;
-    session.surface = makeDefaultSurface(config.width, config.height);
+    session.surface =
+        computeSurface(resolved_monitor->monitor, config.width, config.height, 0, 0, ProjectorPlacement::custom);
     session.patterns_dirty = true;
     sessions_.emplace(config.projector_role, std::move(session));
     return successFromSession(sessions_.at(config.projector_role));
@@ -86,13 +93,14 @@ ProjectorResult ProjectorService::configureSurface(const ProjectorSurfaceRequest
                                         "projector role is not open: " + request.projector_role);
     }
 
-    const auto monitor = monitor_service_.getMonitor(request.monitor_index);
-    if (!monitor)
+    const auto resolved_monitor = monitor_service_.resolveMonitor(request.monitor_index);
+    if (!resolved_monitor)
     {
         return ProjectorResult::failure(request.projector_role, "monitor_not_found",
                                         "monitor not found: " + std::to_string(request.monitor_index));
     }
-    if (monitor->width <= 0 || monitor->height <= 0)
+    const auto& monitor = resolved_monitor->monitor;
+    if (monitor.width <= 0 || monitor.height <= 0)
     {
         return ProjectorResult::failure(request.projector_role, "invalid_monitor_size",
                                         "monitor width and height must be positive");
@@ -103,18 +111,17 @@ ProjectorResult ProjectorService::configureSurface(const ProjectorSurfaceRequest
                                         "window role is not open: " + session->window_role);
     }
 
-    auto surface = computeSurface(*monitor, request.width, request.height, request.x, request.y, request.placement);
+    auto surface = computeSurface(monitor, request.width, request.height, request.x, request.y, request.placement);
     if (surface.pattern_width <= 0 || surface.pattern_height <= 0)
     {
         return ProjectorResult::failure(request.projector_role, "invalid_projector_surface",
                                         "effective projector surface is empty");
     }
 
-    const auto must_configure_window = session->surface.monitor_index != surface.monitor_index ||
-                                       session->surface.monitor_x != surface.monitor_x ||
-                                       session->surface.monitor_y != surface.monitor_y ||
-                                       session->surface.surface_width != surface.surface_width ||
-                                       session->surface.surface_height != surface.surface_height;
+    const auto must_configure_window =
+        session->surface.monitor_index != surface.monitor_index || session->surface.monitor_x != surface.monitor_x ||
+        session->surface.monitor_y != surface.monitor_y || session->surface.surface_width != surface.surface_width ||
+        session->surface.surface_height != surface.surface_height;
     if (must_configure_window)
     {
         const auto window_result = window_service_.configureWindowSurface(service::window::WindowSurfaceConfig{
@@ -129,10 +136,10 @@ ProjectorResult ProjectorService::configureSurface(const ProjectorSurfaceRequest
         if (!window_result.ok)
         {
             const auto code = window_result.error ? window_result.error->code : std::string{};
-            return ProjectorResult::failure(
-                request.projector_role,
-                code == "window_not_open" ? "projector_window_not_open" : "projector_window_configure_failed",
-                windowErrorMessage(window_result, "failed to configure projector window"));
+            return ProjectorResult::failure(request.projector_role,
+                                            code == "window_not_open" ? "projector_window_not_open"
+                                                                      : "projector_window_configure_failed",
+                                            windowErrorMessage(window_result, "failed to configure projector window"));
         }
     }
 
@@ -149,7 +156,8 @@ ProjectorResult ProjectorService::closeProjector(const std::string& projector_ro
     auto it = sessions_.find(projector_role);
     if (it == sessions_.end())
     {
-        return ProjectorResult::failure(projector_role, "projector_not_open", "projector role is not open: " + projector_role);
+        return ProjectorResult::failure(projector_role, "projector_not_open",
+                                        "projector role is not open: " + projector_role);
     }
     const auto result = successFromSession(it->second);
     sessions_.erase(it);
@@ -162,7 +170,8 @@ ProjectorResult ProjectorService::generatePatterns(const std::string& projector_
     auto* session = findSession(projector_role);
     if (!session)
     {
-        return ProjectorResult::failure(projector_role, "projector_not_open", "projector role is not open: " + projector_role);
+        return ProjectorResult::failure(projector_role, "projector_not_open",
+                                        "projector role is not open: " + projector_role);
     }
 
     if (session->surface.pattern_width <= 0 || session->surface.pattern_height <= 0)
@@ -205,7 +214,8 @@ ProjectorResult ProjectorService::showPatternLocked(const std::string& projector
     auto* session = findSession(projector_role);
     if (!session)
     {
-        return ProjectorResult::failure(projector_role, "projector_not_open", "projector role is not open: " + projector_role);
+        return ProjectorResult::failure(projector_role, "projector_not_open",
+                                        "projector role is not open: " + projector_role);
     }
     if (!session->structured_light || session->structured_light->getPatternCount() == 0 || session->patterns_dirty)
     {
@@ -247,7 +257,8 @@ ProjectorResult ProjectorService::nextPattern(const std::string& projector_role)
     auto* session = findSession(projector_role);
     if (!session)
     {
-        return ProjectorResult::failure(projector_role, "projector_not_open", "projector role is not open: " + projector_role);
+        return ProjectorResult::failure(projector_role, "projector_not_open",
+                                        "projector role is not open: " + projector_role);
     }
     if (!session->structured_light || session->structured_light->getPatternCount() == 0 || session->patterns_dirty)
     {
@@ -263,7 +274,8 @@ ProjectorResult ProjectorService::prevPattern(const std::string& projector_role)
     auto* session = findSession(projector_role);
     if (!session)
     {
-        return ProjectorResult::failure(projector_role, "projector_not_open", "projector role is not open: " + projector_role);
+        return ProjectorResult::failure(projector_role, "projector_not_open",
+                                        "projector role is not open: " + projector_role);
     }
     if (!session->structured_light || session->structured_light->getPatternCount() == 0 || session->patterns_dirty)
     {
@@ -303,8 +315,8 @@ bool ProjectorService::isValidProjectorRole(const std::string& projector_role)
     {
         return false;
     }
-    return std::all_of(projector_role.begin(), projector_role.end(), [](unsigned char ch)
-                       { return std::isalnum(ch) || ch == '_' || ch == '-'; });
+    return std::all_of(projector_role.begin(), projector_role.end(),
+                       [](unsigned char ch) { return std::isalnum(ch) || ch == '_' || ch == '-'; });
 }
 
 ProjectorService::ProjectorSession* ProjectorService::findSession(const std::string& projector_role)
@@ -342,9 +354,10 @@ ProjectorResult ProjectorService::successFromSession(const ProjectorSession& ses
 
 ProjectorSurface ProjectorService::makeDefaultSurface(int width, int height) const
 {
-    if (const auto monitor = monitor_service_.getMonitor(0); monitor && monitor->width > 0 && monitor->height > 0)
+    if (const auto resolved = monitor_service_.resolveMonitor(std::nullopt);
+        resolved && resolved->monitor.width > 0 && resolved->monitor.height > 0)
     {
-        return computeSurface(*monitor, width, height, 0, 0, ProjectorPlacement::custom);
+        return computeSurface(resolved->monitor, width, height, 0, 0, ProjectorPlacement::custom);
     }
 
     ProjectorSurface surface;
@@ -362,8 +375,8 @@ ProjectorSurface ProjectorService::makeDefaultSurface(int width, int height) con
 }
 
 ProjectorSurface ProjectorService::computeSurface(const service::monitor::MonitorInfo& monitor, int requested_width,
-                                                   int requested_height, std::optional<int> requested_x,
-                                                   std::optional<int> requested_y, ProjectorPlacement placement)
+                                                  int requested_height, std::optional<int> requested_x,
+                                                  std::optional<int> requested_y, ProjectorPlacement placement)
 {
     ProjectorSurface surface;
     surface.monitor_index = monitor.monitor_index;
