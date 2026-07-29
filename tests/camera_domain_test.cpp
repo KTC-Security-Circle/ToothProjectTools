@@ -7,34 +7,34 @@
 #include "handler/window_resource_command_handler.hpp"
 #include "headless/headless_command_mapper.hpp"
 #include "runtime/handler_context.hpp"
+#include "service/calibration_file.hpp"
 #include "service/camera_service.hpp"
 #include "service/decode_service.hpp"
 #include "service/monitor_service.hpp"
-#include "service/calibration_file.hpp"
 #include "service/projector_service.hpp"
-#include "service/scan_dataset_validator.hpp"
 #include "service/scan_dataset_resolver.hpp"
+#include "service/scan_dataset_validator.hpp"
 #include "service/window_service.hpp"
-#include "video/camera_manager.hpp"
 #include "structured_light/structured_light.hpp"
+#include "video/camera_manager.hpp"
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <iomanip>
-#include <sstream>
-#include <chrono>
 #include <future>
+#include <iomanip>
 #include <limits>
-#include <optional>
-#include <string>
-#include <thread>
-#include <variant>
-
 #include <opencv2/core.hpp>
 #include <opencv2/core/persistence.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <optional>
+#include <set>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <variant>
 
 namespace
 {
@@ -42,8 +42,8 @@ namespace
 class FakeWindowBackend final : public service::window::WindowBackend
 {
   public:
-    win::WindowId openWindow(const std::string& title, int width, int height,
-                             std::optional<int> monitor_index, bool fullscreen) override
+    win::WindowId openWindow(const std::string& title, int width, int height, std::optional<int> monitor_index,
+                             bool fullscreen) override
     {
         last_title = title;
         last_width = width;
@@ -117,10 +117,7 @@ class FakeWindowBackend final : public service::window::WindowBackend
     int last_delay_ms{0};
 };
 
-
-
-template <typename Function>
-auto runWindowRequest(service::window::WindowService& service, Function function)
+template <typename Function> auto runWindowRequest(service::window::WindowService& service, Function function)
 {
     auto future = std::async(std::launch::async, std::move(function));
     for (int attempt = 0; attempt < 200; ++attempt)
@@ -147,13 +144,22 @@ service::monitor::MonitorService fakeMonitorService()
                                             }};
 }
 
+service::monitor::MonitorService fakeLargeMonitorService()
+{
+    return service::monitor::MonitorService{[]
+                                            {
+                                                return std::vector<service::monitor::MonitorInfo>{
+                                                    {0, 0, 0, 2240, 1400, true, "large"},
+                                                };
+                                            }};
+}
+
 control::ControlMessage messageWithId()
 {
     control::ControlMessage message;
     message.id = "test";
     return message;
 }
-
 
 std::filesystem::path testTempDir(const std::string& name)
 {
@@ -163,7 +169,8 @@ std::filesystem::path testTempDir(const std::string& name)
     return path;
 }
 
-void writeScanMetadata(const std::filesystem::path& dir, int pattern_count = 2, int pattern_width = 20, int pattern_height = 16)
+void writeScanMetadata(const std::filesystem::path& dir, int pattern_count = 2, int pattern_width = 20,
+                       int pattern_height = 16)
 {
     std::ofstream output(dir / "metadata.json");
     output << "{\n"
@@ -498,7 +505,6 @@ void testMonitorService()
     assert(!empty_service.resolveMonitor(1));
 }
 
-
 void testScanMapper()
 {
     video::CameraManager cameras;
@@ -665,27 +671,25 @@ void testWindowHandler()
     service::window::WindowService service{backend};
     runtime::WindowResourceHandlerContext context{service};
 
-    const auto open = runWindowRequest(service, [&]
-                                       {
-                                           return handler::window_resource::handle(
-                                               context, cmd::Command{cmd::CmdOpenWindow{"projector", "Projector", 640, 480, std::nullopt, false}});
-                                       });
+    const auto open = runWindowRequest(
+        service,
+        [&]
+        {
+            return handler::window_resource::handle(
+                context, cmd::Command{cmd::CmdOpenWindow{"projector", "Projector", 640, 480, std::nullopt, false}});
+        });
     assert(open.handled && open.ok);
     assert(open.values.at("window_role") == "projector");
     assert(open.values.at("width") == "640");
 
-    const auto close = runWindowRequest(service, [&]
-                                        {
-                                            return handler::window_resource::handle(
-                                                context, cmd::Command{cmd::CmdCloseWindow{"projector"}});
-                                        });
+    const auto close = runWindowRequest(
+        service,
+        [&] { return handler::window_resource::handle(context, cmd::Command{cmd::CmdCloseWindow{"projector"}}); });
     assert(close.handled && close.ok);
 
-    const auto failed = runWindowRequest(service, [&]
-                                         {
-                                             return handler::window_resource::handle(
-                                                 context, cmd::Command{cmd::CmdCloseWindow{"missing"}});
-                                         });
+    const auto failed = runWindowRequest(
+        service,
+        [&] { return handler::window_resource::handle(context, cmd::Command{cmd::CmdCloseWindow{"missing"}}); });
     assert(failed.handled && !failed.ok && failed.error->code == "window_not_open");
 
     const auto other = handler::window_resource::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
@@ -709,12 +713,13 @@ void testHandler()
 void testMonitorFallbackAcrossServices()
 {
     FakeWindowBackend backend;
-    service::monitor::MonitorService one_monitor{[]
-        { return std::vector<service::monitor::MonitorInfo>{{0, 0, 0, 2240, 1400, true, "primary", false}}; }};
+    service::monitor::MonitorService one_monitor{[] {
+        return std::vector<service::monitor::MonitorInfo>{{0, 0, 0, 2240, 1400, true, "primary", false}};
+    }};
     service::window::WindowService window_service{backend, one_monitor};
 
-    auto result = window_service.openWindow(
-        service::window::WindowOpenConfig{"default", "", 640, 480, std::nullopt, false});
+    auto result =
+        window_service.openWindow(service::window::WindowOpenConfig{"default", "", 640, 480, std::nullopt, false});
     assert(result.ok && backend.last_monitor_index == 0);
     result = window_service.openWindow(service::window::WindowOpenConfig{"valid", "", 640, 480, 0, false});
     assert(result.ok && backend.last_monitor_index == 0);
@@ -722,17 +727,15 @@ void testMonitorFallbackAcrossServices()
     assert(result.ok && backend.last_monitor_index == 0);
 
     FakeWindowBackend empty_backend;
-    service::monitor::MonitorService no_monitors{[]
-        { return std::vector<service::monitor::MonitorInfo>{}; }};
+    service::monitor::MonitorService no_monitors{[] { return std::vector<service::monitor::MonitorInfo>{}; }};
     service::window::WindowService empty_window_service{empty_backend, no_monitors};
-    result = empty_window_service.openWindow(
-        service::window::WindowOpenConfig{"missing", "", 640, 480, 0, false});
+    result = empty_window_service.openWindow(service::window::WindowOpenConfig{"missing", "", 640, 480, 0, false});
     assert(!result.ok && result.error->code == "monitor_not_found");
     assert(empty_backend.next_id == 1 && !empty_backend.opened);
 
     service::projector::ProjectorService empty_projector{window_service, no_monitors};
-    auto projector_result = empty_projector.openProjector(
-        service::projector::ProjectorOpenConfig{"missing", "default", 640, 480});
+    auto projector_result =
+        empty_projector.openProjector(service::projector::ProjectorOpenConfig{"missing", "default", 640, 480});
     assert(!projector_result.ok && projector_result.error->code == "monitor_not_found");
     assert(!empty_projector.scanSnapshot("missing"));
 }
@@ -757,58 +760,62 @@ void testWindowServiceValidation()
     result = service.openWindow(service::window::WindowOpenConfig{"projector", "", 640, 480, -1, false});
     assert(!result.ok && result.error->code == "invalid_monitor_index");
 
-    result = runWindowRequest(service, [&]
-                              { return service.closeWindow("projector"); });
+    result = runWindowRequest(service, [&] { return service.closeWindow("projector"); });
     assert(!result.ok && result.error->code == "window_not_open");
 
-    result = runWindowRequest(service, [&]
-                              {
-                                  return service.openWindow(service::window::WindowOpenConfig{
-                                      "projector", "", 640, 480, std::nullopt, false});
+    result = runWindowRequest(service,
+                              [&] {
+                                  return service.openWindow(service::window::WindowOpenConfig{"projector", "", 640, 480,
+                                                                                              std::nullopt, false});
                               });
     assert(result.ok);
     assert(backend.last_title == "projector");
     assert(service.resolveWindowId("projector") == result.window_id);
 
-    const auto duplicate = runWindowRequest(service, [&]
-                                            {
+    const auto duplicate = runWindowRequest(service,
+                                            [&] {
                                                 return service.openWindow(service::window::WindowOpenConfig{
                                                     "projector", "", 640, 480, std::nullopt, false});
                                             });
     assert(!duplicate.ok && duplicate.error->code == "window_already_open");
 
-    const auto duplicate_title = runWindowRequest(service, [&]
-                                                 {
-                                                     return service.openWindow(service::window::WindowOpenConfig{
-                                                         "projector2", "projector", 640, 480, std::nullopt, false});
-                                                 });
+    const auto duplicate_title = runWindowRequest(service,
+                                                  [&]
+                                                  {
+                                                      return service.openWindow(service::window::WindowOpenConfig{
+                                                          "projector2", "projector", 640, 480, std::nullopt, false});
+                                                  });
     assert(!duplicate_title.ok && duplicate_title.error->code == "window_already_open");
 
-    const auto close = runWindowRequest(service, [&]
-                                        { return service.closeWindow("projector"); });
+    const auto close = runWindowRequest(service, [&] { return service.closeWindow("projector"); });
     assert(close.ok);
     assert(!service.resolveWindowId("projector"));
 
-    const auto reopen_same_title = runWindowRequest(service, [&]
+    const auto reopen_same_title = runWindowRequest(service,
+                                                    [&]
                                                     {
                                                         return service.openWindow(service::window::WindowOpenConfig{
                                                             "projector2", "projector", 640, 480, std::nullopt, false});
                                                     });
     assert(reopen_same_title.ok);
-    assert(runWindowRequest(service, [&]
-                            { return service.closeWindow("projector2"); }).ok);
+    assert(runWindowRequest(service, [&] { return service.closeWindow("projector2"); }).ok);
 
-    assert(runWindowRequest(service, [&]
-                            {
-                                return service.openWindow(service::window::WindowOpenConfig{
-                                    "one", "", 100, 100, std::nullopt, false});
-                            }).ok);
-    assert(runWindowRequest(service, [&]
-                            {
-                                return service.openWindow(service::window::WindowOpenConfig{
-                                    "two", "", 100, 100, std::nullopt, false});
-                            }).ok);
-    runWindowRequest(service, [&]
+    assert(
+        runWindowRequest(
+            service,
+            [&] {
+                return service.openWindow(service::window::WindowOpenConfig{"one", "", 100, 100, std::nullopt, false});
+            })
+            .ok);
+    assert(
+        runWindowRequest(
+            service,
+            [&] {
+                return service.openWindow(service::window::WindowOpenConfig{"two", "", 100, 100, std::nullopt, false});
+            })
+            .ok);
+    runWindowRequest(service,
+                     [&]
                      {
                          service.closeAll();
                          return service::window::WindowResult::success({}, win::kInvalidWindowId, 0, 0);
@@ -824,31 +831,36 @@ void testProjectorServiceValidation()
     auto monitor_service = fakeMonitorService();
     service::projector::ProjectorService projector_service{window_service, monitor_service};
 
-    auto result = runWindowRequest(window_service, [&]
-                                   {
-                                       return projector_service.openProjector(service::projector::ProjectorOpenConfig{
-                                           "projector", "missing", 16, 12});
+    auto result = runWindowRequest(window_service,
+                                   [&] {
+                                       return projector_service.openProjector(
+                                           service::projector::ProjectorOpenConfig{"projector", "missing", 16, 12});
                                    });
     assert(!result.ok && result.error->code == "projector_window_not_open");
 
-    assert(runWindowRequest(window_service, [&]
+    assert(runWindowRequest(window_service,
+                            [&]
                             {
                                 return window_service.openWindow(service::window::WindowOpenConfig{
                                     "projector_window", "Projector", 16, 12, std::nullopt, false});
-                            }).ok);
+                            })
+               .ok);
 
-    result = runWindowRequest(window_service, [&]
+    result = runWindowRequest(window_service,
+                              [&]
                               {
-                                  return projector_service.openProjector(service::projector::ProjectorOpenConfig{
-                                      "projector", "projector_window", 16, 12});
+                                  return projector_service.openProjector(
+                                      service::projector::ProjectorOpenConfig{"projector", "projector_window", 16, 12});
                               });
     assert(result.ok);
 
-    const auto duplicate = runWindowRequest(window_service, [&]
-                                            {
-                                                return projector_service.openProjector(service::projector::ProjectorOpenConfig{
-                                                    "projector", "projector_window", 16, 12});
-                                            });
+    const auto duplicate =
+        runWindowRequest(window_service,
+                         [&]
+                         {
+                             return projector_service.openProjector(
+                                 service::projector::ProjectorOpenConfig{"projector", "projector_window", 16, 12});
+                         });
     assert(!duplicate.ok && duplicate.error->code == "projector_already_open");
 
     result = projector_service.showPattern("projector", 0);
@@ -860,19 +872,16 @@ void testProjectorServiceValidation()
     result = projector_service.showPattern("projector", result.pattern_count);
     assert(!result.ok && result.error->code == "pattern_index_out_of_range");
 
-    result = runWindowRequest(window_service, [&]
-                              { return projector_service.showPattern("projector", 0); });
+    result = runWindowRequest(window_service, [&] { return projector_service.showPattern("projector", 0); });
     assert(result.ok && result.pattern_index == 0);
     assert(backend.show_count == 1);
     assert(backend.last_shown_size.width == result.surface_width);
     assert(backend.last_shown_size.height == result.surface_height);
 
-    result = runWindowRequest(window_service, [&]
-                              { return projector_service.nextPattern("projector"); });
+    result = runWindowRequest(window_service, [&] { return projector_service.nextPattern("projector"); });
     assert(result.ok && result.pattern_index == 1);
 
-    result = runWindowRequest(window_service, [&]
-                              { return projector_service.prevPattern("projector"); });
+    result = runWindowRequest(window_service, [&] { return projector_service.prevPattern("projector"); });
     assert(result.ok && result.pattern_index == 0);
 
     const auto close_count_before = backend.close_count;
@@ -896,23 +905,28 @@ void testProjectorSurfaceConfiguration()
         "projector", 0, 1280, 720, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
     assert(!result.ok && result.error->code == "projector_not_open");
 
-    assert(runWindowRequest(window_service, [&]
+    assert(runWindowRequest(window_service,
+                            [&]
                             {
                                 return window_service.openWindow(service::window::WindowOpenConfig{
                                     "projector_window", "Projector", 16, 12, std::nullopt, false});
-                            }).ok);
-    assert(runWindowRequest(window_service, [&]
+                            })
+               .ok);
+    assert(runWindowRequest(window_service,
+                            [&]
                             {
-                                return projector_service.openProjector(service::projector::ProjectorOpenConfig{
-                                    "projector", "projector_window", 16, 12});
-                            }).ok);
+                                return projector_service.openProjector(
+                                    service::projector::ProjectorOpenConfig{"projector", "projector_window", 16, 12});
+                            })
+               .ok);
 
-    result = runWindowRequest(window_service, [&]
-                              {
-                                  return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
-                                      "projector", 1, 1280, 720, std::nullopt, std::nullopt,
-                                      service::projector::ProjectorPlacement::center});
-                              });
+    result = runWindowRequest(
+        window_service,
+        [&]
+        {
+            return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                "projector", 1, 1280, 720, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
+        });
     assert(result.ok);
     assert(result.pattern_width == 1280);
     assert(result.pattern_height == 720);
@@ -922,7 +936,8 @@ void testProjectorSurfaceConfiguration()
     assert(result.surface_width == 1920 && result.surface_height == 1080);
     assert(backend.configure_count == 1);
 
-    result = runWindowRequest(window_service, [&]
+    result = runWindowRequest(window_service,
+                              [&]
                               {
                                   return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
                                       "projector", 1, 3840, 2160, std::nullopt, std::nullopt,
@@ -931,29 +946,32 @@ void testProjectorSurfaceConfiguration()
     assert(result.ok && result.pattern_width == 1920 && result.pattern_height == 1080);
     assert(result.pattern_x == 0 && result.pattern_y == 0 && result.clamped);
 
-    result = runWindowRequest(window_service, [&]
-                              {
-                                  return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
-                                      "projector", 1, 640, 480, 100, 50,
-                                      service::projector::ProjectorPlacement::custom});
-                              });
+    result =
+        runWindowRequest(window_service,
+                         [&]
+                         {
+                             return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                 "projector", 1, 640, 480, 100, 50, service::projector::ProjectorPlacement::custom});
+                         });
     assert(result.ok && result.pattern_x == 100 && result.pattern_y == 50);
     assert(result.pattern_width == 640 && result.pattern_height == 480 && !result.clamped);
 
-    result = runWindowRequest(window_service, [&]
-                              {
-                                  return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
-                                      "projector", 1, 1280, 480, 1000, 50,
-                                      service::projector::ProjectorPlacement::custom});
-                              });
+    result =
+        runWindowRequest(window_service,
+                         [&]
+                         {
+                             return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                 "projector", 1, 1280, 480, 1000, 50, service::projector::ProjectorPlacement::custom});
+                         });
     assert(result.ok && result.pattern_width == 920 && result.clamped);
 
-    result = runWindowRequest(window_service, [&]
-                              {
-                                  return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
-                                      "projector", 1, 640, 480, -10, -20,
-                                      service::projector::ProjectorPlacement::custom});
-                              });
+    result =
+        runWindowRequest(window_service,
+                         [&]
+                         {
+                             return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                 "projector", 1, 640, 480, -10, -20, service::projector::ProjectorPlacement::custom});
+                         });
     assert(result.ok && result.pattern_x == 0 && result.pattern_y == 0 && result.clamped);
 
     result = projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
@@ -962,25 +980,357 @@ void testProjectorSurfaceConfiguration()
     assert(backend.last_configured_monitor_index == 0);
 
     service::monitor::MonitorService invalid_monitor_service{[]
-                                                            {
-                                                                return std::vector<service::monitor::MonitorInfo>{
-                                                                    {0, 0, 0, 0, 1080, true, "invalid", false},
-                                                                };
-                                                            }};
+                                                             {
+                                                                 return std::vector<service::monitor::MonitorInfo>{
+                                                                     {0, 0, 0, 0, 1080, true, "invalid", false},
+                                                                 };
+                                                             }};
     service::projector::ProjectorService invalid_projector_service{window_service, invalid_monitor_service};
-    assert(invalid_projector_service.openProjector(service::projector::ProjectorOpenConfig{
-               "invalid_projector", "projector_window", 16, 12})
+    assert(invalid_projector_service
+               .openProjector(service::projector::ProjectorOpenConfig{"invalid_projector", "projector_window", 16, 12})
                .ok);
     result = invalid_projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
         "invalid_projector", 0, 640, 480, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
     assert(!result.ok && result.error->code == "invalid_monitor_size");
 
-    const auto close_window = runWindowRequest(window_service, [&]
-                                               { return window_service.closeWindow("projector_window"); });
+    const auto close_window =
+        runWindowRequest(window_service, [&] { return window_service.closeWindow("projector_window"); });
     assert(close_window.ok);
     result = projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
         "projector", 1, 640, 480, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
     assert(!result.ok && result.error->code == "projector_window_not_open");
+}
+
+void assertOnlyBinaryValues(const cv::Mat& image)
+{
+    assert(!image.empty());
+    std::set<int> values;
+    for (int y = 0; y < image.rows; ++y)
+    {
+        for (int x = 0; x < image.cols; ++x)
+        {
+            if (image.channels() == 1)
+            {
+                values.insert(image.at<uchar>(y, x));
+            }
+            else
+            {
+                const auto pixel = image.at<cv::Vec3b>(y, x);
+                values.insert(pixel[0]);
+                values.insert(pixel[1]);
+                values.insert(pixel[2]);
+            }
+        }
+    }
+    assert(values.count(0) == 1);
+    assert(values.count(255) == 1);
+    assert(values.size() == 2);
+}
+
+void testProjectorLogicalResolutionSeparateFromDisplay()
+{
+    FakeWindowBackend backend;
+    service::window::WindowService window_service{backend};
+    auto monitor_service = fakeLargeMonitorService();
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
+
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return window_service.openWindow(service::window::WindowOpenConfig{
+                                    "projector_window", "Projector", 960, 540, std::nullopt, false});
+                            })
+               .ok);
+    auto result = runWindowRequest(window_service,
+                                   [&]
+                                   {
+                                       return projector_service.openProjector(service::projector::ProjectorOpenConfig{
+                                           "projector", "projector_window", 960, 540});
+                                   });
+    assert(result.ok);
+    assert(result.width == 960 && result.height == 540);
+    assert(result.code_width == 960 && result.code_height == 540);
+
+    result = runWindowRequest(window_service,
+                              [&]
+                              {
+                                  return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                      "projector", 0, 1920, 1080, std::nullopt, std::nullopt,
+                                      service::projector::ProjectorPlacement::center});
+                              });
+    assert(result.ok);
+    assert(result.code_width == 960 && result.code_height == 540);
+    assert(result.surface_width == 2240 && result.surface_height == 1400);
+    assert(result.pattern_width == 1920 && result.pattern_height == 1080);
+    assert(result.display_width == 1920 && result.display_height == 1080);
+    assert(result.pattern_x == 160 && result.pattern_y == 160);
+    assert(result.display_x == 160 && result.display_y == 160);
+
+    result = projector_service.generatePatterns("projector");
+    assert(result.ok);
+    assert(result.width == 960 && result.height == 540);
+    assert(result.code_width == 960 && result.code_height == 540);
+    assert(result.pattern_width == 1920 && result.pattern_height == 1080);
+    assert(result.display_width == 1920 && result.display_height == 1080);
+    assert(result.pattern_count == 42);
+
+    result = runWindowRequest(window_service, [&] { return projector_service.showPattern("projector", 0); });
+    assert(result.ok);
+    assert(backend.last_shown_size.width == 2240 && backend.last_shown_size.height == 1400);
+}
+
+void testProjectorSameResolutionStillGeneratesExpectedCount()
+{
+    FakeWindowBackend backend;
+    service::window::WindowService window_service{backend};
+    auto monitor_service = fakeLargeMonitorService();
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
+
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return window_service.openWindow(service::window::WindowOpenConfig{
+                                    "projector_window", "Projector", 1920, 1080, std::nullopt, false});
+                            })
+               .ok);
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return projector_service.openProjector(service::projector::ProjectorOpenConfig{
+                                    "projector", "projector_window", 1920, 1080});
+                            })
+               .ok);
+    auto result =
+        runWindowRequest(window_service,
+                         [&]
+                         {
+                             return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                 "projector", 0, 1920, 1080, std::nullopt, std::nullopt,
+                                 service::projector::ProjectorPlacement::center});
+                         });
+    assert(result.ok);
+    result = projector_service.generatePatterns("projector");
+    assert(result.ok);
+    assert(result.width == 1920 && result.height == 1080);
+    assert(result.display_width == 1920 && result.display_height == 1080);
+    assert(result.pattern_count == 46);
+}
+
+void testProjectorSurfaceReconfigurationKeepsGeneratedPatterns()
+{
+    FakeWindowBackend backend;
+    service::window::WindowService window_service{backend};
+    auto monitor_service = fakeLargeMonitorService();
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
+
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return window_service.openWindow(service::window::WindowOpenConfig{
+                                    "projector_window", "Projector", 960, 540, std::nullopt, false});
+                            })
+               .ok);
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return projector_service.openProjector(
+                                    service::projector::ProjectorOpenConfig{"projector", "projector_window", 960, 540});
+                            })
+               .ok);
+    auto result =
+        runWindowRequest(window_service,
+                         [&]
+                         {
+                             return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                 "projector", 0, 1920, 1080, std::nullopt, std::nullopt,
+                                 service::projector::ProjectorPlacement::center});
+                         });
+    assert(result.ok);
+    result = projector_service.generatePatterns("projector");
+    assert(result.ok && result.pattern_count == 42);
+
+    result = runWindowRequest(
+        window_service,
+        [&]
+        {
+            return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                "projector", 0, 1280, 720, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
+        });
+    assert(result.ok);
+    assert(result.code_width == 960 && result.code_height == 540);
+    assert(result.pattern_count == 42);
+    assert(result.display_width == 1280 && result.display_height == 720);
+
+    result = runWindowRequest(window_service, [&] { return projector_service.showPattern("projector", 0); });
+    assert(result.ok);
+    assert(backend.last_shown_size.width == 2240 && backend.last_shown_size.height == 1400);
+}
+
+void testProjectorSurfaceChangesBeforeGenerateKeepCodeResolution()
+{
+    FakeWindowBackend backend;
+    service::window::WindowService window_service{backend};
+    auto monitor_service = fakeLargeMonitorService();
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
+
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return window_service.openWindow(service::window::WindowOpenConfig{
+                                    "projector_window", "Projector", 960, 540, std::nullopt, false});
+                            })
+               .ok);
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return projector_service.openProjector(
+                                    service::projector::ProjectorOpenConfig{"projector", "projector_window", 960, 540});
+                            })
+               .ok);
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                    "projector", 0, 1920, 1080, std::nullopt, std::nullopt,
+                                    service::projector::ProjectorPlacement::center});
+                            })
+               .ok);
+    auto result = runWindowRequest(
+        window_service,
+        [&]
+        {
+            return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                "projector", 0, 1280, 720, std::nullopt, std::nullopt, service::projector::ProjectorPlacement::center});
+        });
+    assert(result.ok);
+    assert(result.code_width == 960 && result.code_height == 540);
+    assert(result.display_width == 1280 && result.display_height == 720);
+
+    result = projector_service.generatePatterns("projector");
+    assert(result.ok);
+    assert(result.width == 960 && result.height == 540);
+    assert(result.pattern_count == 42);
+    assert(result.display_width == 1280 && result.display_height == 720);
+}
+
+void testProjectorNearestResizeProducesBinaryValues()
+{
+    FakeWindowBackend backend;
+    service::window::WindowService window_service{backend};
+    auto monitor_service = fakeLargeMonitorService();
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
+
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return window_service.openWindow(service::window::WindowOpenConfig{
+                                    "projector_window", "Projector", 4, 4, std::nullopt, false});
+                            })
+               .ok);
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return projector_service.openProjector(
+                                    service::projector::ProjectorOpenConfig{"projector", "projector_window", 4, 4});
+                            })
+               .ok);
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return projector_service.configureSurface(service::projector::ProjectorSurfaceRequest{
+                                    "projector", 0, 8, 8, 0, 0, service::projector::ProjectorPlacement::custom});
+                            })
+               .ok);
+    auto result = projector_service.generatePatterns("projector");
+    assert(result.ok);
+    result = runWindowRequest(window_service, [&] { return projector_service.showPattern("projector", 0); });
+    assert(result.ok);
+    assertOnlyBinaryValues(backend.last_image);
+}
+
+void testProjectorHandlerReportsCodeAndDisplayResolution()
+{
+    FakeWindowBackend backend;
+    service::window::WindowService window_service{backend};
+    auto monitor_service = fakeLargeMonitorService();
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
+    runtime::ProjectorHandlerContext context{projector_service};
+
+    assert(runWindowRequest(window_service,
+                            [&]
+                            {
+                                return window_service.openWindow(service::window::WindowOpenConfig{
+                                    "projector_window", "Projector", 960, 540, std::nullopt, false});
+                            })
+               .ok);
+    auto result = runWindowRequest(
+        window_service,
+        [&]
+        {
+            return handler::projector::handle(
+                context, cmd::Command{cmd::CmdOpenProjector{"projector", "projector_window", 960, 540}});
+        });
+    assert(result.handled && result.ok);
+    result = runWindowRequest(
+        window_service,
+        [&]
+        {
+            return handler::projector::handle(
+                context, cmd::Command{cmd::CmdConfigureProjectorSurface{"projector", 0, 1920, 1080, {}, {}, "center"}});
+        });
+    assert(result.handled && result.ok);
+    assert(result.values.at("code_width") == "960");
+    assert(result.values.at("code_height") == "540");
+    assert(result.values.at("display_width") == "1920");
+    assert(result.values.at("display_height") == "1080");
+    assert(result.values.at("display_x") == "160");
+    assert(result.values.at("display_y") == "160");
+
+    result = handler::projector::handle(context, cmd::Command{cmd::CmdGeneratePatterns{"projector"}});
+    assert(result.handled && result.ok);
+    assert(result.values.at("width") == "960");
+    assert(result.values.at("height") == "540");
+    assert(result.values.at("code_width") == "960");
+    assert(result.values.at("code_height") == "540");
+    assert(result.values.at("display_width") == "1920");
+    assert(result.values.at("display_height") == "1080");
+    assert(result.values.at("pattern_count") == "42");
+}
+
+void testScanMetadataDistinguishesCodeAndDisplayResolution()
+{
+    const auto dir = testTempDir("metadata_code_display");
+    std::ofstream output(dir / "metadata.json");
+    output << "{\n"
+           << "  \"scan_id\": \"session_001\",\n"
+           << "  \"pattern_count\": 42,\n"
+           << "  \"projector_width\": 960,\n"
+           << "  \"projector_height\": 540,\n"
+           << "  \"surface\": {\n"
+           << "    \"surface_width\": 2240,\n"
+           << "    \"surface_height\": 1400,\n"
+           << "    \"display_width\": 1920,\n"
+           << "    \"display_height\": 1080,\n"
+           << "    \"display_x\": 160,\n"
+           << "    \"display_y\": 160,\n"
+           << "    \"pattern_width\": 1920,\n"
+           << "    \"pattern_height\": 1080,\n"
+           << "    \"pattern_x\": 160,\n"
+           << "    \"pattern_y\": 160\n"
+           << "  }\n"
+           << "}\n";
+    output.close();
+
+    service::scan_dataset::ScanDatasetValidator validator;
+    std::vector<service::scan_dataset::ScanDatasetIssue> issues;
+    const auto metadata = validator.readMetadataFileForDecode(dir / "metadata.json", issues);
+    assert(metadata);
+    assert(issues.empty());
+    assert(metadata->projector_width == 960 && metadata->projector_height == 540);
+    assert(metadata->pattern_count == 42);
+    assert(metadata->surface_width == 2240 && metadata->surface_height == 1400);
+    assert(metadata->display_width == 1920 && metadata->display_height == 1080);
+    assert(metadata->display_x == 160 && metadata->display_y == 160);
 }
 
 void testProjectorHandler()
@@ -991,34 +1341,36 @@ void testProjectorHandler()
     service::projector::ProjectorService projector_service{window_service, monitor_service};
     runtime::ProjectorHandlerContext context{projector_service};
 
-    assert(runWindowRequest(window_service, [&]
+    assert(runWindowRequest(window_service,
+                            [&]
                             {
                                 return window_service.openWindow(service::window::WindowOpenConfig{
                                     "projector_window", "Projector", 16, 12, std::nullopt, false});
-                            }).ok);
+                            })
+               .ok);
 
-    auto result = runWindowRequest(window_service, [&]
-                                   {
-                                       return handler::projector::handle(
-                                           context, cmd::Command{cmd::CmdOpenProjector{"projector", "projector_window", 16, 12}});
-                                   });
+    auto result =
+        runWindowRequest(window_service,
+                         [&]
+                         {
+                             return handler::projector::handle(
+                                 context, cmd::Command{cmd::CmdOpenProjector{"projector", "projector_window", 16, 12}});
+                         });
     assert(result.handled && result.ok);
 
     result = handler::projector::handle(context, cmd::Command{cmd::CmdGeneratePatterns{"projector"}});
     assert(result.handled && result.ok);
 
-    result = runWindowRequest(window_service, [&]
-                              {
-                                  return handler::projector::handle(
-                                      context, cmd::Command{cmd::CmdProjectorShowPattern{"projector", 0}});
-                              });
+    result = runWindowRequest(
+        window_service,
+        [&] {
+            return handler::projector::handle(context, cmd::Command{cmd::CmdProjectorShowPattern{"projector", 0}});
+        });
     assert(result.handled && result.ok);
 
-    result = runWindowRequest(window_service, [&]
-                              {
-                                  return handler::projector::handle(
-                                      context, cmd::Command{cmd::CmdProjectorNextPattern{"projector"}});
-                              });
+    result = runWindowRequest(
+        window_service,
+        [&] { return handler::projector::handle(context, cmd::Command{cmd::CmdProjectorNextPattern{"projector"}}); });
     assert(result.handled && result.ok);
 
     result = handler::projector::handle(context, cmd::Command{cmd::CmdCloseProjector{"projector"}});
@@ -1197,40 +1549,40 @@ void testScanDatasetValidator()
     writeScanMetadata(dir, 0);
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
     assert(!result.valid);
-    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
-                       { return issue.code == "metadata_invalid_pattern_count"; }));
+    assert(std::any_of(result.issues.begin(), result.issues.end(),
+                       [](const auto& issue) { return issue.code == "metadata_invalid_pattern_count"; }));
 
     dir = testTempDir("invalid_surface");
     writeValidScanDataset(dir, 1);
     writeScanMetadata(dir, 1, 0, 16);
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
     assert(!result.valid);
-    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
-                       { return issue.code == "metadata_invalid_surface"; }));
+    assert(std::any_of(result.issues.begin(), result.issues.end(),
+                       [](const auto& issue) { return issue.code == "metadata_invalid_surface"; }));
 
     dir = testTempDir("left_missing");
     writeValidScanDataset(dir, 1);
     std::filesystem::remove_all(dir / "left");
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
     assert(!result.valid);
-    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
-                       { return issue.code == "left_dir_not_found"; }));
+    assert(std::any_of(result.issues.begin(), result.issues.end(),
+                       [](const auto& issue) { return issue.code == "left_dir_not_found"; }));
 
     dir = testTempDir("right_missing");
     writeValidScanDataset(dir, 1);
     std::filesystem::remove_all(dir / "right");
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
     assert(!result.valid);
-    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
-                       { return issue.code == "right_dir_not_found"; }));
+    assert(std::any_of(result.issues.begin(), result.issues.end(),
+                       [](const auto& issue) { return issue.code == "right_dir_not_found"; }));
 
     dir = testTempDir("missing_left_image");
     writeValidScanDataset(dir, 2);
     std::filesystem::remove(patternPath(dir, "left", 1));
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
     assert(!result.valid && result.partial && result.missing_count == 1);
-    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
-                       { return issue.code == "missing_left_image"; }));
+    assert(std::any_of(result.issues.begin(), result.issues.end(),
+                       [](const auto& issue) { return issue.code == "missing_left_image"; }));
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, true});
     assert(result.valid && result.partial);
 
@@ -1239,24 +1591,24 @@ void testScanDatasetValidator()
     std::filesystem::remove(patternPath(dir, "right", 1));
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
     assert(!result.valid && result.partial && result.missing_count == 1);
-    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
-                       { return issue.code == "missing_right_image"; }));
+    assert(std::any_of(result.issues.begin(), result.issues.end(),
+                       [](const auto& issue) { return issue.code == "missing_right_image"; }));
 
     dir = testTempDir("unreadable");
     writeValidScanDataset(dir, 1);
     std::ofstream(patternPath(dir, "left", 0)) << "not a png";
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
     assert(!result.valid);
-    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
-                       { return issue.code == "unreadable_left_image"; }));
+    assert(std::any_of(result.issues.begin(), result.issues.end(),
+                       [](const auto& issue) { return issue.code == "unreadable_left_image"; }));
 
     dir = testTempDir("stereo_size_mismatch");
     writeValidScanDataset(dir, 1);
     writeImage(patternPath(dir, "right", 0), 24, 16);
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
     assert(!result.valid);
-    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
-                       { return issue.code == "stereo_size_mismatch"; }));
+    assert(std::any_of(result.issues.begin(), result.issues.end(),
+                       [](const auto& issue) { return issue.code == "stereo_size_mismatch"; }));
 
     dir = testTempDir("image_size_inconsistent");
     writeValidScanDataset(dir, 2);
@@ -1264,8 +1616,8 @@ void testScanDatasetValidator()
     writeImage(patternPath(dir, "right", 1), 22, 16);
     result = validator.validate(service::scan_dataset::ScanDatasetValidationConfig{dir, false});
     assert(!result.valid);
-    assert(std::any_of(result.issues.begin(), result.issues.end(), [](const auto& issue)
-                       { return issue.code == "image_size_inconsistent"; }));
+    assert(std::any_of(result.issues.begin(), result.issues.end(),
+                       [](const auto& issue) { return issue.code == "image_size_inconsistent"; }));
 }
 
 void testScanDatasetHandler()
@@ -1285,7 +1637,6 @@ void testScanDatasetHandler()
     assert(!other.handled);
 }
 
-
 void testDecodeServiceSyntheticDataset()
 {
     service::scan_dataset::ScanDatasetValidator validator;
@@ -1295,7 +1646,8 @@ void testDecodeServiceSyntheticDataset()
     const auto output_dir = testTempDir("decode_synthetic_output");
     writeSyntheticGrayCodeDataset(input_dir, 8, 4);
 
-    auto result = decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, output_dir, 15, false});
+    auto result =
+        decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, output_dir, 15, false});
     assert(result.ok);
     assert(result.scan_id == "session_001");
     assert(result.projector_width == 8 && result.projector_height == 4);
@@ -1320,7 +1672,8 @@ void testDecodeServiceSyntheticDataset()
     }
 
     const auto high_threshold_output = testTempDir("decode_high_threshold_output");
-    result = decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, high_threshold_output, 300, false});
+    result = decode_service.decodePatterns(
+        service::decode::DecodePatternsConfig{input_dir, high_threshold_output, 300, false});
     assert(result.ok);
     assert(result.left_valid_count == 0 && result.right_valid_count == 0);
 }
@@ -1332,7 +1685,8 @@ void testDecodeServiceFailures()
 
     auto input_dir = testTempDir("decode_invalid_dataset");
     auto output_dir = testTempDir("decode_invalid_output");
-    auto result = decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, output_dir, 15, false});
+    auto result =
+        decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, output_dir, 15, false});
     assert(!result.ok && result.error->code == "scan_dataset_invalid");
 
     input_dir = testTempDir("decode_count_mismatch");
@@ -1360,7 +1714,10 @@ void testDecodeHandler()
     const auto output_dir = testTempDir("decode_handler_output");
     writeSyntheticGrayCodeDataset(input_dir, 8, 4);
 
-    auto result = handler::decode::handle(context, cmd::Command{cmd::CmdDecodePatterns{input_dir.string(), output_dir.string(), 15, false, {}, {}, {}, std::nullopt, std::nullopt, std::nullopt}});
+    auto result = handler::decode::handle(
+        context,
+        cmd::Command{cmd::CmdDecodePatterns{
+            input_dir.string(), output_dir.string(), 15, false, {}, {}, {}, std::nullopt, std::nullopt, std::nullopt}});
     assert(result.handled && result.ok);
     assert(result.values.at("projector_width") == "8");
     assert(result.values.at("projector_height") == "4");
@@ -1369,7 +1726,6 @@ void testDecodeHandler()
     const auto other = handler::decode::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
     assert(!other.handled);
 }
-
 
 void testServiceValidation()
 {
@@ -1394,6 +1750,13 @@ int main()
     testScanMapper();
     testHandler();
     testWindowHandler();
+    testProjectorLogicalResolutionSeparateFromDisplay();
+    testProjectorSameResolutionStillGeneratesExpectedCount();
+    testProjectorSurfaceReconfigurationKeepsGeneratedPatterns();
+    testProjectorSurfaceChangesBeforeGenerateKeepCodeResolution();
+    testProjectorNearestResizeProducesBinaryValues();
+    testProjectorHandlerReportsCodeAndDisplayResolution();
+    testScanMetadataDistinguishesCodeAndDisplayResolution();
     testProjectorHandler();
     testScanDatasetResolver();
     testMonoCalibrationFileLoader();

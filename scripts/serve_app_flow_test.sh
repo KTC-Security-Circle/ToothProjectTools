@@ -334,7 +334,7 @@ test_scan_validation() {
   request_error "scan-validate-missing-input" "missing_field" \
     '{"id":"scan-validate-missing-input","cmd":"scan_validate"}'
 
-  request_error "scan-validate-empty-input" "invalid_command" \
+  request_error "scan-validate-empty-input" "missing_field" \
     '{"id":"scan-validate-empty-input","cmd":"scan_validate","input_dir":""}'
 
   request_error "decode-missing-input" "missing_field" \
@@ -343,7 +343,7 @@ test_scan_validation() {
   request_error "decode-missing-output" "missing_field" \
     '{"id":"decode-missing-output","cmd":"decode_patterns","input_dir":"./data/scan/test"}'
 
-  request_error "decode-empty-input" "invalid_command" \
+  request_error "decode-empty-input" "missing_field" \
     '{"id":"decode-empty-input","cmd":"decode_patterns","input_dir":"","output_dir":"./data/decode/test"}'
 
   request_error "decode-invalid-threshold" "invalid_command" \
@@ -432,7 +432,7 @@ test_window_success_if_enabled() {
   request_ok "projector-open" \
     '{"id":"projector-open","cmd":"open_projector","projector_role":"projector","window_role":"test","width":640,"height":480}'
 
-  assert_last_json '.projector_role == "projector" and .window_role == "test" and .width == "640" and .height == "480"' \
+  assert_last_json '.projector_role == "projector" and .window_role == "test" and .width == "640" and .height == "480" and .code_width == "640" and .code_height == "480" and .display_width == "640" and .display_height == "480"' \
     "open_projector response"
 
   expect_event "projector_opened" \
@@ -441,20 +441,20 @@ test_window_success_if_enabled() {
   request_ok "surface-configure" \
     '{"id":"surface-configure","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":0,"width":640,"height":480,"placement":"center"}'
 
-  assert_last_json '.projector_role == "projector" and .window_role == "test" and .pattern_width == "640" and .pattern_height == "480" and .clamped == "false"' \
+  assert_last_json '.projector_role == "projector" and .window_role == "test" and .code_width == "640" and .code_height == "480" and .pattern_width == "640" and .pattern_height == "480" and .display_width == "640" and .display_height == "480" and .clamped == "false"' \
     "configure_projector_surface response"
 
   expect_event "projector_surface_configured" \
-    '.event == "projector_surface_configured" and .projector_role == "projector" and .window_role == "test"'
+    '.event == "projector_surface_configured" and .projector_role == "projector" and .window_role == "test" and .code_width == "640" and .display_width == "640"'
 
   request_ok "patterns-generate" \
     '{"id":"patterns-generate","cmd":"generate_patterns","projector_role":"projector"}'
 
-  assert_last_json '.projector_role == "projector" and (.pattern_count | tonumber) > 0 and .width == "640" and .height == "480"' \
+  assert_last_json '.projector_role == "projector" and (.pattern_count | tonumber) > 0 and .width == "640" and .height == "480" and .code_width == "640" and .code_height == "480" and .display_width == "640" and .display_height == "480"' \
     "generate_patterns response"
 
   expect_event "patterns_generated" \
-    '.event == "patterns_generated" and .projector_role == "projector" and (.pattern_count | tonumber) > 0'
+    '.event == "patterns_generated" and .projector_role == "projector" and (.pattern_count | tonumber) > 0 and .code_width == "640" and .display_width == "640"'
 
   request_ok_timeout "pattern-show" 5 \
     '{"id":"pattern-show","cmd":"show_pattern","projector_role":"projector","index":0}'
