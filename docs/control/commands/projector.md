@@ -6,10 +6,12 @@
 
 Windowを作成し、window roleへbindする。
 
+`monitor_index` は0-basedで、省略時はprimary monitorを使用する。範囲外はprimary monitorへfallbackし、monitorが存在しない場合は `monitor_not_found` を返す。既存schemaとの互換性のため、open response/eventには `monitor_index` を追加しない。
+
 ### args(JSONL)
 
 ```json
-{"id":"40","cmd":"open_window","window_role":"projector","title":"Projector","width":1920,"height":1080,"monitor_index":1,"fullscreen":true}
+{"id":"40","cmd":"open_window","window_role":"projector","title":"Projector","width":1920,"height":1080,"monitor_index":0,"fullscreen":true}
 ```
 
 | field | 必須 | 説明 |
@@ -20,7 +22,7 @@ Windowを作成し、window roleへbindする。
 | `title` | 任意 | window title。省略時は `window_role`。 |
 | `width` | 必須 | window幅。 |
 | `height` | 必須 | window高さ。 |
-| `monitor_index` | 任意 | monitor index。 |
+| `monitor_index` | 任意 | 0-based monitor index。省略時はprimary、範囲外はprimaryへfallbackする。 |
 | `fullscreen` | 任意 | fullscreen指定。 |
 
 ### return
@@ -113,8 +115,7 @@ open済みwindow role。
 ### 役割
 
 monitor一覧を返す。
-monitor indexは0-basedである。
-monitor情報を取得できない場合はfallback monitorを返す。
+monitor indexは0-basedである。monitorを取得できない場合は空の一覧を返す。
 
 ### args(JSONL)
 
@@ -161,14 +162,16 @@ monitor provider。
 
 projectorの表示surfaceとactive pattern areaを設定する。
 
+monitorが1台以上ある場合、範囲外の明示指定はprimary monitorへfallbackする。monitorが存在しない場合は `monitor_not_found` を返す。responseとeventの `monitor_index` はrequest値ではなく実際に適用された0-based indexである。
+
 ### args(JSONL)
 
 ```json
-{"id":"61","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":1,"width":1280,"height":720,"placement":"center"}
+{"id":"61","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":0,"width":1280,"height":720,"placement":"center"}
 ```
 
 ```json
-{"id":"62","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":1,"width":1280,"height":720,"x":320,"y":180,"placement":"custom"}
+{"id":"62","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":0,"width":1280,"height":720,"x":320,"y":180,"placement":"custom"}
 ```
 
 | field | 必須 | 説明 |
@@ -176,7 +179,7 @@ projectorの表示surfaceとactive pattern areaを設定する。
 | `id` | 必須 | request ID。 |
 | `cmd` | 必須 | `configure_projector_surface`。 |
 | `projector_role` | 必須 | projector role。 |
-| `monitor_index` | 必須 | monitor index。 |
+| `monitor_index` | 必須 | 0-based monitor index。範囲外はprimaryへfallbackする。 |
 | `width` | 必須 | active pattern幅。 |
 | `height` | 必須 | active pattern高さ。 |
 | `placement` | 任意 | `center` または `custom`。defaultは `center`。 |
@@ -186,13 +189,13 @@ projectorの表示surfaceとactive pattern areaを設定する。
 ### return
 
 ```json
-{"id":"61","ok":true,"projector_role":"projector","window_role":"projector","monitor_index":"1","monitor_width":"1920","monitor_height":"1080","surface_width":"1920","surface_height":"1080","pattern_width":"1280","pattern_height":"720","pattern_x":"320","pattern_y":"180","clamped":"false"}
+{"id":"61","ok":true,"projector_role":"projector","window_role":"projector","monitor_index":"0","monitor_width":"1920","monitor_height":"1080","surface_width":"1920","surface_height":"1080","pattern_width":"1280","pattern_height":"720","pattern_x":"320","pattern_y":"180","clamped":"false"}
 ```
 
 ### event
 
 ```json
-{"event":"projector_surface_configured","projector_role":"projector","window_role":"projector","monitor_index":"1","pattern_width":"1280","pattern_height":"720","pattern_x":"320","pattern_y":"180","clamped":"false"}
+{"event":"projector_surface_configured","projector_role":"projector","window_role":"projector","monitor_index":"0","pattern_width":"1280","pattern_height":"720","pattern_x":"320","pattern_y":"180","clamped":"false"}
 ```
 
 ### 読むArtifact
@@ -225,6 +228,8 @@ Window backend。
 
 projector roleをopen済みwindow roleへbindする。
 ここでのprojectorは物理デバイスではなく、patternを表示するruntime上の表示resourceを指す。
+
+初期surfaceはprimary monitorを使用する。monitorが存在しない場合は `monitor_not_found` を返し、projector stateを作成しない。response/eventにsurfaceの `monitor_index` が含まれる場合は実際に適用された0-based indexである。
 
 ### args(JSONL)
 
