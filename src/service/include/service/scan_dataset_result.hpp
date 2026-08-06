@@ -41,6 +41,12 @@ struct ScanDatasetMetadata
     /// pattern_count <int>: expected pattern count。
     int pattern_count{0};
 
+    /// projector_width <int>: Decode用Gray Code論理解像度の幅。
+    int projector_width{0};
+
+    /// projector_height <int>: Decode用Gray Code論理解像度の高さ。
+    int projector_height{0};
+
     /// settle_ms <int>: scan時のsettle time。
     int settle_ms{0};
 
@@ -61,6 +67,18 @@ struct ScanDatasetMetadata
 
     /// pattern_y <int>: active pattern origin Y。
     int pattern_y{0};
+
+    /// display_width <int>: surface内の表示領域横幅。
+    int display_width{0};
+
+    /// display_height <int>: surface内の表示領域縦幅。
+    int display_height{0};
+
+    /// display_x <int>: surface内の表示領域左上X座標。
+    int display_x{0};
+
+    /// display_y <int>: surface内の表示領域左上Y座標。
+    int display_y{0};
 };
 
 struct ScanDatasetValidationResult

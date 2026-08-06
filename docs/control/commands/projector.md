@@ -37,6 +37,13 @@ Windowを作成し、window roleへbindする。
 {"event":"window_opened","window_role":"projector","window_id":"1","width":"1920","height":"1080"}
 ```
 
+### サイズの意味
+
+- `code_width` / `code_height`: Gray Code論理解像度。`cv::structured_light::GrayCodePattern` へ渡す解像度。
+- `surface_width` / `surface_height`: monitor全体を覆うblack canvasのサイズ。
+- `display_width` / `display_height`: surface内でpatternを表示する矩形サイズ。互換fieldの `pattern_width` / `pattern_height` も同じdisplay regionを表す。
+- 表示時は論理patternをdisplay regionへnearest-neighborで拡大する。
+
 ### 読むArtifact
 
 なし。
@@ -160,7 +167,7 @@ monitor provider。
 
 ### 役割
 
-projectorの表示surfaceとactive pattern areaを設定する。
+projectorのmonitor surfaceと、Gray Codeを実際に表示するdisplay regionを設定する。
 
 monitorが1台以上ある場合、範囲外の明示指定はprimary monitorへfallbackする。monitorが存在しない場合は `monitor_not_found` を返す。responseとeventの `monitor_index` はrequest値ではなく実際に適用された0-based indexである。
 
@@ -180,8 +187,8 @@ monitorが1台以上ある場合、範囲外の明示指定はprimary monitorへ
 | `cmd` | 必須 | `configure_projector_surface`。 |
 | `projector_role` | 必須 | projector role。 |
 | `monitor_index` | 必須 | 0-based monitor index。範囲外はprimaryへfallbackする。 |
-| `width` | 必須 | active pattern幅。 |
-| `height` | 必須 | active pattern高さ。 |
+| `width` | 必須 | monitor上のdisplay region幅。Gray Code論理解像度は変更しない。 |
+| `height` | 必須 | monitor上のdisplay region高さ。Gray Code論理解像度は変更しない。 |
 | `placement` | 任意 | `center` または `custom`。defaultは `center`。 |
 | `x` | 条件付き | `custom` のX座標。 |
 | `y` | 条件付き | `custom` のY座標。 |
@@ -189,13 +196,13 @@ monitorが1台以上ある場合、範囲外の明示指定はprimary monitorへ
 ### return
 
 ```json
-{"id":"61","ok":true,"projector_role":"projector","window_role":"projector","monitor_index":"0","monitor_width":"1920","monitor_height":"1080","surface_width":"1920","surface_height":"1080","pattern_width":"1280","pattern_height":"720","pattern_x":"320","pattern_y":"180","clamped":"false"}
+{"id":"61","ok":true,"projector_role":"projector","window_role":"projector","monitor_index":"0","monitor_width":"1920","monitor_height":"1080","surface_width":"1920","surface_height":"1080","code_width":"960","code_height":"540","pattern_width":"1280","pattern_height":"720","pattern_x":"320","pattern_y":"180","display_width":"1280","display_height":"720","display_x":"320","display_y":"180","clamped":"false"}
 ```
 
 ### event
 
 ```json
-{"event":"projector_surface_configured","projector_role":"projector","window_role":"projector","monitor_index":"0","pattern_width":"1280","pattern_height":"720","pattern_x":"320","pattern_y":"180","clamped":"false"}
+{"event":"projector_surface_configured","projector_role":"projector","window_role":"projector","monitor_index":"0","code_width":"960","code_height":"540","pattern_width":"1280","pattern_height":"720","pattern_x":"320","pattern_y":"180","display_width":"1280","display_height":"720","display_x":"320","display_y":"180","clamped":"false"}
 ```
 
 ### 読むArtifact
@@ -229,7 +236,7 @@ Window backend。
 projector roleをopen済みwindow roleへbindする。
 ここでのprojectorは物理デバイスではなく、patternを表示するruntime上の表示resourceを指す。
 
-初期surfaceはprimary monitorを使用する。monitorが存在しない場合は `monitor_not_found` を返し、projector stateを作成しない。response/eventにsurfaceの `monitor_index` が含まれる場合は実際に適用された0-based indexである。
+初期surfaceはprimary monitorを使用する。`width` / `height` は Gray Code 論理解像度として保存される。monitorが存在しない場合は `monitor_not_found` を返し、projector stateを作成しない。response/eventにsurfaceの `monitor_index` が含まれる場合は実際に適用された0-based indexである。
 
 ### args(JSONL)
 
@@ -243,19 +250,19 @@ projector roleをopen済みwindow roleへbindする。
 | `cmd` | 必須 | `open_projector`。 |
 | `projector_role` | 必須 | projector role。 |
 | `window_role` | 必須 | window role。 |
-| `width` | 必須 | initial active pattern幅。 |
-| `height` | 必須 | initial active pattern高さ。 |
+| `width` | 必須 | Gray Code論理解像度の幅。 |
+| `height` | 必須 | Gray Code論理解像度の高さ。 |
 
 ### return
 
 ```json
-{"id":"50","ok":true,"projector_role":"projector","window_role":"projector","width":"1920","height":"1080","surface_width":"1920","surface_height":"1080","pattern_width":"1920","pattern_height":"1080","pattern_x":"0","pattern_y":"0","clamped":"false"}
+{"id":"50","ok":true,"projector_role":"projector","window_role":"projector","width":"1920","height":"1080","code_width":"1920","code_height":"1080","surface_width":"1920","surface_height":"1080","pattern_width":"1920","pattern_height":"1080","display_width":"1920","display_height":"1080","pattern_x":"0","pattern_y":"0","display_x":"0","display_y":"0","clamped":"false"}
 ```
 
 ### event
 
 ```json
-{"event":"projector_opened","projector_role":"projector","window_role":"projector","width":"1920","height":"1080"}
+{"event":"projector_opened","projector_role":"projector","window_role":"projector","width":"1920","height":"1080","code_width":"1920","code_height":"1080"}
 ```
 
 ### 読むArtifact
@@ -337,7 +344,7 @@ open済みprojector role。
 
 generate_patterns はpattern生成commandである。
 カメラや物理プロジェクタには依存しない。
-生成するpatternの幅・高さはprojector surface設定に依存する。
+生成するpatternの幅・高さは `open_projector` で保存した Gray Code論理解像度に依存する。`configure_projector_surface` のdisplay region幅・高さは生成解像度を変更しない。
 
 ### args(JSONL)
 
@@ -354,13 +361,13 @@ generate_patterns はpattern生成commandである。
 ### return
 
 ```json
-{"id":"51","ok":true,"projector_role":"projector","pattern_count":"44","width":"1920","height":"1080"}
+{"id":"51","ok":true,"projector_role":"projector","pattern_count":"42","width":"960","height":"540","code_width":"960","code_height":"540","display_width":"1920","display_height":"1080"}
 ```
 
 ### event
 
 ```json
-{"event":"patterns_generated","projector_role":"projector","pattern_count":"44","width":"1920","height":"1080"}
+{"event":"patterns_generated","projector_role":"projector","pattern_count":"42","width":"960","height":"540","code_width":"960","code_height":"540","display_width":"1920","display_height":"1080"}
 ```
 
 ### 読むArtifact

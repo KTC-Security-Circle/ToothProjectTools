@@ -94,8 +94,9 @@ std::string captureMessage(const capture::CaptureStereoResult& result)
 
 } // namespace
 
-ScanService::ScanService(service::projector::ProjectorService& projector_service, capture::CaptureService& capture_service,
-                         service::camera::CameraService& camera_service, ScanEventSink& event_sink)
+ScanService::ScanService(service::projector::ProjectorService& projector_service,
+                         capture::CaptureService& capture_service, service::camera::CameraService& camera_service,
+                         ScanEventSink& event_sink)
     : projector_service_(projector_service), capture_service_(capture_service), camera_service_(camera_service),
       event_sink_(event_sink)
 {
@@ -110,11 +111,13 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
 {
     if (config.projector_role.empty() || config.left_role.empty() || config.right_role.empty() || config.settle_ms < 0)
     {
-        return ScanResult::failure(config.scan_id.value_or(std::string{}), "invalid_scan_config", "invalid scan configuration");
+        return ScanResult::failure(config.scan_id.value_or(std::string{}), "invalid_scan_config",
+                                   "invalid scan configuration");
     }
     if (config.output_dir.empty())
     {
-        return ScanResult::failure(config.scan_id.value_or(std::string{}), "invalid_output_path", "output_dir is empty");
+        return ScanResult::failure(config.scan_id.value_or(std::string{}), "invalid_output_path",
+                                   "output_dir is empty");
     }
     if (config.scan_id && config.scan_id->empty())
     {
@@ -133,7 +136,8 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     const auto snapshot = projector_service_.scanSnapshot(config.projector_role);
     if (!snapshot)
     {
-        return ScanResult::failure(scan_id, "projector_not_open", "projector role is not open: " + config.projector_role);
+        return ScanResult::failure(scan_id, "projector_not_open",
+                                   "projector role is not open: " + config.projector_role);
     }
     if (snapshot->patterns_dirty || snapshot->pattern_count <= 0)
     {
@@ -158,7 +162,8 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     }
 
     std::string metadata_error;
-    if (!writeMetadata(config, scan_id, snapshot->pattern_count, snapshot->surface, metadata_error))
+    if (!writeMetadata(config, scan_id, snapshot->pattern_count, snapshot->code_width, snapshot->code_height,
+                       snapshot->surface, metadata_error))
     {
         return ScanResult::failure(scan_id, "scan_start_failed", metadata_error);
     }
@@ -183,8 +188,8 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
         worker_.request_stop();
         worker_ = std::jthread{};
     }
-    worker_ = std::jthread([this, worker_config, scan_id, pattern_count = snapshot->pattern_count](std::stop_token token)
-                           { workerLoop(token, worker_config, scan_id, pattern_count); });
+    worker_ = std::jthread([this, worker_config, scan_id, pattern_count = snapshot->pattern_count](
+                               std::stop_token token) { workerLoop(token, worker_config, scan_id, pattern_count); });
 
     auto result = scanStatus(scan_id);
     result.ok = true;
@@ -288,11 +293,11 @@ bool ScanService::isWindowRoleBusy(const std::string& window_role) const
 void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config, std::string scan_id, int pattern_count)
 {
     pushEvent("scan_started", {{"scan_id", scan_id},
-                                {"projector_role", config.projector_role},
-                                {"left_role", config.left_role},
-                                {"right_role", config.right_role},
-                                {"pattern_count", std::to_string(pattern_count)},
-                                {"output_dir", config.output_dir.string()}});
+                               {"projector_role", config.projector_role},
+                               {"left_role", config.left_role},
+                               {"right_role", config.right_role},
+                               {"pattern_count", std::to_string(pattern_count)},
+                               {"output_dir", config.output_dir.string()}});
 
     const auto left_id = camera_service_.resolveCameraId(config.left_role);
     const auto right_id = camera_service_.resolveCameraId(config.right_role);
@@ -312,9 +317,11 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             error_code = last_error_code_;
             error_message = last_error_message_;
         }
-        pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", error_code},
-                                   {"error_message", error_message}, {"captured_count", std::to_string(captured)},
-                                   {"current_index", std::to_string(current)}});
+        pushEvent("scan_failed", {{"scan_id", scan_id},
+                                  {"error_code", error_code},
+                                  {"error_message", error_message},
+                                  {"captured_count", std::to_string(captured)},
+                                  {"current_index", std::to_string(current)}});
         return;
     }
 
@@ -330,8 +337,9 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                 captured = captured_count_;
                 current = current_index_;
             }
-            pushEvent("scan_stopped", {{"scan_id", scan_id}, {"captured_count", std::to_string(captured)},
-                                        {"current_index", std::to_string(current)}});
+            pushEvent("scan_stopped", {{"scan_id", scan_id},
+                                       {"captured_count", std::to_string(captured)},
+                                       {"current_index", std::to_string(current)}});
             return;
         }
         {
@@ -350,15 +358,18 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                 std::lock_guard lock(mutex_);
                 state_ = ScanState::failed;
                 last_error_code_ = show_result.error ? show_result.error->code : std::string{"pattern_show_failed"};
-                last_error_message_ = show_result.error ? show_result.error->message : std::string{"failed to show pattern"};
+                last_error_message_ =
+                    show_result.error ? show_result.error->message : std::string{"failed to show pattern"};
                 captured = captured_count_;
                 current = current_index_;
                 error_code = last_error_code_;
                 error_message = last_error_message_;
             }
-            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", error_code},
-                                       {"error_message", error_message}, {"captured_count", std::to_string(captured)},
-                                       {"current_index", std::to_string(current)}});
+            pushEvent("scan_failed", {{"scan_id", scan_id},
+                                      {"error_code", error_code},
+                                      {"error_message", error_message},
+                                      {"captured_count", std::to_string(captured)},
+                                      {"current_index", std::to_string(current)}});
             return;
         }
 
@@ -390,9 +401,11 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                 error_code = last_error_code_;
                 error_message = last_error_message_;
             }
-            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", error_code},
-                                       {"error_message", error_message}, {"captured_count", std::to_string(captured)},
-                                       {"current_index", std::to_string(current)}});
+            pushEvent("scan_failed", {{"scan_id", scan_id},
+                                      {"error_code", error_code},
+                                      {"error_message", error_message},
+                                      {"captured_count", std::to_string(captured)},
+                                      {"current_index", std::to_string(current)}});
             return;
         }
 
@@ -403,11 +416,11 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             captured = captured_count_;
         }
         pushEvent("scan_frame_captured", {{"scan_id", scan_id},
-                                           {"pattern_index", std::to_string(index)},
-                                           {"captured_count", std::to_string(captured)},
-                                           {"pattern_count", std::to_string(pattern_count)},
-                                           {"left_path", left_path.string()},
-                                           {"right_path", right_path.string()}});
+                                          {"pattern_index", std::to_string(index)},
+                                          {"captured_count", std::to_string(captured)},
+                                          {"pattern_count", std::to_string(pattern_count)},
+                                          {"left_path", left_path.string()},
+                                          {"right_path", right_path.string()}});
     }
 
     int captured = 0;
@@ -418,9 +431,9 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         captured = captured_count_;
     }
     pushEvent("scan_completed", {{"scan_id", scan_id},
-                                  {"captured_count", std::to_string(captured)},
-                                  {"pattern_count", std::to_string(pattern_count)},
-                                  {"output_dir", config.output_dir.string()}});
+                                 {"captured_count", std::to_string(captured)},
+                                 {"pattern_count", std::to_string(pattern_count)},
+                                 {"output_dir", config.output_dir.string()}});
 }
 
 ScanResult ScanService::snapshotLocked() const
@@ -446,7 +459,8 @@ void ScanService::pushEvent(std::string event, std::map<std::string, std::string
 }
 
 bool ScanService::writeMetadata(const ScanStartConfig& config, const std::string& scan_id, int pattern_count,
-                                const service::projector::ProjectorSurface& surface, std::string& error_message) const
+                                int code_width, int code_height, const service::projector::ProjectorSurface& surface,
+                                std::string& error_message) const
 {
     try
     {
@@ -464,6 +478,8 @@ bool ScanService::writeMetadata(const ScanStartConfig& config, const std::string
                << "  \"left_role\": \"" << jsonEscape(config.left_role) << "\",\n"
                << "  \"right_role\": \"" << jsonEscape(config.right_role) << "\",\n"
                << "  \"pattern_count\": " << pattern_count << ",\n"
+               << "  \"projector_width\": " << code_width << ",\n"
+               << "  \"projector_height\": " << code_height << ",\n"
                << "  \"settle_ms\": " << config.settle_ms << ",\n"
                << "  \"output_dir\": \"" << jsonEscape(config.output_dir.string()) << "\",\n"
                << "  \"surface\": {\n"
@@ -472,6 +488,10 @@ bool ScanService::writeMetadata(const ScanStartConfig& config, const std::string
                << "    \"monitor_height\": " << surface.monitor_height << ",\n"
                << "    \"surface_width\": " << surface.surface_width << ",\n"
                << "    \"surface_height\": " << surface.surface_height << ",\n"
+               << "    \"display_width\": " << surface.pattern_width << ",\n"
+               << "    \"display_height\": " << surface.pattern_height << ",\n"
+               << "    \"display_x\": " << surface.pattern_x << ",\n"
+               << "    \"display_y\": " << surface.pattern_y << ",\n"
                << "    \"pattern_width\": " << surface.pattern_width << ",\n"
                << "    \"pattern_height\": " << surface.pattern_height << ",\n"
                << "    \"pattern_x\": " << surface.pattern_x << ",\n"

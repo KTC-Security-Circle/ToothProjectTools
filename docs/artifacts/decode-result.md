@@ -32,8 +32,8 @@ decode_result/
 | `metadata.version` | decode result format version。新規出力は`0.1.0`。versionなしはlegacy v0として扱う。 |
 | `metadata.input_dir` | 元のscan dataset root。 |
 | `metadata.pattern_count` | decodeしたpattern数。 |
-| `metadata.projector_width` | projector座標の幅。 |
-| `metadata.projector_height` | projector座標の高さ。 |
+| `metadata.projector_width` | Decodeに使用したGray Code論理解像度の幅。 |
+| `metadata.projector_height` | Decodeに使用したGray Code論理解像度の高さ。 |
 | `left/projector_x.yml` | left画像各pixelのprojector X座標。 |
 | `left/projector_y.yml` | left画像各pixelのprojector Y座標。 |
 | `left/valid_mask.png` | left decodeの有効mask。 |

@@ -68,6 +68,8 @@ ProjectorResult ProjectorService::openProjector(const ProjectorOpenConfig& confi
     ProjectorSession session;
     session.projector_role = config.projector_role;
     session.window_role = config.window_role;
+    session.code_width = config.width;
+    session.code_height = config.height;
     session.surface =
         computeSurface(resolved_monitor->monitor, config.width, config.height, 0, 0, ProjectorPlacement::custom);
     session.patterns_dirty = true;
@@ -144,9 +146,6 @@ ProjectorResult ProjectorService::configureSurface(const ProjectorSurfaceRequest
     }
 
     session->surface = surface;
-    session->patterns_dirty = true;
-    session->structured_light.reset();
-    session->current_index = 0;
     return successFromSession(*session);
 }
 
@@ -174,15 +173,15 @@ ProjectorResult ProjectorService::generatePatterns(const std::string& projector_
                                         "projector role is not open: " + projector_role);
     }
 
-    if (session->surface.pattern_width <= 0 || session->surface.pattern_height <= 0)
+    if (session->code_width <= 0 || session->code_height <= 0)
     {
-        session->surface = makeDefaultSurface(session->surface.surface_width, session->surface.surface_height);
+        return ProjectorResult::failure(projector_role, "invalid_projector_size",
+                                        "code_width and code_height must be positive");
     }
 
     try
     {
-        session->structured_light =
-            std::make_unique<sl::StructuredLight>(session->surface.pattern_width, session->surface.pattern_height);
+        session->structured_light = std::make_unique<sl::StructuredLight>(session->code_width, session->code_height);
         session->structured_light->generatePatterns();
         const auto count = static_cast<int>(session->structured_light->getPatternCount());
         if (count <= 0)
@@ -298,6 +297,8 @@ std::optional<ProjectorScanSnapshot> ProjectorService::scanSnapshot(const std::s
         session->projector_role,
         session->window_role,
         session->structured_light ? static_cast<int>(session->structured_light->getPatternCount()) : 0,
+        session->code_width,
+        session->code_height,
         session->patterns_dirty,
         session->surface,
     };
@@ -335,8 +336,8 @@ ProjectorResult ProjectorService::successFromSession(const ProjectorSession& ses
 {
     const auto count = session.structured_light ? static_cast<int>(session.structured_light->getPatternCount()) : 0;
     const auto index = count > 0 ? session.current_index : -1;
-    auto result = ProjectorResult::success(session.projector_role, session.window_role, session.surface.pattern_width,
-                                           session.surface.pattern_height, count, index);
+    auto result = ProjectorResult::success(session.projector_role, session.window_role, session.code_width,
+                                           session.code_height, count, index);
     result.monitor_index = session.surface.monitor_index;
     result.monitor_x = session.surface.monitor_x;
     result.monitor_y = session.surface.monitor_y;
@@ -346,6 +347,10 @@ ProjectorResult ProjectorService::successFromSession(const ProjectorSession& ses
     result.surface_height = session.surface.surface_height;
     result.pattern_width = session.surface.pattern_width;
     result.pattern_height = session.surface.pattern_height;
+    result.display_width = session.surface.pattern_width;
+    result.display_height = session.surface.pattern_height;
+    result.display_x = session.surface.pattern_x;
+    result.display_y = session.surface.pattern_y;
     result.pattern_x = session.surface.pattern_x;
     result.pattern_y = session.surface.pattern_y;
     result.clamped = session.surface.clamped;
@@ -411,10 +416,6 @@ ProjectorSurface ProjectorService::computeSurface(const service::monitor::Monito
 
 cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface)
 {
-    if (pattern.cols != surface.pattern_width || pattern.rows != surface.pattern_height)
-    {
-        throw std::runtime_error("pattern size does not match projector surface active area");
-    }
     if (surface.surface_width <= 0 || surface.surface_height <= 0 || surface.pattern_width <= 0 ||
         surface.pattern_height <= 0 || surface.pattern_x < 0 || surface.pattern_y < 0 ||
         surface.pattern_x + surface.pattern_width > surface.surface_width ||
@@ -431,6 +432,14 @@ cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const Pro
     else
     {
         display_pattern = pattern;
+    }
+
+    if (display_pattern.cols != surface.pattern_width || display_pattern.rows != surface.pattern_height)
+    {
+        cv::Mat resized;
+        cv::resize(display_pattern, resized, cv::Size(surface.pattern_width, surface.pattern_height), 0.0, 0.0,
+                   cv::INTER_NEAREST);
+        display_pattern = resized;
     }
 
     cv::Mat canvas(surface.surface_height, surface.surface_width, display_pattern.type(), cv::Scalar::all(0));

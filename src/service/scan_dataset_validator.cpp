@@ -1,10 +1,9 @@
 #include "service/scan_dataset_validator.hpp"
 
+#include <iomanip>
 #include <opencv2/core.hpp>
 #include <opencv2/core/persistence.hpp>
 #include <opencv2/imgcodecs.hpp>
-
-#include <iomanip>
 #include <sstream>
 #include <string>
 
@@ -13,9 +12,11 @@ namespace service::scan_dataset
 namespace
 {
 
-ScanDatasetIssue issue(std::string code, std::string message, const std::filesystem::path& path = {}, int pattern_index = -1)
+ScanDatasetIssue issue(std::string code, std::string message, const std::filesystem::path& path = {},
+                       int pattern_index = -1)
 {
-    return ScanDatasetIssue{std::move(code), std::move(message), path.empty() ? std::string{} : path.string(), pattern_index};
+    return ScanDatasetIssue{std::move(code), std::move(message), path.empty() ? std::string{} : path.string(),
+                            pattern_index};
 }
 
 std::string patternFileName(int index)
@@ -100,30 +101,30 @@ ScanDatasetValidationResult ScanDatasetValidator::validate(const ScanDatasetVali
     }
     else if (result.pattern_count <= 0 && resolved.ok)
     {
-        result.issues.push_back(issue("pattern_count_not_found", "pattern_count could not be inferred", resolved.dataset.root_dir));
+        result.issues.push_back(
+            issue("pattern_count_not_found", "pattern_count could not be inferred", resolved.dataset.root_dir));
     }
 
     setValidity(result, config.allow_partial);
     return result;
 }
 
-std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadataForDecode(
-    const std::filesystem::path& input_dir,
-    std::vector<ScanDatasetIssue>& issues) const
+std::optional<ScanDatasetMetadata>
+ScanDatasetValidator::readMetadataForDecode(const std::filesystem::path& input_dir,
+                                            std::vector<ScanDatasetIssue>& issues) const
 {
     return readMetadata(input_dir / "metadata.json", issues);
 }
 
-std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadataFileForDecode(
-    const std::filesystem::path& metadata_file,
-    std::vector<ScanDatasetIssue>& issues) const
+std::optional<ScanDatasetMetadata>
+ScanDatasetValidator::readMetadataFileForDecode(const std::filesystem::path& metadata_file,
+                                                std::vector<ScanDatasetIssue>& issues) const
 {
     return readMetadata(metadata_file, issues);
 }
 
-std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadata(
-    const std::filesystem::path& metadata_path,
-    std::vector<ScanDatasetIssue>& issues) const
+std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadata(const std::filesystem::path& metadata_path,
+                                                                      std::vector<ScanDatasetIssue>& issues) const
 {
     std::error_code error_code;
     if (!std::filesystem::exists(metadata_path, error_code))
@@ -155,6 +156,8 @@ std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadata(
         metadata.right_role = readString(root, "right_role").value_or("");
         metadata.output_dir = readString(root, "output_dir").value_or("");
         metadata.pattern_count = readIntOrZero(root, "pattern_count");
+        metadata.projector_width = readIntOrZero(root, "projector_width");
+        metadata.projector_height = readIntOrZero(root, "projector_height");
         metadata.settle_ms = readIntOrZero(root, "settle_ms");
 
         const auto surface = root["surface"];
@@ -166,6 +169,35 @@ std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadata(
             metadata.pattern_height = readIntOrZero(surface, "pattern_height");
             metadata.pattern_x = readIntOrZero(surface, "pattern_x");
             metadata.pattern_y = readIntOrZero(surface, "pattern_y");
+            metadata.display_width = readIntOrZero(surface, "display_width");
+            metadata.display_height = readIntOrZero(surface, "display_height");
+            metadata.display_x = readIntOrZero(surface, "display_x");
+            metadata.display_y = readIntOrZero(surface, "display_y");
+            if (metadata.display_width <= 0)
+            {
+                metadata.display_width = metadata.pattern_width;
+            }
+            if (metadata.display_height <= 0)
+            {
+                metadata.display_height = metadata.pattern_height;
+            }
+            if (metadata.display_x == 0)
+            {
+                metadata.display_x = metadata.pattern_x;
+            }
+            if (metadata.display_y == 0)
+            {
+                metadata.display_y = metadata.pattern_y;
+            }
+        }
+
+        if (metadata.projector_width <= 0)
+        {
+            metadata.projector_width = metadata.pattern_width;
+        }
+        if (metadata.projector_height <= 0)
+        {
+            metadata.projector_height = metadata.pattern_height;
         }
 
         if (metadata.scan_id.empty())
@@ -174,11 +206,13 @@ std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadata(
         }
         if (metadata.pattern_count <= 0)
         {
-            issues.push_back(issue("metadata_invalid_pattern_count", "metadata pattern_count must be positive", metadata_path));
+            issues.push_back(
+                issue("metadata_invalid_pattern_count", "metadata pattern_count must be positive", metadata_path));
         }
-        if (metadata.pattern_width <= 0 || metadata.pattern_height <= 0)
+        if (metadata.projector_width <= 0 || metadata.projector_height <= 0)
         {
-            issues.push_back(issue("metadata_invalid_surface", "metadata surface pattern size must be positive", metadata_path));
+            issues.push_back(
+                issue("metadata_invalid_surface", "metadata surface pattern size must be positive", metadata_path));
         }
 
         return metadata;
@@ -195,11 +229,9 @@ std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadata(
     }
 }
 
-void ScanDatasetValidator::validateExpectedImages(
-    const std::filesystem::path& left_dir,
-    const std::filesystem::path& right_dir,
-    int pattern_count,
-    ScanDatasetValidationResult& result) const
+void ScanDatasetValidator::validateExpectedImages(const std::filesystem::path& left_dir,
+                                                  const std::filesystem::path& right_dir, int pattern_count,
+                                                  ScanDatasetValidationResult& result) const
 {
     cv::Size expected_size;
 
@@ -217,11 +249,15 @@ void ScanDatasetValidator::validateExpectedImages(
         }
         if (!left_exists)
         {
-            result.issues.push_back(issue("missing_left_image", "missing left image for pattern index " + std::to_string(index), left_path, index));
+            result.issues.push_back(issue("missing_left_image",
+                                          "missing left image for pattern index " + std::to_string(index), left_path,
+                                          index));
         }
         if (!right_exists)
         {
-            result.issues.push_back(issue("missing_right_image", "missing right image for pattern index " + std::to_string(index), right_path, index));
+            result.issues.push_back(issue("missing_right_image",
+                                          "missing right image for pattern index " + std::to_string(index), right_path,
+                                          index));
         }
 
         cv::Mat left;
@@ -233,14 +269,18 @@ void ScanDatasetValidator::validateExpectedImages(
         {
             if (!cv::haveImageReader(left_path.string()))
             {
-                result.issues.push_back(issue("unreadable_left_image", "left image is unreadable for pattern index " + std::to_string(index), left_path, index));
+                result.issues.push_back(issue("unreadable_left_image",
+                                              "left image is unreadable for pattern index " + std::to_string(index),
+                                              left_path, index));
             }
             else
             {
                 left = cv::imread(left_path.string(), cv::IMREAD_UNCHANGED);
                 if (left.empty())
                 {
-                    result.issues.push_back(issue("empty_left_image", "left image is empty for pattern index " + std::to_string(index), left_path, index));
+                    result.issues.push_back(issue("empty_left_image",
+                                                  "left image is empty for pattern index " + std::to_string(index),
+                                                  left_path, index));
                 }
                 else
                 {
@@ -253,14 +293,18 @@ void ScanDatasetValidator::validateExpectedImages(
         {
             if (!cv::haveImageReader(right_path.string()))
             {
-                result.issues.push_back(issue("unreadable_right_image", "right image is unreadable for pattern index " + std::to_string(index), right_path, index));
+                result.issues.push_back(issue("unreadable_right_image",
+                                              "right image is unreadable for pattern index " + std::to_string(index),
+                                              right_path, index));
             }
             else
             {
                 right = cv::imread(right_path.string(), cv::IMREAD_UNCHANGED);
                 if (right.empty())
                 {
-                    result.issues.push_back(issue("empty_right_image", "right image is empty for pattern index " + std::to_string(index), right_path, index));
+                    result.issues.push_back(issue("empty_right_image",
+                                                  "right image is empty for pattern index " + std::to_string(index),
+                                                  right_path, index));
                 }
                 else
                 {
@@ -272,7 +316,9 @@ void ScanDatasetValidator::validateExpectedImages(
 
         if (left_ok && right_ok && left.size() != right.size())
         {
-            result.issues.push_back(issue("stereo_size_mismatch", "left/right image sizes differ for pattern index " + std::to_string(index), left_path, index));
+            result.issues.push_back(issue("stereo_size_mismatch",
+                                          "left/right image sizes differ for pattern index " + std::to_string(index),
+                                          left_path, index));
         }
 
         const cv::Size size_for_index = left_ok ? left.size() : (right_ok ? right.size() : cv::Size{});
@@ -286,7 +332,10 @@ void ScanDatasetValidator::validateExpectedImages(
             }
             else if (size_for_index != expected_size)
             {
-                result.issues.push_back(issue("image_size_inconsistent", "image size differs from first readable image for pattern index " + std::to_string(index), left_ok ? left_path : right_path, index));
+                result.issues.push_back(
+                    issue("image_size_inconsistent",
+                          "image size differs from first readable image for pattern index " + std::to_string(index),
+                          left_ok ? left_path : right_path, index));
             }
         }
     }

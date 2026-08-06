@@ -14,6 +14,8 @@ ProjectorResult ProjectorResult::success(std::string projector_role, std::string
     result.window_role = std::move(window_role);
     result.width = width;
     result.height = height;
+    result.code_width = width;
+    result.code_height = height;
     result.pattern_count = pattern_count;
     result.pattern_index = pattern_index;
     return result;

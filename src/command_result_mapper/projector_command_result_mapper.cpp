@@ -40,10 +40,9 @@ std::string monitorsJson(const std::vector<service::monitor::MonitorInfo>& monit
         {
             stream << ',';
         }
-        stream << "{\"monitor_index\":" << monitor.monitor_index << ",\"x\":" << monitor.x
-               << ",\"y\":" << monitor.y << ",\"width\":" << monitor.width
-               << ",\"height\":" << monitor.height << ",\"primary\":"
-               << (monitor.primary ? "true" : "false") << ",\"name\":\"" << jsonEscape(monitor.name)
+        stream << "{\"monitor_index\":" << monitor.monitor_index << ",\"x\":" << monitor.x << ",\"y\":" << monitor.y
+               << ",\"width\":" << monitor.width << ",\"height\":" << monitor.height
+               << ",\"primary\":" << (monitor.primary ? "true" : "false") << ",\"name\":\"" << jsonEscape(monitor.name)
                << "\",\"fallback\":" << (monitor.fallback ? "true" : "false") << "}";
     }
     stream << ']';
@@ -77,6 +76,14 @@ common::CommandResult toCommandResult(const service::projector::ProjectorResult&
     {
         values.emplace("height", std::to_string(result.height));
     }
+    if (result.code_width > 0)
+    {
+        values.emplace("code_width", std::to_string(result.code_width));
+    }
+    if (result.code_height > 0)
+    {
+        values.emplace("code_height", std::to_string(result.code_height));
+    }
     if (include_pattern_count && result.pattern_count > 0)
     {
         values.emplace("pattern_count", std::to_string(result.pattern_count));
@@ -97,6 +104,10 @@ common::CommandResult toCommandResult(const service::projector::ProjectorResult&
         values.emplace("pattern_width", std::to_string(result.pattern_width));
         values.emplace("pattern_height", std::to_string(result.pattern_height));
         values.emplace("pattern_x", std::to_string(result.pattern_x));
+        values.emplace("display_width", std::to_string(result.display_width));
+        values.emplace("display_height", std::to_string(result.display_height));
+        values.emplace("display_x", std::to_string(result.display_x));
+        values.emplace("display_y", std::to_string(result.display_y));
         values.emplace("pattern_y", std::to_string(result.pattern_y));
         values.emplace("clamped", boolString(result.clamped));
     }

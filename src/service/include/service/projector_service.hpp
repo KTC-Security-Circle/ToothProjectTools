@@ -5,10 +5,10 @@
 
 #include <memory>
 #include <mutex>
+#include <opencv2/core/mat.hpp>
 #include <optional>
 #include <string>
 #include <unordered_map>
-#include <opencv2/core/mat.hpp>
 
 namespace sl
 {
@@ -68,7 +68,13 @@ struct ProjectorScanSnapshot
     /// pattern_count <int>: 生成済みpattern数。
     int pattern_count{0};
 
-    /// patterns_dirty <bool>: surface変更後に再生成が必要ならtrue。
+    /// code_width <int>: Gray Code論理解像度の幅。
+    int code_width{0};
+
+    /// code_height <int>: Gray Code論理解像度の高さ。
+    int code_height{0};
+
+    /// patterns_dirty <bool>: pattern未生成または生成済みpatternが無効ならtrue。
     bool patterns_dirty{false};
 
     /// surface <ProjectorSurface>: 現在のprojector surface。
@@ -100,8 +106,7 @@ class ProjectorService
     ///
     /// Return:
     ///   <ProjectorService>: WindowService backendを持つprojector service。
-    ProjectorService(service::window::WindowService& window_service,
-                     service::monitor::MonitorService& monitor_service);
+    ProjectorService(service::window::WindowService& window_service, service::monitor::MonitorService& monitor_service);
 
     /// @brief ProjectorServiceを破棄する。
     ///
@@ -198,13 +203,19 @@ class ProjectorService
         /// surface <ProjectorSurface>: monitor/surface/pattern active area設定。
         ProjectorSurface surface;
 
+        /// code_width <int>: Gray Code論理解像度の幅。
+        int code_width{0};
+
+        /// code_height <int>: Gray Code論理解像度の高さ。
+        int code_height{0};
+
         /// structured_light <std::unique_ptr<sl::StructuredLight>>: GrayCodePattern管理object。
         std::unique_ptr<sl::StructuredLight> structured_light;
 
         /// current_index <int>: 現在表示対象のpattern index。
         int current_index{0};
 
-        /// patterns_dirty <bool>: surface変更によりpattern再生成が必要ならtrue。
+        /// patterns_dirty <bool>: pattern未生成または生成済みpatternが無効ならtrue。
         bool patterns_dirty{true};
     };
 
