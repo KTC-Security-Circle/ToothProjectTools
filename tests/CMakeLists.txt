@@ -8,3 +8,8 @@ add_executable(reconstruction_domain_test reconstruction_domain_test.cpp)
 target_include_directories(reconstruction_domain_test PRIVATE ${CMAKE_SOURCE_DIR}/src/reconstruction)
 target_link_libraries(reconstruction_domain_test PRIVATE reconstruction)
 add_test(NAME reconstruction_domain_test COMMAND reconstruction_domain_test)
+
+add_executable(calibration_observation_test calibration_observation_test.cpp)
+target_link_libraries(calibration_observation_test PRIVATE calibration)
+target_compile_features(calibration_observation_test PRIVATE cxx_std_20)
+add_test(NAME calibration_observation_test COMMAND calibration_observation_test)

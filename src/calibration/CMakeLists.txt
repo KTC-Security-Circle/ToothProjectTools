@@ -1,5 +1,6 @@
 add_library(calibration
     calibrator.cpp
+    calibration_observation.cpp
     stereo_calibrator.cpp
 )
 
