@@ -63,21 +63,6 @@ std::optional<BoardObservation> observeBoard(const cv::Mat& image, const cv::Siz
     cv::Rect2f bounds = cv::boundingRect(observation.corners);
     observation.center = (bounds.tl() + bounds.br()) * 0.5F;
     observation.size = bounds.size();
-    const std::size_t last_row = static_cast<std::size_t>(pattern_size.height - 1) * pattern_size.width;
-    const std::size_t last_column = static_cast<std::size_t>(pattern_size.width - 1);
-    const auto& top_left = observation.corners.front();
-    const auto& top_right = observation.corners[last_column];
-    const auto& bottom_left = observation.corners[last_row];
-    const auto& bottom_right = observation.corners[last_row + last_column];
-    const float top_width = distance(top_left, top_right);
-    const float bottom_width = distance(bottom_left, bottom_right);
-    const float left_height = distance(top_left, bottom_left);
-    const float right_height = distance(top_right, bottom_right);
-    const float width_scale = std::max(top_width, bottom_width);
-    const float height_scale = std::max(left_height, right_height);
-    const float width_error = width_scale > 0.0F ? std::abs(top_width - bottom_width) / width_scale : 1.0F;
-    const float height_error = height_scale > 0.0F ? std::abs(left_height - right_height) / height_scale : 1.0F;
-    observation.perspective_error = std::max(width_error, height_error);
     if (observation.corners.size() >= 2)
     {
         const auto& first = observation.corners.front();
