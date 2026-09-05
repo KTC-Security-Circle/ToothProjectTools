@@ -45,6 +45,8 @@ struct Data
     cv::Mat D2;
     cv::Mat R;
     cv::Mat T;
+    cv::Mat Q;
+    std::optional<double> calibration_rms;
     int image_width{};
     int image_height{};
     int projector_width{};
@@ -361,6 +363,28 @@ bool loadCalibration(const ReconstructionInput& input,
         calibration["D2"] >> data.D2;
         calibration["R"] >> data.R;
         calibration["T"] >> data.T;
+        calibration["Q"] >> data.Q;
+        const auto rms = calibration["RMS"];
+        if (!rms.empty())
+        {
+            if (!rms.isInt() && !rms.isReal())
+            {
+                addIssue(result,
+                         "calibration_file_invalid",
+                         "calibration RMS must be a finite positive number",
+                         input.calibration_file);
+                return false;
+            }
+            data.calibration_rms = static_cast<double>(rms);
+            if (!std::isfinite(*data.calibration_rms) || *data.calibration_rms <= 0.0)
+            {
+                addIssue(result,
+                         "calibration_file_invalid",
+                         "calibration RMS must be a finite positive number",
+                         input.calibration_file);
+                return false;
+            }
+        }
 
         const auto width = calibration["image_width"];
         const auto height = calibration["image_height"];
@@ -428,7 +452,8 @@ bool validateCalibration(const ReconstructionInput& input,
         !isValidRotationMatrix(data.R) ||
         !isValidDistortionCoefficients(data.D1) ||
         !isValidDistortionCoefficients(data.D2) ||
-        !isValidTranslationVector(data.T))
+        !isValidTranslationVector(data.T) ||
+        (!data.Q.empty() && !isValidFloatingMatrix(data.Q, 4, 4)))
     {
         addIssue(result,
                  "calibration_file_invalid",
