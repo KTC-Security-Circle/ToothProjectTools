@@ -1,9 +1,8 @@
 #include "service/atomic_calibration_file.hpp"
 
-#include <array>
 #include <algorithm>
+#include <array>
 #include <string>
-
 #include <unistd.h>
 
 namespace service::calibration_file
