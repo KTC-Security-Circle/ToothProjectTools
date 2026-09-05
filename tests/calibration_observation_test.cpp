@@ -1,4 +1,5 @@
 #include "calibration/calibration_observation.hpp"
+#include "calibration/calibration_session.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -51,6 +52,38 @@ void testInvalidObservation()
     REQUIRE(!calib::observeBoard(cv::Mat::zeros(20, 20, CV_8UC4), cv::Size(10, 7)).has_value());
 }
 
+void testSessionStateTransitions()
+{
+    calib::CalibrationSession session(calib::CaptureMode::automatic);
+    calib::GuidanceThresholds thresholds;
+    thresholds.minimum_blur_score = 0.0F;
+    thresholds.stable_frames = 2;
+    calib::BoardTarget target;
+    target.area_ratio = 0.25F;
+    calib::BoardObservation observation;
+    observation.detected = true;
+    observation.center = {320.0F, 240.0F};
+    observation.size = {320.0F, 240.0F};
+    observation.blur_score = 100.0F;
+    observation.corners.resize(4);
+    calib::StabilityResult stability;
+    stability.stable = true;
+    stability.consecutive_frames = thresholds.stable_frames;
+
+    session.begin();
+    session.observe(observation, target, cv::Size(640, 480), stability, thresholds);
+    REQUIRE(session.state() == calib::SessionState::ready_to_capture);
+    session.recordCapture();
+    REQUIRE(session.state() == calib::SessionState::captured);
+    REQUIRE(session.captured_count() == 1);
+    session.advanceToNextPose();
+    REQUIRE(session.state() == calib::SessionState::next_pose);
+    session.beginSolving();
+    session.beginValidation();
+    session.complete();
+    REQUIRE(session.state() == calib::SessionState::completed);
+}
+
 } // namespace
 
 int main()
@@ -58,5 +91,6 @@ int main()
     testStability();
     testRangeClassification();
     testInvalidObservation();
+    testSessionStateTransitions();
     return 0;
 }
