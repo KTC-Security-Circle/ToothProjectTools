@@ -1,4 +1,5 @@
 #include "service/calibration_service.hpp"
+#include "service/atomic_calibration_file.hpp"
 
 #include "calibration/calibrator.hpp"
 #include "capture/capture_result.hpp"
@@ -187,16 +188,23 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
         return failure(output_file, "calibration_failed", "failed to run mono calibration");
     }
 
-    const auto temporary_file = output_file.string() + ".tmp";
+    if (!ensureOutputParent(output_file))
+    {
+        return failure(output_file, "calibration_output_write_failed", "failed to create mono calibration output directory");
+    }
+    const auto temporary_path = calibration_file::createTemporaryCalibrationPath(output_file);
+    if (!temporary_path)
+    {
+        return failure(output_file, "calibration_output_write_failed", "failed to create temporary calibration file");
+    }
+    const auto temporary_file = *temporary_path;
     try
     {
-        if (!ensureOutputParent(output_file))
-        {
-            return failure(output_file, "calibration_output_write_failed", "failed to create mono calibration output directory");
-        }
-        cv::FileStorage fs_out(temporary_file, cv::FileStorage::WRITE);
+        cv::FileStorage fs_out(temporary_file.string(), cv::FileStorage::WRITE);
         if (!fs_out.isOpened())
         {
+            std::error_code cleanup_error;
+            fs::remove(temporary_file, cleanup_error);
             return failure(output_file, "calibration_output_write_failed", "failed to open mono calibration output file");
         }
         fs_out << "RMS" << rms << "image_width" << image_size.width << "image_height" << image_size.height

@@ -1,5 +1,6 @@
 #include "service/stereo_calibration_service.hpp"
 
+#include "service/atomic_calibration_file.hpp"
 #include "service/calibration_file.hpp"
 
 #include "calibration/stereo_calibrator.hpp"
@@ -160,7 +161,6 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     LOG_INFO("Stereo: 計算開始 {} pairs", fL.size());
     calib::StereoData res;
     double rms = 0.0;
-    const auto temporary_file = output_file.string() + ".tmp";
     try
     {
         rms = ctx.stereo_calibrator->run(fL, fR, K1, D1, K2, D2, res);
@@ -179,15 +179,23 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
         return failure(output_file, "stereo_calibration_failed", "failed to run stereo calibration");
     }
 
+    if (!ensureOutputParent(output_file))
+    {
+        return failure(output_file, "file_write_failed", "failed to create stereo calibration output directory");
+    }
+    const auto temporary_path = calibration_file::createTemporaryCalibrationPath(output_file);
+    if (!temporary_path)
+    {
+        return failure(output_file, "file_write_failed", "failed to create temporary calibration file");
+    }
+    const auto temporary_file = *temporary_path;
     try
     {
-        if (!ensureOutputParent(output_file))
-        {
-            return failure(output_file, "file_write_failed", "failed to create stereo calibration output directory");
-        }
-        cv::FileStorage fs_out(temporary_file, cv::FileStorage::WRITE);
+        cv::FileStorage fs_out(temporary_file.string(), cv::FileStorage::WRITE);
         if (!fs_out.isOpened())
         {
+            std::error_code cleanup_error;
+            fs::remove(temporary_file, cleanup_error);
             return failure(output_file, "file_write_failed", "failed to open stereo calibration output file");
         }
         fs_out << "version" << "0.1.0" << "image_width" << image_size.width << "image_height" << image_size.height << "RMS" << rms << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R

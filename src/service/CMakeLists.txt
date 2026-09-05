@@ -1,4 +1,5 @@
 add_library(service STATIC
+    atomic_calibration_file.cpp
     calibration_file.cpp
     calibration_service.cpp
     stereo_calibration_service.cpp
