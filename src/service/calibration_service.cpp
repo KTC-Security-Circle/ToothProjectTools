@@ -10,10 +10,12 @@
 #include "window/window.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <iomanip>
 #include <iterator>
 #include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
 #include <sstream>
 #include <vector>
 
@@ -77,6 +79,25 @@ bool ensureOutputParent(const fs::path& output_file)
         return true;
     }
     return fs::create_directories(parent) || fs::exists(parent);
+}
+
+/// @brief 単眼結果が後段の復元で意味を持つ値か検証する。
+bool validMonoResult(const cv::Mat& camera_matrix, const cv::Mat& dist_coeffs, double rms, cv::Size image_size)
+{
+    if (camera_matrix.rows != 3 || camera_matrix.cols != 3 || camera_matrix.channels() != 1 ||
+        dist_coeffs.empty() || image_size.width <= 0 || image_size.height <= 0 || !std::isfinite(rms) ||
+        rms <= 0.0 || !cv::checkRange(camera_matrix) || !cv::checkRange(dist_coeffs))
+    {
+        return false;
+    }
+
+    cv::Mat matrix64;
+    camera_matrix.convertTo(matrix64, CV_64F);
+    const double fx = matrix64.at<double>(0, 0);
+    const double fy = matrix64.at<double>(1, 1);
+    const double cx = matrix64.at<double>(0, 2);
+    const double cy = matrix64.at<double>(1, 2);
+    return fx > 0.0 && fy > 0.0 && cx >= 0.0 && cx < image_size.width && cy >= 0.0 && cy < image_size.height;
 }
 
 } // namespace
@@ -151,26 +172,42 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
 
     cv::Mat K, D;
     const double rms = ctx.calibrator->runCalibration(files, K, D);
-    if (rms <= 0.0 || rms >= 1.0 || K.empty() || D.empty())
+    cv::Size image_size;
+    for (const auto& file : files)
+    {
+        const cv::Mat image = cv::imread(file, cv::IMREAD_UNCHANGED);
+        if (!image.empty())
+        {
+            image_size = image.size();
+            break;
+        }
+    }
+    if (!validMonoResult(K, D, rms, image_size))
     {
         return failure(output_file, "calibration_failed", "failed to run mono calibration");
     }
 
+    const auto temporary_file = output_file.string() + ".tmp";
     try
     {
         if (!ensureOutputParent(output_file))
         {
             return failure(output_file, "calibration_output_write_failed", "failed to create mono calibration output directory");
         }
-        cv::FileStorage fs_out(output_file.string(), cv::FileStorage::WRITE);
+        cv::FileStorage fs_out(temporary_file, cv::FileStorage::WRITE);
         if (!fs_out.isOpened())
         {
             return failure(output_file, "calibration_output_write_failed", "failed to open mono calibration output file");
         }
-        fs_out << "RMS" << rms << "K" << K << "D" << D;
+        fs_out << "RMS" << rms << "image_width" << image_size.width << "image_height" << image_size.height
+               << "K" << K << "D" << D;
+        fs_out.release();
+        fs::rename(temporary_file, output_file);
     }
     catch (const std::exception& e)
     {
+        std::error_code cleanup_error;
+        fs::remove(temporary_file, cleanup_error);
         return failure(output_file, "calibration_output_write_failed", e.what());
     }
 

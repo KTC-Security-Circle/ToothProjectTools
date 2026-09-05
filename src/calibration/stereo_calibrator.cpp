@@ -56,6 +56,7 @@ double StereoCalibrator::run(
 
         if (imgL.empty() || imgR.empty()) continue;
         if (img_size.area() == 0) img_size = imgL.size();
+        if (imgL.size() != img_size || imgR.size() != img_size) continue;
 
         std::vector<cv::Point2f> cornersL, cornersR;
         

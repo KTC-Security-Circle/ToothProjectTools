@@ -10,6 +10,7 @@
 #include "video/camera_manager.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <opencv2/core.hpp>
 #include <opencv2/core/base.hpp>
@@ -75,6 +76,14 @@ bool ensureOutputParent(const fs::path& output_file)
         return true;
     }
     return fs::create_directories(parent) || fs::exists(parent);
+}
+
+bool validStereoResult(const calib::StereoData& data, double rms, cv::Size image_size)
+{
+    return data.valid && image_size.width > 0 && image_size.height > 0 && std::isfinite(rms) && rms > 0.0 &&
+           data.R.rows == 3 && data.R.cols == 3 && data.T.rows == 3 && data.T.cols == 1 &&
+           data.Q.rows == 4 && data.Q.cols == 4 && cv::checkRange(data.R) && cv::checkRange(data.T) &&
+           cv::checkRange(data.Q) && std::abs(cv::determinant(data.R)) > 1e-6;
 }
 
 } // namespace
@@ -151,6 +160,7 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     LOG_INFO("Stereo: 計算開始 {} pairs", fL.size());
     calib::StereoData res;
     double rms = 0.0;
+    const auto temporary_file = output_file.string() + ".tmp";
     try
     {
         rms = ctx.stereo_calibrator->run(fL, fR, K1, D1, K2, D2, res);
@@ -163,7 +173,8 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     {
         return failure(output_file, "stereo_calibration_failed", error.what());
     }
-    if (rms <= 0.0 || !res.valid)
+    const cv::Size image_size = res.mapL_x.size();
+    if (!validStereoResult(res, rms, image_size))
     {
         return failure(output_file, "stereo_calibration_failed", "failed to run stereo calibration");
     }
@@ -174,16 +185,20 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
         {
             return failure(output_file, "file_write_failed", "failed to create stereo calibration output directory");
         }
-        cv::FileStorage fs_out(output_file.string(), cv::FileStorage::WRITE);
+        cv::FileStorage fs_out(temporary_file, cv::FileStorage::WRITE);
         if (!fs_out.isOpened())
         {
             return failure(output_file, "file_write_failed", "failed to open stereo calibration output file");
         }
-        fs_out << "version" << "0.1.0" << "image_width" << res.mapL_x.cols << "image_height" << res.mapL_x.rows << "RMS" << rms << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R
+        fs_out << "version" << "0.1.0" << "image_width" << image_size.width << "image_height" << image_size.height << "RMS" << rms << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R
                << "T" << res.T << "Q" << res.Q;
+        fs_out.release();
+        fs::rename(temporary_file, output_file);
     }
     catch (const std::exception& e)
     {
+        std::error_code cleanup_error;
+        fs::remove(temporary_file, cleanup_error);
         return failure(output_file, "file_write_failed", e.what());
     }
 

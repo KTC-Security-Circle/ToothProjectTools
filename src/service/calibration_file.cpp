@@ -2,6 +2,7 @@
 
 #include <array>
 #include <algorithm>
+#include <cmath>
 
 #include <opencv2/core/persistence.hpp>
 
@@ -65,6 +66,21 @@ std::optional<MonoCalibrationFile> loadMonoCalibrationFile(
         else if (!rms_node.empty() && rms_node.isInt())
         {
             file.rms = static_cast<int>(rms_node);
+        }
+        const auto width_node = storage["image_width"];
+        const auto height_node = storage["image_height"];
+        if (!width_node.empty() && width_node.isInt())
+        {
+            file.image_width = static_cast<int>(width_node);
+        }
+        if (!height_node.empty() && height_node.isInt())
+        {
+            file.image_height = static_cast<int>(height_node);
+        }
+        if (!std::isfinite(file.rms) || file.rms <= 0.0)
+        {
+            error_message = "mono calibration RMS is missing or invalid: " + path.string();
+            return std::nullopt;
         }
 
         if (file.K.empty())
