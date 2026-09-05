@@ -25,8 +25,19 @@ std::optional<std::filesystem::path> createTemporaryCalibrationPath(const std::f
     {
         return std::nullopt;
     }
-    close(file_descriptor);
+    if (close(file_descriptor) != 0)
+    {
+        std::error_code cleanup_error;
+        std::filesystem::remove(buffer.data(), cleanup_error);
+        return std::nullopt;
+    }
     return std::filesystem::path{buffer.data()};
+}
+
+bool removeTemporaryCalibrationPath(const std::filesystem::path& path, std::error_code& error)
+{
+    error.clear();
+    return std::filesystem::remove(path, error) || !error;
 }
 
 } // namespace service::calibration_file

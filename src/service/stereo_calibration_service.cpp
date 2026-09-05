@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <opencv2/core.hpp>
 #include <opencv2/core/base.hpp>
+#include <opencv2/imgcodecs.hpp>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -81,10 +82,34 @@ bool ensureOutputParent(const fs::path& output_file)
 
 bool validStereoResult(const calib::StereoData& data, double rms, cv::Size image_size)
 {
+    constexpr double kRotationTolerance = 1e-4;
+    if (!data.valid || data.R.rows != 3 || data.R.cols != 3)
+    {
+        return false;
+    }
+    cv::Mat rotation64;
+    data.R.convertTo(rotation64, CV_64F);
+    const double orthogonality_error = cv::norm(rotation64.t() * rotation64 - cv::Mat::eye(3, 3, CV_64F), cv::NORM_INF);
+    const double determinant = cv::determinant(rotation64);
     return data.valid && image_size.width > 0 && image_size.height > 0 && std::isfinite(rms) && rms > 0.0 &&
            data.R.rows == 3 && data.R.cols == 3 && data.T.rows == 3 && data.T.cols == 1 &&
            data.Q.rows == 4 && data.Q.cols == 4 && cv::checkRange(data.R) && cv::checkRange(data.T) &&
-           cv::checkRange(data.Q) && std::abs(cv::determinant(data.R)) > 1e-6;
+           cv::checkRange(data.Q) && std::isfinite(orthogonality_error) &&
+           orthogonality_error <= kRotationTolerance && std::isfinite(determinant) &&
+           std::abs(determinant - 1.0) <= kRotationTolerance;
+}
+
+std::optional<cv::Size> firstImageSize(const std::vector<std::string>& files)
+{
+    for (const auto& file : files)
+    {
+        const cv::Mat image = cv::imread(file, cv::IMREAD_UNCHANGED);
+        if (!image.empty())
+        {
+            return image.size();
+        }
+    }
+    return std::nullopt;
 }
 
 } // namespace
@@ -158,6 +183,31 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
         return failure(output_file, "stereo_image_pair_mismatch", "left/right calibration image counts do not match");
     }
 
+    const auto left_image_size = firstImageSize(fL);
+    const auto right_image_size = firstImageSize(fR);
+    if (!left_image_size || !right_image_size || *left_image_size != *right_image_size)
+    {
+        return failure(output_file, "stereo_calibration_failed", "stereo image sizes are missing or inconsistent");
+    }
+    if (left_calibration->image_width > 0 && left_calibration->image_height > 0 &&
+        (left_calibration->image_width != left_image_size->width ||
+         left_calibration->image_height != left_image_size->height))
+    {
+        return failure(output_file, "calibration_image_size_mismatch", "left mono calibration image size does not match stereo images");
+    }
+    if (right_calibration->image_width > 0 && right_calibration->image_height > 0 &&
+        (right_calibration->image_width != right_image_size->width ||
+         right_calibration->image_height != right_image_size->height))
+    {
+        return failure(output_file, "calibration_image_size_mismatch", "right mono calibration image size does not match stereo images");
+    }
+    if (left_calibration->image_width > 0 && right_calibration->image_width > 0 &&
+        (left_calibration->image_width != right_calibration->image_width ||
+         left_calibration->image_height != right_calibration->image_height))
+    {
+        return failure(output_file, "calibration_image_size_mismatch", "left/right mono calibration image sizes differ");
+    }
+
     LOG_INFO("Stereo: 計算開始 {} pairs", fL.size());
     calib::StereoData res;
     double rms = 0.0;
@@ -179,34 +229,44 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
         return failure(output_file, "stereo_calibration_failed", "failed to run stereo calibration");
     }
 
-    if (!ensureOutputParent(output_file))
-    {
-        return failure(output_file, "file_write_failed", "failed to create stereo calibration output directory");
-    }
-    const auto temporary_path = calibration_file::createTemporaryCalibrationPath(output_file);
-    if (!temporary_path)
-    {
-        return failure(output_file, "file_write_failed", "failed to create temporary calibration file");
-    }
-    const auto temporary_file = *temporary_path;
+    std::optional<fs::path> temporary_file;
     try
     {
-        cv::FileStorage fs_out(temporary_file.string(), cv::FileStorage::WRITE);
+        if (!ensureOutputParent(output_file))
+        {
+            return failure(output_file, "file_write_failed", "failed to create stereo calibration output directory");
+        }
+        const auto temporary_path = calibration_file::createTemporaryCalibrationPath(output_file);
+        if (!temporary_path)
+        {
+            return failure(output_file, "file_write_failed", "failed to create temporary calibration file");
+        }
+        temporary_file = *temporary_path;
+        cv::FileStorage fs_out(temporary_file->string(), cv::FileStorage::WRITE);
         if (!fs_out.isOpened())
         {
             std::error_code cleanup_error;
-            fs::remove(temporary_file, cleanup_error);
+            if (!calibration_file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
+            {
+                LOG_WARN("Stereo Calibration temporary file cleanup failed: {}", cleanup_error.message());
+            }
             return failure(output_file, "file_write_failed", "failed to open stereo calibration output file");
         }
         fs_out << "version" << "0.1.0" << "image_width" << image_size.width << "image_height" << image_size.height << "RMS" << rms << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R
                << "T" << res.T << "Q" << res.Q;
         fs_out.release();
-        fs::rename(temporary_file, output_file);
+        fs::rename(*temporary_file, output_file);
     }
     catch (const std::exception& e)
     {
-        std::error_code cleanup_error;
-        fs::remove(temporary_file, cleanup_error);
+        if (temporary_file)
+        {
+            std::error_code cleanup_error;
+            if (!calibration_file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
+            {
+                LOG_WARN("Stereo Calibration temporary file cleanup failed: {}", cleanup_error.message());
+            }
+        }
         return failure(output_file, "file_write_failed", e.what());
     }
 

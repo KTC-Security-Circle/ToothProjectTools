@@ -87,7 +87,7 @@ bool validMonoResult(const cv::Mat& camera_matrix, const cv::Mat& dist_coeffs, d
 {
     if (camera_matrix.rows != 3 || camera_matrix.cols != 3 || camera_matrix.channels() != 1 ||
         dist_coeffs.empty() || image_size.width <= 0 || image_size.height <= 0 || !std::isfinite(rms) ||
-        rms <= 0.0 || !cv::checkRange(camera_matrix) || !cv::checkRange(dist_coeffs))
+        rms <= 0.0 || rms >= 1.0 || !cv::checkRange(camera_matrix) || !cv::checkRange(dist_coeffs))
     {
         return false;
     }
@@ -188,34 +188,45 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
         return failure(output_file, "calibration_failed", "failed to run mono calibration");
     }
 
-    if (!ensureOutputParent(output_file))
-    {
-        return failure(output_file, "calibration_output_write_failed", "failed to create mono calibration output directory");
-    }
-    const auto temporary_path = calibration_file::createTemporaryCalibrationPath(output_file);
-    if (!temporary_path)
-    {
-        return failure(output_file, "calibration_output_write_failed", "failed to create temporary calibration file");
-    }
-    const auto temporary_file = *temporary_path;
+    std::optional<fs::path> temporary_file;
     try
     {
-        cv::FileStorage fs_out(temporary_file.string(), cv::FileStorage::WRITE);
+        if (!ensureOutputParent(output_file))
+        {
+            return failure(output_file, "calibration_output_write_failed", "failed to create mono calibration output directory");
+        }
+        const auto temporary_path = calibration_file::createTemporaryCalibrationPath(output_file);
+        if (!temporary_path)
+        {
+            return failure(output_file, "calibration_output_write_failed", "failed to create temporary calibration file");
+        }
+        temporary_file = *temporary_path;
+        cv::FileStorage fs_out(temporary_file->string(), cv::FileStorage::WRITE);
         if (!fs_out.isOpened())
         {
             std::error_code cleanup_error;
-            fs::remove(temporary_file, cleanup_error);
+            if (!calibration_file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
+            {
+                LOG_WARN("Calibration temporary file cleanup failed: {}", cleanup_error.message());
+            }
             return failure(output_file, "calibration_output_write_failed", "failed to open mono calibration output file");
         }
         fs_out << "RMS" << rms << "image_width" << image_size.width << "image_height" << image_size.height
                << "K" << K << "D" << D;
         fs_out.release();
-        fs::rename(temporary_file, output_file);
+        fs::rename(*temporary_file, output_file);
     }
     catch (const std::exception& e)
     {
-        std::error_code cleanup_error;
-        fs::remove(temporary_file, cleanup_error);
+        if (temporary_file)
+        {
+            std::error_code cleanup_error;
+            if (!calibration_file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
+            {
+                LOG_WARN("Calibration temporary file cleanup failed: {}", cleanup_error.message());
+            }
+        }
+        LOG_ERROR("Calibration output write failed: {}", e.what());
         return failure(output_file, "calibration_output_write_failed", e.what());
     }
 

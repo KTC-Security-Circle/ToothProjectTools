@@ -14,4 +14,7 @@ namespace service::calibration_file
  */
 std::optional<std::filesystem::path> createTemporaryCalibrationPath(const std::filesystem::path& destination);
 
+/// @brief temporary Calibration fileを削除し、失敗理由をerror_codeへ返す。
+bool removeTemporaryCalibrationPath(const std::filesystem::path& path, std::error_code& error);
+
 } // namespace service::calibration_file

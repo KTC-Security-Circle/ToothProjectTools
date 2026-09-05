@@ -69,6 +69,18 @@ std::optional<MonoCalibrationFile> loadMonoCalibrationFile(
         }
         const auto width_node = storage["image_width"];
         const auto height_node = storage["image_height"];
+        const bool has_width = !width_node.empty();
+        const bool has_height = !height_node.empty();
+        if (has_width != has_height)
+        {
+            error_message = "mono calibration image size must contain both image_width and image_height: " + path.string();
+            return std::nullopt;
+        }
+        if (has_width && (!width_node.isInt() || !height_node.isInt()))
+        {
+            error_message = "mono calibration image size must be integer values: " + path.string();
+            return std::nullopt;
+        }
         if (!width_node.empty() && width_node.isInt())
         {
             file.image_width = static_cast<int>(width_node);
@@ -76,6 +88,11 @@ std::optional<MonoCalibrationFile> loadMonoCalibrationFile(
         if (!height_node.empty() && height_node.isInt())
         {
             file.image_height = static_cast<int>(height_node);
+        }
+        if (has_width && (file.image_width <= 0 || file.image_height <= 0))
+        {
+            error_message = "mono calibration image size must be positive: " + path.string();
+            return std::nullopt;
         }
         if (!std::isfinite(file.rms) || file.rms <= 0.0)
         {
