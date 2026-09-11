@@ -111,7 +111,13 @@ ScanService::~ScanService()
 
 ScanResult ScanService::startScan(const ScanStartConfig& config)
 {
-    if (config.projector_role.empty() || config.left_role.empty() || config.settle_ms < 0)
+    const bool valid_source = config.sync_source == "fixed_delay" || config.sync_source == "camera_roi" ||
+                              config.sync_source == "photodiode";
+    if (config.projector_role.empty() || config.left_role.empty() || config.settle_ms < 0 || !valid_source ||
+        config.sync_timeout_ms <= 0 || config.sync_guard_ms < 0 || config.sync_stable_frames <= 0 ||
+        config.roi_x < 0 || config.roi_y < 0 || config.roi_width <= 0 || config.roi_height <= 0 ||
+        config.roi_black_threshold < 0 || config.roi_white_threshold > 255 ||
+        config.roi_black_threshold >= config.roi_white_threshold)
     {
         return ScanResult::failure(config.scan_id.value_or(std::string{}), "invalid_scan_config",
                                    "invalid scan configuration");
@@ -327,6 +333,8 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         return;
     }
 
+    auto previous_stable_state = structured_light::sync::MarkerState::undecided;
+    std::uint64_t last_evaluated_sequence = 0;
     for (int index = 0; index < pattern_count; ++index)
     {
         if (stop_token.stop_requested())
@@ -387,8 +395,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             const auto expected = (index % 2 == 0) ? structured_light::sync::MarkerState::black
                                                     : structured_light::sync::MarkerState::white;
             int stable = 0;
-            bool saw_transition_candidate = index == 0;
-            structured_light::sync::MarkerState previous = structured_light::sync::MarkerState::undecided;
+            bool saw_transition_candidate = previous_stable_state == structured_light::sync::MarkerState::undecided;
             const auto deadline = show_timestamp + std::chrono::milliseconds(config.sync_timeout_ms);
             while (!stop_token.stop_requested() && std::chrono::steady_clock::now() < deadline)
             {
@@ -398,20 +405,29 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                     std::this_thread::sleep_for(std::chrono::milliseconds(2));
                     continue;
                 }
+                if (sample->sequence == last_evaluated_sequence)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    continue;
+                }
+                last_evaluated_sequence = sample->sequence;
                 const auto observation = structured_light::sync::observeRoi(sample->image, roi_config,
-                                                                            structured_light::sync::MarkerState::undecided);
+                                                                            previous_stable_state);
+                if (previous_stable_state != structured_light::sync::MarkerState::undecided &&
+                    observation.state != previous_stable_state)
+                    saw_transition_candidate = true;
                 if (observation.state != expected && observation.state != structured_light::sync::MarkerState::undecided)
                 {
                     saw_transition_candidate = true;
                     stable = 0;
                 }
-                else if (observation.state == expected && (saw_transition_candidate || previous == structured_light::sync::MarkerState::undecided))
+                else if (observation.state == expected && saw_transition_candidate)
                     stable++;
                 else
                     stable = 0;
-                previous = observation.state;
                 if (saw_transition_candidate && stable >= config.sync_stable_frames)
                 {
+                    previous_stable_state = expected;
                     selected_at = sample->timestamp + std::chrono::milliseconds(config.sync_guard_ms);
                     break;
                 }

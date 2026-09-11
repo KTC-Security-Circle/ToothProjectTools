@@ -145,9 +145,10 @@ ScanDatasetResolveResult ScanDatasetResolver::resolve(const ScanDatasetInputSpec
 
     if (!dataset.right_dir.empty() && !isDirectory(dataset.right_dir))
     {
+        // input_dirから解決したrightが存在しない場合は単眼datasetとして扱う。
         dataset.right_dir.clear();
     }
-    else
+    if (dataset.left_dir.empty())
     {
         result.issues.push_back(issue("missing_field", "input_dir or left_dir/right_dir is required"));
         return result;
