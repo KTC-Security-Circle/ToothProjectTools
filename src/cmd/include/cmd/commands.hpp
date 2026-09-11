@@ -203,6 +203,16 @@ struct CmdStartScan
 
     /// settle_ms <int>: pattern表示後captureまでの待機時間ms。
     int settle_ms{120};
+    std::string sync_source{"fixed_delay"};
+    int sync_timeout_ms{1000};
+    int sync_guard_ms{30};
+    int sync_stable_frames{3};
+    int roi_x{0};
+    int roi_y{0};
+    int roi_width{32};
+    int roi_height{32};
+    int roi_black_threshold{40};
+    int roi_white_threshold{180};
 };
 
 struct CmdScanStatus

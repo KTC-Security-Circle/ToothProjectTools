@@ -4,8 +4,10 @@
 #include "capture/capture_service.hpp"
 #include "service/camera_service.hpp"
 #include "service/projector_service.hpp"
+#include "structured_light/pattern_sync.hpp"
 
 #include <chrono>
+#include <opencv2/core.hpp>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -373,10 +375,77 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             return;
         }
 
-        if (config.settle_ms > 0)
+        const auto show_timestamp = std::chrono::steady_clock::now();
+        std::optional<video::FrameSample> selected_sample;
+        auto selected_at = show_timestamp + std::chrono::milliseconds(config.settle_ms);
+        if (config.sync_source == "camera_roi")
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(config.settle_ms));
+            const structured_light::sync::RoiSyncConfig roi_config{
+                cv::Rect(config.roi_x, config.roi_y, config.roi_width, config.roi_height),
+                static_cast<double>(config.roi_black_threshold), static_cast<double>(config.roi_white_threshold),
+                config.sync_stable_frames};
+            const auto expected = (index % 2 == 0) ? structured_light::sync::MarkerState::black
+                                                    : structured_light::sync::MarkerState::white;
+            int stable = 0;
+            bool saw_transition_candidate = index == 0;
+            structured_light::sync::MarkerState previous = structured_light::sync::MarkerState::undecided;
+            const auto deadline = show_timestamp + std::chrono::milliseconds(config.sync_timeout_ms);
+            while (!stop_token.stop_requested() && std::chrono::steady_clock::now() < deadline)
+            {
+                const auto sample = camera_service_.latestFrame(*left_id);
+                if (!sample || sample->timestamp < show_timestamp)
+                {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    continue;
+                }
+                const auto observation = structured_light::sync::observeRoi(sample->image, roi_config,
+                                                                            structured_light::sync::MarkerState::undecided);
+                if (observation.state != expected && observation.state != structured_light::sync::MarkerState::undecided)
+                {
+                    saw_transition_candidate = true;
+                    stable = 0;
+                }
+                else if (observation.state == expected && (saw_transition_candidate || previous == structured_light::sync::MarkerState::undecided))
+                    stable++;
+                else
+                    stable = 0;
+                previous = observation.state;
+                if (saw_transition_candidate && stable >= config.sync_stable_frames)
+                {
+                    selected_at = sample->timestamp + std::chrono::milliseconds(config.sync_guard_ms);
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            if (stable < config.sync_stable_frames)
+            {
+                std::lock_guard lock(mutex_);
+                state_ = ScanState::failed;
+                last_error_code_ = "sync_timeout";
+                last_error_message_ = "camera ROIで投影切替を検出できませんでした";
+                pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                           {"error_message", last_error_message_}});
+                return;
+            }
+            const auto selection_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(config.sync_timeout_ms);
+            while (!stop_token.stop_requested() && !selected_sample && std::chrono::steady_clock::now() < selection_deadline)
+            {
+                selected_sample = camera_service_.firstFrameAtOrAfter(*left_id, selected_at);
+                if (!selected_sample) std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
         }
+        else if (config.sync_source == "photodiode")
+        {
+            std::lock_guard lock(mutex_);
+            state_ = ScanState::failed;
+            last_error_code_ = "photodiode_transport_unavailable";
+            last_error_message_ = "Photodiode transportは未接続のため使用できません";
+            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                       {"error_message", last_error_message_}});
+            return;
+        }
+        else if (config.settle_ms > 0)
+            std::this_thread::sleep_for(std::chrono::milliseconds(config.settle_ms));
 
         const auto left_path = config.output_dir / "left" / patternFileName(index);
         const auto right_path = config.output_dir / "right" / patternFileName(index);
@@ -386,6 +455,8 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             std::lock_guard capture_lock(scan_capture_mutex_);
             if (right_id)
                 capture_result = capture_service_.captureStereo(*left_id, *right_id, left_path, right_path);
+            else if (selected_sample)
+                single_capture_result = capture_service_.saveFrameSample(*selected_sample, left_path);
             else
                 single_capture_result = capture_service_.captureFrame(*left_id, left_path);
         }
@@ -481,6 +552,9 @@ bool ScanService::writeMetadata(const ScanStartConfig& config, const std::string
                << "  \"projector_role\": \"" << jsonEscape(config.projector_role) << "\",\n"
                << "  \"left_role\": \"" << jsonEscape(config.left_role) << "\",\n"
                << "  \"right_role\": \"" << jsonEscape(config.right_role) << "\",\n"
+               << "  \"sync_source\": \"" << jsonEscape(config.sync_source) << "\",\n"
+               << "  \"sync_timeout_ms\": " << config.sync_timeout_ms << ",\n"
+               << "  \"sync_guard_ms\": " << config.sync_guard_ms << ",\n"
                << "  \"pattern_count\": " << pattern_count << ",\n"
                << "  \"projector_width\": " << code_width << ",\n"
                << "  \"projector_height\": " << code_height << ",\n"

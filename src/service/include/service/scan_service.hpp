@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <thread>
+#include <cstdint>
 
 namespace capture
 {
@@ -47,6 +48,18 @@ struct ScanStartConfig
 
     /// settle_ms <int>: pattern表示後、captureまで待機する時間ms。
     int settle_ms{120};
+
+    /// sync_source <string>: fixed_delay / camera_roi / photodiode。未指定相当はfixed_delay。
+    std::string sync_source{"fixed_delay"};
+    int sync_timeout_ms{1000};
+    int sync_guard_ms{30};
+    int sync_stable_frames{3};
+    int roi_x{0};
+    int roi_y{0};
+    int roi_width{32};
+    int roi_height{32};
+    int roi_black_threshold{40};
+    int roi_white_threshold{180};
 };
 
 class ScanService

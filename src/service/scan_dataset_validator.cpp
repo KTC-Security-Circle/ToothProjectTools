@@ -243,7 +243,8 @@ void ScanDatasetValidator::validateExpectedImages(const std::filesystem::path& l
         const bool left_exists = std::filesystem::exists(left_path, error_code);
         const bool right_exists = std::filesystem::exists(right_path, error_code);
 
-        if (!left_exists || !right_exists)
+        const bool single_camera = right_dir.empty();
+        if ((!left_exists && !single_camera) || (!right_exists && !single_camera))
         {
             ++result.missing_count;
         }
@@ -253,7 +254,7 @@ void ScanDatasetValidator::validateExpectedImages(const std::filesystem::path& l
                                           "missing left image for pattern index " + std::to_string(index), left_path,
                                           index));
         }
-        if (!right_exists)
+        if (!right_exists && !single_camera)
         {
             result.issues.push_back(issue("missing_right_image",
                                           "missing right image for pattern index " + std::to_string(index), right_path,
@@ -289,7 +290,7 @@ void ScanDatasetValidator::validateExpectedImages(const std::filesystem::path& l
                 }
             }
         }
-        if (right_exists)
+        if (right_exists && !single_camera)
         {
             if (!cv::haveImageReader(right_path.string()))
             {

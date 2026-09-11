@@ -38,6 +38,8 @@ endif()
 # Dependencies (OpenCV / spdlog via FetchContent)
 # =============================================================================
 # OpenCV（配布版を find_package）
+# OpenCV 4.10のimgcodecs static targetが参照するOpenEXR imported targetを先に定義する。
+find_package(OpenEXR CONFIG QUIET)
 find_package(
   OpenCV 4.10.0 EXACT
   REQUIRED

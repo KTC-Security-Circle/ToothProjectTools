@@ -96,6 +96,41 @@ CaptureResult CaptureService::captureFrame(video::CameraId camera_id, const std:
     return result;
 }
 
+CaptureResult CaptureService::saveFrameSample(const video::FrameSample& sample,
+                                              const std::filesystem::path& output_path)
+{
+    CaptureResult result;
+    result.output_path = output_path;
+    if (output_path.empty() || sample.image.empty())
+    {
+        result.error = CaptureError{output_path.empty() ? CaptureErrorCode::InvalidOutputPath : CaptureErrorCode::EmptyFrame,
+                                    output_path.empty() ? "保存先pathが空です" : "frameが空です"};
+        return result;
+    }
+    if (auto error = ensureParentDirectory(output_path))
+    {
+        result.error = error;
+        return result;
+    }
+    try
+    {
+        if (!cv::imwrite(output_path.string(), sample.image))
+        {
+            result.error = CaptureError{CaptureErrorCode::FileWriteFailed, "画像ファイルの保存に失敗しました"};
+            return result;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        result.error = CaptureError{CaptureErrorCode::FileWriteFailed, e.what()};
+        return result;
+    }
+    result.ok = true;
+    result.sequence = sample.sequence;
+    result.timestamp = sample.timestamp;
+    return result;
+}
+
 CaptureStereoResult CaptureService::captureStereo(video::CameraId left_camera_id,
                                                   video::CameraId right_camera_id,
                                                   const std::filesystem::path& left_output_path,

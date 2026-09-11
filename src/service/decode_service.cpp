@@ -138,7 +138,8 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
     validation_config.projector_height = config.projector_height;
     validation_config.pattern_count = config.pattern_count;
     const auto validation = validator_.validate(validation_config);
-    if (!validation.valid || (config.allow_partial && std::min(validation.left_count, validation.right_count) == 0))
+    const bool single_camera = resolved.dataset.right_dir.empty() || !std::filesystem::is_directory(resolved.dataset.right_dir);
+    if (!validation.valid || (!single_camera && config.allow_partial && std::min(validation.left_count, validation.right_count) == 0))
     {
         auto failure = DecodePatternsResult::failure("scan_dataset_invalid", issuesSummary(validation.issues));
         failure.input_dir = result.input_dir;
@@ -229,7 +230,9 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
         failure.threshold = config.threshold;
         return failure;
     }
-    const auto right_patterns = loadPatternImages(resolved.dataset.right_dir, stripe_pattern_count, error_message);
+    std::vector<cv::Mat> right_patterns;
+    if (!single_camera)
+        right_patterns = loadPatternImages(resolved.dataset.right_dir, stripe_pattern_count, error_message);
     if (!error_message.empty())
     {
         auto failure = DecodePatternsResult::failure("decode_image_load_failed", error_message);
@@ -246,7 +249,8 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
     try
     {
         left = decodeSide(left_patterns, result.projector_width, result.projector_height, config.threshold);
-        right = decodeSide(right_patterns, result.projector_width, result.projector_height, config.threshold);
+        if (!single_camera)
+            right = decodeSide(right_patterns, result.projector_width, result.projector_height, config.threshold);
     }
     catch (const std::invalid_argument& error)
     {
@@ -272,11 +276,11 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
     result.image_width = left.image_width;
     result.image_height = left.image_height;
     result.left_valid_count = left.valid_count;
-    result.right_valid_count = right.valid_count;
+    result.right_valid_count = single_camera ? 0 : right.valid_count;
     result.left_valid_ratio = left.valid_ratio;
-    result.right_valid_ratio = right.valid_ratio;
+    result.right_valid_ratio = single_camera ? 0.0 : right.valid_ratio;
 
-    if (left.image_width != right.image_width || left.image_height != right.image_height)
+    if (!single_camera && (left.image_width != right.image_width || left.image_height != right.image_height))
     {
         auto failure =
             DecodePatternsResult::failure("decode_image_size_mismatch", "left/right decoded image sizes differ");
@@ -289,7 +293,7 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
     }
 
     if (!writeDecodeOutput(config.output_dir, "left", left, error_message) ||
-        !writeDecodeOutput(config.output_dir, "right", right, error_message) ||
+        (!single_camera && !writeDecodeOutput(config.output_dir, "right", right, error_message)) ||
         !writeMetadata(config, result, metadata_for_output, error_message))
     {
         auto failure = DecodePatternsResult::failure("decode_output_write_failed", error_message);
