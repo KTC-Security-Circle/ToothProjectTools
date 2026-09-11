@@ -29,4 +29,24 @@ std::string toString(SyncSource source)
     switch (source) { case SyncSource::camera_roi: return "camera_roi"; case SyncSource::photodiode: return "photodiode"; case SyncSource::fixed_delay: return "fixed_delay"; }
     return "unknown";
 }
+
+std::optional<SyncEvent> PhotodiodeSyncSource::waitForTransition(
+    MarkerState expected, std::chrono::steady_clock::time_point after,
+    std::chrono::milliseconds timeout)
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        const auto event = transport_.receive(timeout);
+        if (!event)
+            return std::nullopt;
+        if (event->timestamp >= after && event->state == expected)
+        {
+            auto accepted = *event;
+            accepted.source = SyncSource::photodiode;
+            return accepted;
+        }
+    }
+    return std::nullopt;
+}
 } // namespace structured_light::sync

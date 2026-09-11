@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <optional>
 
 #include <opencv2/core/mat.hpp>
 #include <opencv2/core/types.hpp>
@@ -36,6 +37,37 @@ struct RoiSyncConfig
 };
 
 struct RoiObservation { MarkerState state{MarkerState::undecided}; double mean_brightness{0.0}; };
+
+/** @brief 光学同期イベントを供給する抽象境界。timestampはhostのsteady_clock domainである。 */
+class PatternSyncSource
+{
+  public:
+    virtual ~PatternSyncSource() = default;
+    virtual std::optional<SyncEvent> waitForTransition(
+        MarkerState expected, std::chrono::steady_clock::time_point after,
+        std::chrono::milliseconds timeout) = 0;
+};
+
+/** @brief Photodiodeのdevice transportを同期判定から分離する受信境界。 */
+class PhotodiodeTransport
+{
+  public:
+    virtual ~PhotodiodeTransport() = default;
+    virtual std::optional<SyncEvent> receive(std::chrono::milliseconds timeout) = 0;
+};
+
+/** @brief Photodiode transportのeventをCameraと同じ同期契約へ適合する。 */
+class PhotodiodeSyncSource final : public PatternSyncSource
+{
+  public:
+    explicit PhotodiodeSyncSource(PhotodiodeTransport& transport) : transport_(transport) {}
+    std::optional<SyncEvent> waitForTransition(
+        MarkerState expected, std::chrono::steady_clock::time_point after,
+        std::chrono::milliseconds timeout) override;
+
+  private:
+    PhotodiodeTransport& transport_;
+};
 
 /** @brief ROI平均輝度をhysteresis thresholdでmarker状態へ変換する。 */
 RoiObservation observeRoi(const cv::Mat&, const RoiSyncConfig&, MarkerState previous_state);
