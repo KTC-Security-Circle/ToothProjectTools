@@ -109,7 +109,7 @@ ScanService::~ScanService()
 
 ScanResult ScanService::startScan(const ScanStartConfig& config)
 {
-    if (config.projector_role.empty() || config.left_role.empty() || config.right_role.empty() || config.settle_ms < 0)
+    if (config.projector_role.empty() || config.left_role.empty() || config.settle_ms < 0)
     {
         return ScanResult::failure(config.scan_id.value_or(std::string{}), "invalid_scan_config",
                                    "invalid scan configuration");
@@ -145,8 +145,8 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     }
 
     const auto left_id = camera_service_.resolveCameraId(config.left_role);
-    const auto right_id = camera_service_.resolveCameraId(config.right_role);
-    if (!left_id || !right_id)
+    const auto right_id = config.right_role.empty() ? std::optional<video::CameraId>{} : camera_service_.resolveCameraId(config.right_role);
+    if (!left_id || (!config.right_role.empty() && !right_id))
     {
         return ScanResult::failure(scan_id, "camera_not_open", "left or right camera role is not open");
     }
@@ -154,7 +154,7 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     try
     {
         std::filesystem::create_directories(config.output_dir / "left");
-        std::filesystem::create_directories(config.output_dir / "right");
+        if (!config.right_role.empty()) std::filesystem::create_directories(config.output_dir / "right");
     }
     catch (const std::exception& error)
     {
@@ -300,8 +300,8 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                                {"output_dir", config.output_dir.string()}});
 
     const auto left_id = camera_service_.resolveCameraId(config.left_role);
-    const auto right_id = camera_service_.resolveCameraId(config.right_role);
-    if (!left_id || !right_id)
+    const auto right_id = config.right_role.empty() ? std::optional<video::CameraId>{} : camera_service_.resolveCameraId(config.right_role);
+    if (!left_id || (!config.right_role.empty() && !right_id))
     {
         int captured = 0;
         int current = -1;
@@ -380,12 +380,16 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
 
         const auto left_path = config.output_dir / "left" / patternFileName(index);
         const auto right_path = config.output_dir / "right" / patternFileName(index);
+        capture::CaptureResult single_capture_result;
         capture::CaptureStereoResult capture_result;
         {
             std::lock_guard capture_lock(scan_capture_mutex_);
-            capture_result = capture_service_.captureStereo(*left_id, *right_id, left_path, right_path);
+            if (right_id)
+                capture_result = capture_service_.captureStereo(*left_id, *right_id, left_path, right_path);
+            else
+                single_capture_result = capture_service_.captureFrame(*left_id, left_path);
         }
-        if (!capture_result.ok)
+        if ((right_id && !capture_result.ok) || (!right_id && !single_capture_result.ok))
         {
             int captured = 0;
             int current = -1;
@@ -394,8 +398,8 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             {
                 std::lock_guard lock(mutex_);
                 state_ = ScanState::failed;
-                last_error_code_ = captureCode(capture_result);
-                last_error_message_ = captureMessage(capture_result);
+                last_error_code_ = right_id ? captureCode(capture_result) : "capture_failed";
+                last_error_message_ = right_id ? captureMessage(capture_result) : (single_capture_result.error ? single_capture_result.error->message : "single camera capture failed");
                 captured = captured_count_;
                 current = current_index_;
                 error_code = last_error_code_;
@@ -420,7 +424,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                                           {"captured_count", std::to_string(captured)},
                                           {"pattern_count", std::to_string(pattern_count)},
                                           {"left_path", left_path.string()},
-                                          {"right_path", right_path.string()}});
+                                          {"right_path", right_id ? right_path.string() : std::string{}}});
     }
 
     int captured = 0;

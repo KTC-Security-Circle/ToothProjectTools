@@ -62,8 +62,8 @@ CaptureResult CaptureService::captureFrame(video::CameraId camera_id, const std:
         return result;
     }
 
-    cv::Mat frame = camera->getFrame();
-    if (frame.empty())
+    const auto sample = camera->getFrameSample();
+    if (!sample || sample->image.empty())
     {
         result.error = CaptureError{CaptureErrorCode::EmptyFrame, "有効なframeがまだありません"};
         return result;
@@ -77,7 +77,7 @@ CaptureResult CaptureService::captureFrame(video::CameraId camera_id, const std:
 
     try
     {
-        if (!cv::imwrite(output_path.string(), frame))
+        if (!cv::imwrite(output_path.string(), sample->image))
         {
             result.error = CaptureError{CaptureErrorCode::FileWriteFailed, "画像ファイルの保存に失敗しました"};
             return result;
@@ -90,6 +90,8 @@ CaptureResult CaptureService::captureFrame(video::CameraId camera_id, const std:
     }
 
     result.ok = true;
+    result.sequence = sample->sequence;
+    result.timestamp = sample->timestamp;
     LOG_INFO("Capture: saved {}", output_path.string());
     return result;
 }
@@ -123,9 +125,9 @@ CaptureStereoResult CaptureService::captureStereo(video::CameraId left_camera_id
         return result;
     }
 
-    cv::Mat left_frame = left_camera->getFrame();
-    cv::Mat right_frame = right_camera->getFrame();
-    if (left_frame.empty() || right_frame.empty())
+    const auto left_sample = left_camera->getFrameSample();
+    const auto right_sample = right_camera->getFrameSample();
+    if (!left_sample || !right_sample || left_sample->image.empty() || right_sample->image.empty())
     {
         result.error = CaptureError{CaptureErrorCode::EmptyFrame, "左右いずれかの有効なframeがまだありません"};
         return result;
@@ -144,12 +146,12 @@ CaptureStereoResult CaptureService::captureStereo(video::CameraId left_camera_id
 
     try
     {
-        if (!cv::imwrite(left_output_path.string(), left_frame))
+        if (!cv::imwrite(left_output_path.string(), left_sample->image))
         {
             result.error = CaptureError{CaptureErrorCode::FileWriteFailed, "左画像ファイルの保存に失敗しました"};
             return result;
         }
-        if (!cv::imwrite(right_output_path.string(), right_frame))
+        if (!cv::imwrite(right_output_path.string(), right_sample->image))
         {
             result.error = CaptureError{CaptureErrorCode::FileWriteFailed, "右画像ファイルの保存に失敗しました"};
             return result;
@@ -162,6 +164,10 @@ CaptureStereoResult CaptureService::captureStereo(video::CameraId left_camera_id
     }
 
     result.ok = true;
+    result.left_sequence = left_sample->sequence;
+    result.right_sequence = right_sample->sequence;
+    result.left_timestamp = left_sample->timestamp;
+    result.right_timestamp = right_sample->timestamp;
     LOG_INFO("Capture: saved stereo left={} right={}", left_output_path.string(), right_output_path.string());
     return result;
 }
