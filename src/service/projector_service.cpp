@@ -230,7 +230,7 @@ ProjectorResult ProjectorService::showPatternLocked(const std::string& projector
     try
     {
         const auto pattern = session->structured_light->getPattern(static_cast<size_t>(index)).clone();
-        const auto canvas = composePatternCanvas(pattern, session->surface);
+        const auto canvas = composePatternCanvas(pattern, session->surface, index);
         const auto shown = window_service_.showImage(session->window_role, canvas);
         if (!shown.ok)
         {
@@ -414,7 +414,7 @@ ProjectorSurface ProjectorService::computeSurface(const service::monitor::Monito
     return surface;
 }
 
-cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface)
+cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface, int pattern_index)
 {
     if (surface.surface_width <= 0 || surface.surface_height <= 0 || surface.pattern_width <= 0 ||
         surface.pattern_height <= 0 || surface.pattern_x < 0 || surface.pattern_y < 0 ||
@@ -445,6 +445,20 @@ cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const Pro
     cv::Mat canvas(surface.surface_height, surface.surface_width, display_pattern.type(), cv::Scalar::all(0));
     const cv::Rect roi{surface.pattern_x, surface.pattern_y, surface.pattern_width, surface.pattern_height};
     display_pattern.copyTo(canvas(roi));
+    // Gray Code領域外の余白へ同期markerを置く。余白がない場合は
+    // active patternを壊さないためmarkerを描画しない。
+    constexpr int marker_size = 8;
+    cv::Rect marker;
+    if (surface.pattern_x >= marker_size)
+        marker = {surface.pattern_x - marker_size, surface.pattern_y, marker_size, marker_size};
+    else if (surface.surface_width - (surface.pattern_x + surface.pattern_width) >= marker_size)
+        marker = {surface.pattern_x + surface.pattern_width, surface.pattern_y, marker_size, marker_size};
+    else if (surface.pattern_y >= marker_size)
+        marker = {surface.pattern_x, surface.pattern_y - marker_size, marker_size, marker_size};
+    else if (surface.surface_height - (surface.pattern_y + surface.pattern_height) >= marker_size)
+        marker = {surface.pattern_x, surface.pattern_y + surface.pattern_height, marker_size, marker_size};
+    if (marker.area() > 0)
+        canvas(marker).setTo((pattern_index % 2) == 0 ? cv::Scalar::all(0) : cv::Scalar::all(255));
     return canvas;
 }
 
