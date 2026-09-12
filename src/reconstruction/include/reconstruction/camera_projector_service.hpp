@@ -42,31 +42,4 @@ bool saveCalibration(const std::filesystem::path& path, cv::Size camera_size, cv
                      const cv::Mat& camera_matrix, const cv::Mat& camera_distortion,
                      const CalibrationResult& result, double square_size_mm, std::string& error);
 
-struct ReconstructionResult
-{
-    bool ok{false};
-    int candidates{0};
-    int valid_points{0};
-    int rejected_nonfinite{0};
-    int rejected_depth{0};
-    int rejected_reprojection{0};
-    double max_reprojection_error_px{2.0};
-    std::string error;
-};
-
-/**
- * @brief Camera pixelとdecoded Projector logical pixelを三角測量してPLYへ保存する。
- *
- * distortionを除去した座標に対しP_camera=[I|0]、P_projector=[R|T]を使用する。
- * invalid mask、非有限値、両装置の後方点、reprojection error超過は出力しない。
- */
-ReconstructionResult reconstructToPly(const cv::Mat& projector_x, const cv::Mat& projector_y,
-                                      const cv::Mat& valid_mask, const cv::Mat& camera_image,
-                                      cv::Size projector_size, const cv::Mat& camera_matrix,
-                                      const cv::Mat& camera_distortion, const cv::Mat& projector_matrix,
-                                      const cv::Mat& projector_distortion, const cv::Mat& rotation,
-                                      const cv::Mat& translation, const std::filesystem::path& output,
-                                      double min_depth_mm, double max_depth_mm,
-                                      double max_reprojection_error_px);
-
 } // namespace reconstruction::camera_projector

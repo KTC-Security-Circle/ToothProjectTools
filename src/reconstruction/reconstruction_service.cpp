@@ -240,7 +240,7 @@ bool isValidTranslationVector(const cv::Mat& translation)
         (translation.rows == 1 && translation.cols == 3);
     return !translation.empty() && translation.channels() == 1 && vector_shape &&
            (translation.depth() == CV_32F || translation.depth() == CV_64F) &&
-           cv::checkRange(translation, true);
+           cv::checkRange(translation, true) && cv::norm(translation) > 1e-12;
 }
 
 bool loadDecodeResult(const ReconstructionInput& input,
@@ -570,6 +570,18 @@ bool loadInput(const ReconstructionInput& input,
             data.image_width = data.left.x.cols;
             data.image_height = data.left.x.rows;
             data.camera_projector = true;
+            const auto camera_width = calibration["camera_width"];
+            const auto camera_height = calibration["camera_height"];
+            const bool calibration_size_matches = !camera_width.empty() && !camera_height.empty() &&
+                static_cast<int>(camera_width) == data.image_width &&
+                static_cast<int>(camera_height) == data.image_height;
+            if (!calibration_size_matches)
+            {
+                addIssue(result, "image_size_mismatch",
+                         "decode image size does not match Camera–Projector calibration image size",
+                         input.calibration_file);
+                return false;
+            }
             const bool valid = isValidFloatingMatrix(data.K1, 3, 3) && isValidFloatingMatrix(data.K2, 3, 3) &&
                    isValidRotationMatrix(data.R) && isValidDistortionCoefficients(data.D1) &&
                    isValidDistortionCoefficients(data.D2) && isValidTranslationVector(data.T);
