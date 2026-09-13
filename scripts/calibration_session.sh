@@ -180,15 +180,73 @@ count_stereo_pairs() {
   printf '%d' "${count}"
 }
 
+validate_stereo_pairs() {
+  local path name
+  local -a missing_left=()
+  local -a missing_right=()
+  shopt -s nullglob
+  for path in "${OUT_DIR}/stereo/left"/*.png; do
+    name="${path##*/}"
+    if [[ "${name}" =~ ^[0-9]+[.]png$ && ! -f "${OUT_DIR}/stereo/right/${name}" ]]; then
+      missing_right+=("${name}")
+    fi
+  done
+  for path in "${OUT_DIR}/stereo/right"/*.png; do
+    name="${path##*/}"
+    if [[ "${name}" =~ ^[0-9]+[.]png$ && ! -f "${OUT_DIR}/stereo/left/${name}" ]]; then
+      missing_left+=("${name}")
+    fi
+  done
+  shopt -u nullglob
+
+  if (( ${#missing_left[@]} > 0 )); then
+    printf '[WARN] stereo pair mismatch: left is missing: %s\n' "${missing_left[*]}" >&2
+  fi
+  if (( ${#missing_right[@]} > 0 )); then
+    printf '[WARN] stereo pair mismatch: right is missing: %s\n' "${missing_right[*]}" >&2
+  fi
+  (( ${#missing_left[@]} == 0 && ${#missing_right[@]} == 0 ))
+}
+
 show_counts() {
   printf '\nDataset:\n'
   printf '  left mono   : %s\n' "$(count_images "${OUT_DIR}/mono_left")"
   printf '  right mono  : %s\n' "$(count_images "${OUT_DIR}/mono_right")"
-  printf '  stereo pairs: %s\n\n' "$(count_stereo_pairs)"
+  printf '  stereo pairs: %s\n' "$(count_stereo_pairs)"
+  validate_stereo_pairs || true
+  printf '\n'
+}
+
+detect_mono_corners() {
+  local role="$1" id json config found corner_count expected_count
+  new_request_id
+  id="${REQUEST_ID}"
+  config="$(board_args)"
+  json="$(jq -cn --arg id "${id}" --arg role "${role}" \
+    --arg output "${OUT_DIR}/preview/${role}.png" --argjson board "${config}" \
+    '{id:$id,cmd:"calib_detect_corners",role:$role,output:$output} + $board')"
+  if ! request "${id}" "${json}"; then
+    printf '[SKIP] mono image was not saved\n' >&2
+    return 1
+  fi
+
+  found="$(jq -r '.found' <<<"${LAST_JSON}")"
+  corner_count="$(jq -r '.corner_count' <<<"${LAST_JSON}")"
+  expected_count="$(jq -r '.expected_corner_count' <<<"${LAST_JSON}")"
+  if [[ "${found}" != true || "${corner_count}" != "${expected_count}" ]]; then
+    printf '[WARN] %s corners not found: %s/%s\n' "${role}" "${corner_count}" "${expected_count}" >&2
+    printf '[SKIP] mono image was not saved\n' >&2
+    return 1
+  fi
+  printf '[OK] %s corners found: %s/%s (preview: %s)\n' \
+    "${role}" "${corner_count}" "${expected_count}" "${OUT_DIR}/preview/${role}.png"
 }
 
 capture_mono() {
   local role="$1" directory number sequence path id json
+  if ! detect_mono_corners "${role}"; then
+    return
+  fi
   directory="${OUT_DIR}/mono_${role}"
   number="$(next_image_number "${directory}")"
   printf -v sequence '%03d' "${number}"
@@ -261,6 +319,10 @@ calibrate_mono() {
 
 calibrate_stereo() {
   local id json config
+  if ! validate_stereo_pairs; then
+    printf '[SKIP] stereo calibration was not started\n' >&2
+    return
+  fi
   new_request_id
   id="${REQUEST_ID}"
   config="$(board_args)"
