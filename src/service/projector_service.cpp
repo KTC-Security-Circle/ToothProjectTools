@@ -4,6 +4,7 @@
 #include "structured_light/structured_light.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <exception>
 #include <memory>
@@ -19,14 +20,19 @@ constexpr int sync_marker_size = 8;
 
 cv::Rect syncMarkerRect(const ProjectorSurface& surface)
 {
-    if (surface.pattern_x >= sync_marker_size)
-        return {surface.pattern_x - sync_marker_size, surface.pattern_y, sync_marker_size, sync_marker_size};
-    if (surface.surface_width - (surface.pattern_x + surface.pattern_width) >= sync_marker_size)
-        return {surface.pattern_x + surface.pattern_width, surface.pattern_y, sync_marker_size, sync_marker_size};
-    if (surface.pattern_y >= sync_marker_size)
-        return {surface.pattern_x, surface.pattern_y - sync_marker_size, sync_marker_size, sync_marker_size};
-    if (surface.surface_height - (surface.pattern_y + surface.pattern_height) >= sync_marker_size)
-        return {surface.pattern_x, surface.pattern_y + surface.pattern_height, sync_marker_size, sync_marker_size};
+    const std::array candidates{
+        cv::Rect{surface.pattern_x - sync_marker_size, surface.pattern_y, sync_marker_size, sync_marker_size},
+        cv::Rect{surface.pattern_x + surface.pattern_width, surface.pattern_y, sync_marker_size, sync_marker_size},
+        cv::Rect{surface.pattern_x, surface.pattern_y - sync_marker_size, sync_marker_size, sync_marker_size},
+        cv::Rect{surface.pattern_x, surface.pattern_y + surface.pattern_height, sync_marker_size, sync_marker_size}};
+    const cv::Rect bounds{0, 0, surface.surface_width, surface.surface_height};
+    for (const auto& candidate : candidates)
+    {
+        if ((candidate & bounds) == candidate)
+        {
+            return candidate;
+        }
+    }
     return {};
 }
 } // namespace

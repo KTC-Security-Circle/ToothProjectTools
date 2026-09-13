@@ -1,4 +1,5 @@
 #include "cmd/commands.hpp"
+#include "capture/capture_service.hpp"
 #include "control/control_message.hpp"
 #include "handler/camera_command_handler.hpp"
 #include "handler/decode_command_handler.hpp"
@@ -12,6 +13,8 @@
 #include "service/decode_service.hpp"
 #include "service/monitor_service.hpp"
 #include "service/projector_service.hpp"
+#include "service/scan_event.hpp"
+#include "service/scan_service.hpp"
 #include "service/scan_dataset_resolver.hpp"
 #include "service/scan_dataset_validator.hpp"
 #include "service/window_service.hpp"
@@ -1734,6 +1737,45 @@ void testSyncMarkerRequiresProjectorMargin()
     assert(!service::projector::canPlaceSyncMarker(surface));
     surface.surface_width = 24;
     assert(service::projector::canPlaceSyncMarker(surface));
+
+    surface.surface_width = 9;
+    surface.surface_height = 10;
+    surface.pattern_x = 8;
+    surface.pattern_y = 9;
+    surface.pattern_width = 1;
+    surface.pattern_height = 1;
+    assert(!service::projector::canPlaceSyncMarker(surface));
+}
+
+void testCameraRoiScanRejectsStereoBeforeStart()
+{
+    FakeWindowBackend backend;
+    auto monitor_service = fakeMonitorService();
+    service::window::WindowService window_service{backend};
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
+    video::CameraManager cameras;
+    capture::CaptureService capture_service{cameras};
+    service::camera::CameraService camera_service{cameras};
+    service::scan::ScanEventQueue events;
+    service::scan::ScanService scan_service{projector_service, capture_service, camera_service, events};
+
+    service::scan::ScanStartConfig config;
+    config.projector_role = "projector";
+    config.left_role = "left";
+    config.right_role = "right";
+    config.output_dir = testTempDir("camera_roi_stereo_rejected");
+    config.sync_source = "camera_roi";
+    auto result = scan_service.startScan(config);
+    assert(!result.ok && result.error->code == "invalid_scan_config");
+
+    config.right_role.clear();
+    result = scan_service.startScan(config);
+    assert(!result.ok && result.error->code == "projector_not_open");
+
+    config.right_role = "right";
+    config.sync_source = "fixed_delay";
+    result = scan_service.startScan(config);
+    assert(!result.ok && result.error->code == "projector_not_open");
 }
 
 void testDecodeServiceFailures()
@@ -1828,6 +1870,7 @@ int main()
     testDecodeServiceSyntheticDataset();
     testDecodeExcludesCameraSyncRoiOnly();
     testSyncMarkerRequiresProjectorMargin();
+    testCameraRoiScanRejectsStereoBeforeStart();
     testDecodeServiceFailures();
     return 0;
 }

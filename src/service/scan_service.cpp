@@ -114,6 +114,7 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     const bool valid_source = config.sync_source == "fixed_delay" || config.sync_source == "camera_roi" ||
                               config.sync_source == "photodiode";
     if (config.projector_role.empty() || config.left_role.empty() || config.settle_ms < 0 || !valid_source ||
+        (config.sync_source == "camera_roi" && !config.right_role.empty()) ||
         config.sync_timeout_ms <= 0 || config.sync_guard_ms < 0 || config.sync_stable_frames <= 0 ||
         config.roi_x < 0 || config.roi_y < 0 || config.roi_width <= 0 || config.roi_height <= 0 ||
         config.roi_decode_margin < 0 ||
@@ -454,6 +455,16 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             {
                 selected_sample = camera_service_.firstFrameAtOrAfter(*left_id, selected_at);
                 if (!selected_sample) std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            }
+            if (!selected_sample)
+            {
+                std::lock_guard lock(mutex_);
+                state_ = ScanState::failed;
+                last_error_code_ = "sync_timeout";
+                last_error_message_ = "camera ROI同期後のguard済みframeを取得できませんでした";
+                pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                           {"error_message", last_error_message_}});
+                return;
             }
         }
         else if (config.sync_source == "photodiode")
