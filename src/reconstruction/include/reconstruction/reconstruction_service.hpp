@@ -9,7 +9,10 @@ struct ReconstructionInput { std::filesystem::path decode_dir; std::filesystem::
 struct ReconstructionRequest { ReconstructionInput input; std::filesystem::path output_file; bool overwrite{false}; };
 struct ReconstructionIssue { std::string code; std::string message; std::filesystem::path path; };
 struct ReconstructionWarning { std::string code; std::string message; };
-struct ReconstructionDiagnostics { size_t exact_match_candidate_count{}, valid_correspondence_count{}, epipolar_rejected_count{}, triangulation_rejected_count{}, depth_rejected_count{}; };
+struct ReconstructionDiagnostics {
+    size_t exact_match_candidate_count{}, valid_correspondence_count{}, epipolar_rejected_count{}, triangulation_rejected_count{}, depth_rejected_count{};
+    size_t projector_depth_rejected_count{}, depth_range_rejected_count{}, reprojection_rejected_count{}, invalid_homogeneous_rejected_count{}, non_finite_rejected_count{};
+};
 struct ReconstructionValidationResult { bool valid{}; std::vector<ReconstructionIssue> issues; std::vector<ReconstructionWarning> warnings; int image_width{},image_height{},projector_width{},projector_height{},left_valid_count{},right_valid_count{}; size_t reconstructable_point_count{}; ReconstructionDiagnostics diagnostics; };
 struct ReconstructionResult { bool ok{}; std::optional<ReconstructionIssue> error; std::vector<ReconstructionWarning> warnings; std::filesystem::path output_file; size_t point_count{}; ReconstructionDiagnostics diagnostics; };
 /** @brief 保存済みdecode resultからleft camera座標系・単位mmの点群を生成する。 */

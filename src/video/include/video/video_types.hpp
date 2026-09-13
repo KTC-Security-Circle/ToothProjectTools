@@ -1,8 +1,26 @@
 #pragma once
 #include <cstdint>
+#include <chrono>
+#include <deque>
+#include <opencv2/core/mat.hpp>
 #include <opencv2/videoio.hpp> // cv::VideoWriter::fourcc
 
 namespace video {
+
+  /**
+   * @brief Camera frameとhost monotonic clock上の取得時刻を束ねる。
+   *
+   * timestampはOpenCVまたはV4L2のhardware timestampではなく、
+   * VideoCapture::read()が成功した直後にhostで取得した時刻である。
+   * sequenceはCameraごとに単調増加するframe番号である。
+   */
+  struct FrameSample {
+    cv::Mat image;
+    std::uint64_t sequence{0};
+    std::chrono::steady_clock::time_point timestamp{};
+  };
+
+  using FrameRingBuffer = std::deque<FrameSample>;
 
   using CameraId = std::uint32_t;
   constexpr CameraId kInvalidCameraId = 0;

@@ -75,6 +75,16 @@ struct ControlMessage {
 
   /// settle_ms <std::optional<int>>: pattern表示後captureまでの待機時間ms。
   std::optional<int> settle_ms;
+  std::optional<std::string> sync_source;
+  std::optional<int> sync_timeout_ms;
+  std::optional<int> sync_guard_ms;
+  std::optional<int> sync_stable_frames;
+  std::optional<int> roi_x;
+  std::optional<int> roi_y;
+  std::optional<int> roi_width;
+  std::optional<int> roi_height;
+  std::optional<int> roi_black_threshold;
+  std::optional<int> roi_white_threshold;
 
   /// threshold <std::optional<int>>: GrayCode decode threshold。
   std::optional<int> threshold;

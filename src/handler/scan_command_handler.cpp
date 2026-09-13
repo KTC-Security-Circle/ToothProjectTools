@@ -26,6 +26,16 @@ common::CommandResult handle(runtime::ScanHandlerContext& ctx, const cmd::Comman
                     scan_command.right_role,
                     std::filesystem::path{scan_command.output_dir},
                     scan_command.settle_ms,
+                    scan_command.sync_source,
+                    scan_command.sync_timeout_ms,
+                    scan_command.sync_guard_ms,
+                    scan_command.sync_stable_frames,
+                    scan_command.roi_x,
+                    scan_command.roi_y,
+                    scan_command.roi_width,
+                    scan_command.roi_height,
+                    scan_command.roi_black_threshold,
+                    scan_command.roi_white_threshold,
                 }));
             }
             else if constexpr (std::is_same_v<CommandType, cmd::CmdScanStatus>)

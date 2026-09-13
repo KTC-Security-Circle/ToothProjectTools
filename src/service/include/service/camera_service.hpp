@@ -4,6 +4,7 @@
 #include "video/camera_manager.hpp"
 
 #include <mutex>
+#include <chrono>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -43,6 +44,11 @@ class CameraService
     /// Return:
     ///   <std::optional<video::CameraId>>: roleがbind済みならCameraManager上のcamera_id。
     std::optional<video::CameraId> resolveCameraId(const std::string& role) const;
+
+    /** @brief roleに対応するCameraの最新timestamp付きframeを取得する。 */
+    std::optional<video::FrameSample> latestFrame(video::CameraId camera_id) const;
+    std::optional<video::FrameSample> firstFrameAtOrAfter(
+        video::CameraId camera_id, std::chrono::steady_clock::time_point timestamp) const;
 
   private:
     /// @brief camera roleとして使用可能な文字列か判定する。

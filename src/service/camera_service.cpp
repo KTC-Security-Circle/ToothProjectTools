@@ -68,6 +68,19 @@ std::optional<video::CameraId> CameraService::resolveCameraId(const std::string&
     return it == role_to_camera_id_.end() ? std::nullopt : std::optional<video::CameraId>{it->second};
 }
 
+std::optional<video::FrameSample> CameraService::latestFrame(video::CameraId camera_id) const
+{
+    auto* camera = cameras_.get(camera_id);
+    return camera ? camera->getFrameSample() : std::nullopt;
+}
+
+std::optional<video::FrameSample> CameraService::firstFrameAtOrAfter(
+    video::CameraId camera_id, std::chrono::steady_clock::time_point timestamp) const
+{
+    auto* camera = cameras_.get(camera_id);
+    return camera ? camera->firstFrameAtOrAfter(timestamp) : std::nullopt;
+}
+
 bool CameraService::validRole(const std::string& role)
 {
     return !role.empty() &&

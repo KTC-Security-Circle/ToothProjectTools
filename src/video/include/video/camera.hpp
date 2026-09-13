@@ -10,6 +10,8 @@
 #include <thread>
 #include <mutex> 
 #include <atomic>
+#include <deque>
+#include <optional>
 
 #include "video_types.hpp"
 
@@ -30,8 +32,20 @@ public:
   // 状態
   bool isOpened() const noexcept { return is_opened_; }
 
-  // ★変更: ノンブロッキングで最新フレームのコピーを返す
+  // 互換API。新しい同期処理ではgetFrameSample()を使用する。
   cv::Mat getFrame();
+
+  /** @brief timestampとsequenceを含む最新frameをcopyして返す。 */
+  std::optional<FrameSample> getFrameSample();
+
+  /**
+   * @brief 指定時刻以降で最初に取得されたframeを返す。
+   * @param timestamp 比較対象のsteady_clock時刻。
+   */
+  std::optional<FrameSample> firstFrameAtOrAfter(std::chrono::steady_clock::time_point timestamp);
+
+  /** @brief Cameraが保持するring bufferの最大frame数を設定する。 */
+  void setFrameRingCapacity(std::size_t capacity);
 
   // プロパティ
   Id id() const noexcept { return id_; }
@@ -66,6 +80,9 @@ private:
   std::thread worker_thread_;             // 撮影スレッド
   std::mutex frame_mutex_;                // 画像保護用ミューテックス
   cv::Mat last_frame_;                    // 最新フレームキャッシュ（実体）
+  FrameRingBuffer frame_ring_;
+  std::size_t frame_ring_capacity_{120};
+  std::uint64_t next_frame_sequence_{0};
   
   // キャリブレーション
   cv::Mat* intrinsics_storage_ptr_{nullptr};

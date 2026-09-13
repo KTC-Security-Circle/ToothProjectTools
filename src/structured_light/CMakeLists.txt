@@ -1,6 +1,7 @@
 # src/structured_light/CMakeLists.txt
 add_library(structured_light
   structured_light.cpp
+  pattern_sync.cpp
 )
 
 target_include_directories(structured_light

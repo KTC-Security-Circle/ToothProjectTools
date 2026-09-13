@@ -113,11 +113,11 @@ ScanDatasetResolveResult ScanDatasetResolver::resolve(const ScanDatasetInputSpec
         }
     }
 
-    if (spec.left_dir && spec.right_dir)
+    if (spec.left_dir)
     {
         dataset.left_dir = normalizeDirectoryPath(*spec.left_dir);
-        dataset.right_dir = normalizeDirectoryPath(*spec.right_dir);
         dataset.root_dir = spec.input_dir ? normalizeDirectoryPath(*spec.input_dir) : dataset.left_dir.parent_path();
+        dataset.right_dir = spec.right_dir ? normalizeDirectoryPath(*spec.right_dir) : std::filesystem::path{};
     }
     else if (spec.input_dir)
     {
@@ -142,16 +142,18 @@ ScanDatasetResolveResult ScanDatasetResolver::resolve(const ScanDatasetInputSpec
             dataset.right_dir = input / "right";
         }
     }
-    else
+
+    if (!dataset.right_dir.empty() && !isDirectory(dataset.right_dir))
+    {
+        // input_dirから解決したrightが存在しない場合は単眼datasetとして扱う。
+        dataset.right_dir.clear();
+    }
+    if (dataset.left_dir.empty())
     {
         result.issues.push_back(issue("missing_field", "input_dir or left_dir/right_dir is required"));
         return result;
     }
 
-    if (spec.left_dir && !spec.right_dir)
-    {
-        result.issues.push_back(issue("missing_field", "missing required field: right_dir"));
-    }
     if (!spec.left_dir && spec.right_dir)
     {
         result.issues.push_back(issue("missing_field", "missing required field: left_dir"));
@@ -175,7 +177,7 @@ ScanDatasetResolveResult ScanDatasetResolver::resolve(const ScanDatasetInputSpec
     {
         result.issues.push_back(issue("left_dir_not_found", "left directory does not exist", dataset.left_dir));
     }
-    if (!isDirectory(dataset.right_dir))
+    if (!dataset.right_dir.empty() && !isDirectory(dataset.right_dir))
     {
         result.issues.push_back(issue("right_dir_not_found", "right directory does not exist", dataset.right_dir));
     }

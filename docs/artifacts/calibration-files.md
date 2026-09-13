@@ -29,10 +29,12 @@ mono calibration file は単眼cameraの内部parameterを保存するfileであ
 | `role` | camera role。 |
 | `created_at` | 生成時刻。 |
 | `source_image_folder` | 入力画像directory。 |
+| `image_width` | 新規mono calibrationの画像幅。単位pixel。生成時は`image_height`とともに保存する。 |
+| `image_height` | 新規mono calibrationの画像高さ。単位pixel。生成時は`image_width`とともに保存する。 |
 
 ### file format
 
-OpenCV FileStorage YAMLである。`K` / `D` にNaNまたはInfが含まれるfileは無効である。
+OpenCV FileStorage YAMLである。`K` / `D` にNaNまたはInfが含まれるfileは無効である。新規生成fileはtemporary YAMLへ完全に書き込んでからdestinationへ切り替えるため、書き込み失敗で既存の成功済みfileを途中状態にしない。
 
 ## stereo calibration file
 
@@ -75,4 +77,5 @@ stereo calibration file はleft/right camera間の外部parameterを保存する
 
 ### file format
 
-OpenCV FileStorage YAMLである。
+OpenCV FileStorage YAMLである。ReconstructionServiceは`Q`が存在する場合、4x4 single-channel floating-point matrixかつ有限値であることを確認する。legacy fileでは`Q`がない形式も読み込むが、新規stereo calibrationでは必ず保存する。
+新規生成fileは出力先と同じdirectoryに一意なtemporary YAMLを作成し、書き込み完了後にrenameする。solverまたは書き込みに失敗した場合はtemporary fileを削除し、既存destinationを保持する。`R` と `T` は既存ReconstructionServiceと同じく、left camera座標系からright camera座標系への変換を表す。

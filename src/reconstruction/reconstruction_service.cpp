@@ -45,11 +45,14 @@ struct Data
     cv::Mat D2;
     cv::Mat R;
     cv::Mat T;
+    cv::Mat Q;
+    std::optional<double> calibration_rms;
     int image_width{};
     int image_height{};
     int projector_width{};
     int projector_height{};
     std::vector<cv::Point3d> points;
+    bool camera_projector{false};
 };
 
 void addIssue(ReconstructionValidationResult& result,
@@ -237,7 +240,7 @@ bool isValidTranslationVector(const cv::Mat& translation)
         (translation.rows == 1 && translation.cols == 3);
     return !translation.empty() && translation.channels() == 1 && vector_shape &&
            (translation.depth() == CV_32F || translation.depth() == CV_64F) &&
-           cv::checkRange(translation, true);
+           cv::checkRange(translation, true) && cv::norm(translation) > 1e-12;
 }
 
 bool loadDecodeResult(const ReconstructionInput& input,
@@ -361,6 +364,28 @@ bool loadCalibration(const ReconstructionInput& input,
         calibration["D2"] >> data.D2;
         calibration["R"] >> data.R;
         calibration["T"] >> data.T;
+        calibration["Q"] >> data.Q;
+        const auto rms = calibration["RMS"];
+        if (!rms.empty())
+        {
+            if (!rms.isInt() && !rms.isReal())
+            {
+                addIssue(result,
+                         "calibration_file_invalid",
+                         "calibration RMS must be a finite positive number",
+                         input.calibration_file);
+                return false;
+            }
+            data.calibration_rms = static_cast<double>(rms);
+            if (!std::isfinite(*data.calibration_rms) || *data.calibration_rms <= 0.0)
+            {
+                addIssue(result,
+                         "calibration_file_invalid",
+                         "calibration RMS must be a finite positive number",
+                         input.calibration_file);
+                return false;
+            }
+        }
 
         const auto width = calibration["image_width"];
         const auto height = calibration["image_height"];
@@ -428,7 +453,8 @@ bool validateCalibration(const ReconstructionInput& input,
         !isValidRotationMatrix(data.R) ||
         !isValidDistortionCoefficients(data.D1) ||
         !isValidDistortionCoefficients(data.D2) ||
-        !isValidTranslationVector(data.T))
+        !isValidTranslationVector(data.T) ||
+        (!data.Q.empty() && !isValidFloatingMatrix(data.Q, 4, 4)))
     {
         addIssue(result,
                  "calibration_file_invalid",
@@ -493,6 +519,98 @@ bool loadInput(const ReconstructionInput& input,
                  input.calibration_file);
         return false;
     }
+
+    // Camera–Projector decodeはleft側のprojector座標mapだけを使う。
+    try
+    {
+        cv::FileStorage calibration(input.calibration_file.string(), cv::FileStorage::READ);
+        std::string mode;
+        calibration["mode"] >> mode;
+        if (mode == "camera_projector")
+        {
+            cv::FileStorage x(input.decode_dir.string() + "/left/projector_x.yml", cv::FileStorage::READ);
+            cv::FileStorage y(input.decode_dir.string() + "/left/projector_y.yml", cv::FileStorage::READ);
+            data.left.x = x["projector_x"].mat();
+            data.left.y = y["projector_y"].mat();
+            data.left.mask = cv::imread((input.decode_dir / "left/valid_mask.png").string(), cv::IMREAD_GRAYSCALE);
+            calibration["camera_K"] >> data.K1;
+            calibration["camera_D"] >> data.D1;
+            calibration["projector_K"] >> data.K2;
+            calibration["projector_D"] >> data.D2;
+            calibration["R_camera_to_projector"] >> data.R;
+            calibration["T_camera_to_projector"] >> data.T;
+            auto width = calibration["projector_width"];
+            auto height = calibration["projector_height"];
+            data.projector_width = width.empty() ? 480 : static_cast<int>(width);
+            data.projector_height = height.empty() ? 270 : static_cast<int>(height);
+            cv::FileStorage metadata((input.decode_dir / "metadata.json").string(), cv::FileStorage::READ);
+            if (!metadata.isOpened())
+            {
+                addIssue(result, "projector_coordinate_mismatch", "decode metadata.json is missing", input.decode_dir);
+                return false;
+            }
+            if (metadata.isOpened())
+            {
+                const auto decoded_width = metadata["projector_width"];
+                const auto decoded_height = metadata["projector_height"];
+                if (decoded_width.empty() || decoded_height.empty() ||
+                    (static_cast<int>(decoded_width) != data.projector_width ||
+                     static_cast<int>(decoded_height) != data.projector_height))
+                {
+                    addIssue(result, "projector_coordinate_mismatch",
+                             "decode and calibration projector logical resolutions differ", input.decode_dir);
+                    return false;
+                }
+                const auto surface = metadata["surface"];
+                const auto calibration_pattern_x = calibration["pattern_x"];
+                const auto calibration_pattern_y = calibration["pattern_y"];
+                const auto calibration_pattern_width = calibration["pattern_width"];
+                const auto calibration_pattern_height = calibration["pattern_height"];
+                if (surface.empty() || calibration_pattern_x.empty() || calibration_pattern_y.empty() ||
+                    calibration_pattern_width.empty() || calibration_pattern_height.empty() ||
+                    static_cast<int>(surface["pattern_x"]) != static_cast<int>(calibration_pattern_x) ||
+                    static_cast<int>(surface["pattern_y"]) != static_cast<int>(calibration_pattern_y) ||
+                    static_cast<int>(surface["pattern_width"]) != static_cast<int>(calibration_pattern_width) ||
+                    static_cast<int>(surface["pattern_height"]) != static_cast<int>(calibration_pattern_height))
+                {
+                    addIssue(result, "projector_surface_mismatch",
+                             "decode and calibration projector surfaces differ", input.decode_dir);
+                    return false;
+                }
+            }
+            if (data.left.x.empty() || data.left.y.empty() || data.left.mask.empty())
+            {
+                addIssue(result, "decode_result_invalid", "Camera–Projector decode map is missing", input.decode_dir);
+                return false;
+            }
+            data.image_width = data.left.x.cols;
+            data.image_height = data.left.x.rows;
+            data.camera_projector = true;
+            const auto camera_width = calibration["camera_width"];
+            const auto camera_height = calibration["camera_height"];
+            const bool calibration_size_matches = !camera_width.empty() && !camera_height.empty() &&
+                static_cast<int>(camera_width) == data.image_width &&
+                static_cast<int>(camera_height) == data.image_height;
+            if (!calibration_size_matches)
+            {
+                addIssue(result, "image_size_mismatch",
+                         "decode image size does not match Camera–Projector calibration image size",
+                         input.calibration_file);
+                return false;
+            }
+            const bool valid = isValidFloatingMatrix(data.K1, 3, 3) && isValidFloatingMatrix(data.K2, 3, 3) &&
+                   isValidRotationMatrix(data.R) && isValidDistortionCoefficients(data.D1) &&
+                   isValidDistortionCoefficients(data.D2) && isValidTranslationVector(data.T);
+            if (!valid)
+                addIssue(result, "calibration_file_invalid", "Camera–Projector calibration matrices are invalid", input.calibration_file);
+            return valid;
+        }
+    }
+    catch (const cv::Exception&)
+    {
+        addIssue(result, "calibration_file_invalid", "failed to parse Camera–Projector calibration", input.calibration_file);
+        return false;
+    }
     if (!loadDecodeResult(input, result, data))
     {
         return false;
@@ -519,6 +637,68 @@ bool calculate(const ReconstructionInput& input,
                ReconstructionValidationResult& result,
                Data& data)
 {
+    if (data.camera_projector)
+    {
+        std::vector<cv::Point2f> camera_points;
+        std::vector<cv::Point2f> projector_points;
+        for (int y = 0; y < data.image_height; ++y)
+            for (int x = 0; x < data.image_width; ++x)
+                if (data.left.mask.at<uchar>(y, x) && data.left.x.at<int>(y, x) >= 0 &&
+                    data.left.y.at<int>(y, x) >= 0)
+                {
+                    camera_points.emplace_back(static_cast<float>(x), static_cast<float>(y));
+                    projector_points.emplace_back(static_cast<float>(data.left.x.at<int>(y, x)),
+                                                  static_cast<float>(data.left.y.at<int>(y, x)));
+                }
+        if (camera_points.empty())
+        {
+            addIssue(result, "insufficient_valid_correspondence", "no valid Camera–Projector correspondence", input.decode_dir);
+            return false;
+        }
+        cv::Mat uc, up;
+        cv::undistortPoints(camera_points, uc, data.K1, data.D1);
+        cv::undistortPoints(projector_points, up, data.K2, data.D2);
+        cv::Mat p1 = cv::Mat::zeros(3, 4, CV_64F);
+        cv::Mat p2 = cv::Mat::zeros(3, 4, CV_64F);
+        cv::Mat eye = cv::Mat::eye(3, 3, CV_64F);
+        eye.copyTo(p1(cv::Rect(0, 0, 3, 3)));
+        data.R.convertTo(data.R, CV_64F);
+        data.T.convertTo(data.T, CV_64F);
+        cv::hconcat(data.R, data.T.reshape(1, 3), p2);
+        cv::Mat homogeneous;
+        cv::triangulatePoints(p1, p2, uc, up, homogeneous);
+        cv::Mat homogeneous64;
+        homogeneous.convertTo(homogeneous64, CV_64F);
+        result.diagnostics.exact_match_candidate_count = camera_points.size();
+        for (int i = 0; i < homogeneous.cols; ++i)
+        {
+            const double w = homogeneous64.at<double>(3, i);
+            if (!std::isfinite(w) || std::abs(w) < 1e-12) { ++result.diagnostics.invalid_homogeneous_rejected_count; continue; }
+            const cv::Point3d point(homogeneous64.at<double>(0, i) / w, homogeneous64.at<double>(1, i) / w,
+                                    homogeneous64.at<double>(2, i) / w);
+            if (!std::isfinite(point.x) || !std::isfinite(point.y) || !std::isfinite(point.z))
+            { ++result.diagnostics.non_finite_rejected_count; continue; }
+            if (point.z <= 0.0) { ++result.diagnostics.depth_rejected_count; continue; }
+            const cv::Mat xp = data.R * (cv::Mat_<double>(3, 1) << point.x, point.y, point.z) + data.T.reshape(1, 3);
+            if (xp.at<double>(2) <= 0.0) { ++result.diagnostics.projector_depth_rejected_count; continue; }
+            const double depth = point.z;
+            if ((input.config.min_depth_mm && depth < *input.config.min_depth_mm) ||
+                (input.config.max_depth_mm && depth > *input.config.max_depth_mm))
+            { ++result.diagnostics.depth_range_rejected_count; continue; }
+            std::vector<cv::Point3d> object{point};
+            std::vector<cv::Point2f> cproj, pproj;
+            cv::projectPoints(object, cv::Mat::zeros(3, 1, CV_64F), cv::Mat::zeros(3, 1, CV_64F), data.K1, data.D1, cproj);
+            cv::Mat rvec;
+            cv::Rodrigues(data.R, rvec);
+            cv::projectPoints(object, rvec, data.T, data.K2, data.D2, pproj);
+            if (cv::norm(cproj[0] - camera_points[i]) > input.config.max_epipolar_error_px ||
+                cv::norm(pproj[0] - projector_points[i]) > input.config.max_epipolar_error_px)
+            { ++result.diagnostics.reprojection_rejected_count; continue; }
+            data.points.push_back(point);
+        }
+        result.diagnostics.valid_correspondence_count = data.points.size();
+        return true;
+    }
     result.left_valid_count = cv::countNonZero(data.left.mask);
     result.right_valid_count = cv::countNonZero(data.right.mask);
     if (!validateProjectorIndexMemory(input,
@@ -750,7 +930,9 @@ ReconstructionResult ReconstructionService::reconstruct(const ReconstructionRequ
     result.diagnostics = validation.diagnostics;
     if (!validation.valid)
     {
-        result.error = validation.issues.front();
+        result.error = validation.issues.empty()
+                           ? ReconstructionIssue{"reconstruction_invalid", "reconstruction validation failed", request.input.decode_dir}
+                           : validation.issues.front();
         return result;
     }
 
