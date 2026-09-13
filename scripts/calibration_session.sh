@@ -26,6 +26,8 @@ STEREO_PREVIEW_READY=false
 CLEANING_UP=false
 LEFT_STREAM_URL=""
 RIGHT_STREAM_URL=""
+TTY_DEVICE=/dev/tty
+TTY_STATE=""
 
 die() {
   printf '[ERROR] %s\n' "$*" >&2
@@ -60,6 +62,10 @@ cleanup() {
   [[ "${CLEANING_UP}" == false ]] || return
   CLEANING_UP=true
   trap - EXIT INT TERM
+
+  if [[ -n "${TTY_STATE}" ]]; then
+    stty "${TTY_STATE}" < "${TTY_DEVICE}" 2>/dev/null || true
+  fi
 
   send_cleanup_commands
   if [[ -n "${BACKEND_IN}" ]]; then
@@ -417,7 +423,8 @@ graceful_shutdown() {
 
 need_cmd jq
 need_cmd awk
-[[ -r /dev/tty ]] || die '/dev/tty is not available'
+[[ -r "${TTY_DEVICE}" ]] || die "${TTY_DEVICE} is not available"
+TTY_STATE="$(stty -g < "${TTY_DEVICE}")"
 [[ -x "${BIN}" ]] || die "backend is not executable: ${BIN}"
 nonnegative_integer "${LEFT_CAMERA}" || die 'LEFT_CAMERA must be a non-negative integer'
 nonnegative_integer "${RIGHT_CAMERA}" || die 'RIGHT_CAMERA must be a non-negative integer'
@@ -438,10 +445,11 @@ start_stream right
 print_menu
 show_live_preview
 show_counts
+stty -icanon -echo min 1 time 0 < "${TTY_DEVICE}"
 
 while true; do
   printf 'calibration> '
-  IFS= read -rsn1 key </dev/tty || break
+  IFS= read -r -N1 key < "${TTY_DEVICE}" || break
   printf '%s\n' "${key}"
   case "${key}" in
     p) preview_stereo ;;
