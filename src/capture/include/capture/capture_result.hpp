@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+#include <chrono>
+#include <cstdint>
 #include <optional>
 #include <string>
 
@@ -40,6 +42,11 @@ struct CaptureResult
 
     /// output_path <std::filesystem::path>: 保存された画像ファイルのpath。
     std::filesystem::path output_path;
+
+    /// sequence <std::uint64_t>: Camera ring buffer内のframe sequence。
+    std::uint64_t sequence{0};
+    /// timestamp <steady_clock::time_point>: read完了直後のhost取得時刻。
+    std::chrono::steady_clock::time_point timestamp{};
 };
 
 /// @brief stereo cameraのCapture結果。
@@ -56,6 +63,10 @@ struct CaptureStereoResult
 
     /// right_output_path <std::filesystem::path>: 右camera画像ファイルの保存path。
     std::filesystem::path right_output_path;
+    std::uint64_t left_sequence{0};
+    std::uint64_t right_sequence{0};
+    std::chrono::steady_clock::time_point left_timestamp{};
+    std::chrono::steady_clock::time_point right_timestamp{};
 };
 
 /// @brief CaptureErrorCodeをlogやresponse用の文字列へ変換する。

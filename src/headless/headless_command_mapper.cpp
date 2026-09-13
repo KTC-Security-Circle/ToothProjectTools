@@ -343,10 +343,6 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
     {
         return *failure;
     }
-    if (auto failure = requireString(message.right_role, "right_role"))
-    {
-        return *failure;
-    }
     if (auto failure = requireString(message.output_dir, "output_dir"))
     {
         return *failure;
@@ -365,9 +361,15 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
     result.command = cmd::CmdStartScan{message.scan_id,
                                        *message.projector_role,
                                        *message.left_role,
-                                       *message.right_role,
+                                       message.right_role.value_or(std::string{}),
                                        *message.output_dir,
-                                       message.settle_ms.value_or(120)};
+                                       message.settle_ms.value_or(120),
+                                       message.sync_source.value_or("fixed_delay"),
+                                       message.sync_timeout_ms.value_or(1000), message.sync_guard_ms.value_or(30),
+                                       message.sync_stable_frames.value_or(3), message.roi_x.value_or(0),
+                                       message.roi_y.value_or(0), message.roi_width.value_or(32),
+                                       message.roi_height.value_or(32), message.roi_black_threshold.value_or(40),
+                                       message.roi_white_threshold.value_or(180)};
     return result;
 }
 

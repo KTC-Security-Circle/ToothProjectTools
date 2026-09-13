@@ -4,6 +4,7 @@
 #include "structured_light/structured_light.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <exception>
 #include <memory>
@@ -13,6 +14,33 @@
 
 namespace service::projector
 {
+namespace
+{
+constexpr int sync_marker_size = 8;
+
+cv::Rect syncMarkerRect(const ProjectorSurface& surface)
+{
+    const std::array candidates{
+        cv::Rect{surface.pattern_x - sync_marker_size, surface.pattern_y, sync_marker_size, sync_marker_size},
+        cv::Rect{surface.pattern_x + surface.pattern_width, surface.pattern_y, sync_marker_size, sync_marker_size},
+        cv::Rect{surface.pattern_x, surface.pattern_y - sync_marker_size, sync_marker_size, sync_marker_size},
+        cv::Rect{surface.pattern_x, surface.pattern_y + surface.pattern_height, sync_marker_size, sync_marker_size}};
+    const cv::Rect bounds{0, 0, surface.surface_width, surface.surface_height};
+    for (const auto& candidate : candidates)
+    {
+        if ((candidate & bounds) == candidate)
+        {
+            return candidate;
+        }
+    }
+    return {};
+}
+} // namespace
+
+bool canPlaceSyncMarker(const ProjectorSurface& surface)
+{
+    return syncMarkerRect(surface).area() > 0;
+}
 namespace
 {
 
@@ -230,7 +258,7 @@ ProjectorResult ProjectorService::showPatternLocked(const std::string& projector
     try
     {
         const auto pattern = session->structured_light->getPattern(static_cast<size_t>(index)).clone();
-        const auto canvas = composePatternCanvas(pattern, session->surface);
+        const auto canvas = composePatternCanvas(pattern, session->surface, index);
         const auto shown = window_service_.showImage(session->window_role, canvas);
         if (!shown.ok)
         {
@@ -414,7 +442,7 @@ ProjectorSurface ProjectorService::computeSurface(const service::monitor::Monito
     return surface;
 }
 
-cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface)
+cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface, int pattern_index)
 {
     if (surface.surface_width <= 0 || surface.surface_height <= 0 || surface.pattern_width <= 0 ||
         surface.pattern_height <= 0 || surface.pattern_x < 0 || surface.pattern_y < 0 ||
@@ -445,6 +473,11 @@ cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const Pro
     cv::Mat canvas(surface.surface_height, surface.surface_width, display_pattern.type(), cv::Scalar::all(0));
     const cv::Rect roi{surface.pattern_x, surface.pattern_y, surface.pattern_width, surface.pattern_height};
     display_pattern.copyTo(canvas(roi));
+    // Gray Code領域外の余白へ同期markerを置く。余白がない場合は
+    // active patternを壊さないためmarkerを描画しない。
+    const auto marker = syncMarkerRect(surface);
+    if (marker.area() > 0)
+        canvas(marker).setTo((pattern_index % 2) == 0 ? cv::Scalar::all(0) : cv::Scalar::all(255));
     return canvas;
 }
 

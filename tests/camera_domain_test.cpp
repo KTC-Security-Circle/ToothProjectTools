@@ -1,4 +1,5 @@
 #include "cmd/commands.hpp"
+#include "capture/capture_service.hpp"
 #include "control/control_message.hpp"
 #include "handler/camera_command_handler.hpp"
 #include "handler/decode_command_handler.hpp"
@@ -12,6 +13,8 @@
 #include "service/decode_service.hpp"
 #include "service/monitor_service.hpp"
 #include "service/projector_service.hpp"
+#include "service/scan_event.hpp"
+#include "service/scan_service.hpp"
 #include "service/scan_dataset_resolver.hpp"
 #include "service/scan_dataset_validator.hpp"
 #include "service/window_service.hpp"
@@ -237,6 +240,31 @@ void writeSyntheticGrayCodeDataset(const std::filesystem::path& dir, int project
         (void)left_written;
         (void)right_written;
     }
+}
+
+void enableCameraRoiSync(const std::filesystem::path& dir, int roi_x, int roi_y, int roi_width, int roi_height,
+                         int margin)
+{
+    cv::FileStorage storage((dir / "metadata.json").string(), cv::FileStorage::READ);
+    const auto pattern_count = static_cast<int>(storage["pattern_count"]);
+    const auto projector_width = static_cast<int>(storage["projector_width"]);
+    const auto projector_height = static_cast<int>(storage["projector_height"]);
+    storage.release();
+    std::ofstream output(dir / "metadata.json");
+    output << "{\n"
+           << "  \"scan_id\": \"session_001\",\n"
+           << "  \"pattern_count\": " << pattern_count << ",\n"
+           << "  \"projector_width\": " << projector_width << ",\n"
+           << "  \"projector_height\": " << projector_height << ",\n"
+           << "  \"sync_source\": \"camera_roi\",\n"
+           << "  \"roi_x\": " << roi_x << ",\n"
+           << "  \"roi_y\": " << roi_y << ",\n"
+           << "  \"roi_width\": " << roi_width << ",\n"
+           << "  \"roi_height\": " << roi_height << ",\n"
+           << "  \"roi_decode_margin\": " << margin << ",\n"
+           << "  \"surface\": {\"pattern_width\": " << projector_width
+           << ", \"pattern_height\": " << projector_height << ", \"pattern_x\": 0, \"pattern_y\": 0}\n"
+           << "}\n";
 }
 
 cv::Mat readYmlMat(const std::filesystem::path& path, const std::string& key)
@@ -1678,6 +1706,78 @@ void testDecodeServiceSyntheticDataset()
     assert(result.left_valid_count == 0 && result.right_valid_count == 0);
 }
 
+void testDecodeExcludesCameraSyncRoiOnly()
+{
+    service::scan_dataset::ScanDatasetValidator validator;
+    service::decode::DecodeService decode_service{validator};
+    const auto input_dir = testTempDir("decode_camera_roi_input");
+    const auto output_dir = testTempDir("decode_camera_roi_output");
+    writeSyntheticGrayCodeDataset(input_dir, 8, 4);
+    enableCameraRoiSync(input_dir, 3, 1, 2, 1, 1);
+
+    const auto result =
+        decode_service.decodePatterns(service::decode::DecodePatternsConfig{input_dir, output_dir, 15, false});
+    assert(result.ok);
+    assert(result.left_valid_count == 20 && result.right_valid_count == 20);
+    const auto projector_x = readYmlMat(output_dir / "left" / "projector_x.yml", "projector_x");
+    const auto mask = cv::imread((output_dir / "left" / "valid_mask.png").string(), cv::IMREAD_GRAYSCALE);
+    assert(mask.at<uchar>(0, 2) == 0 && mask.at<uchar>(2, 5) == 0);
+    assert(projector_x.at<int>(1, 3) == -1);
+    assert(mask.at<uchar>(0, 1) == 255 && projector_x.at<int>(0, 1) == 1);
+    assert(mask.at<uchar>(3, 7) == 255 && projector_x.at<int>(3, 7) == 7);
+}
+
+void testSyncMarkerRequiresProjectorMargin()
+{
+    service::projector::ProjectorSurface surface;
+    surface.surface_width = 16;
+    surface.surface_height = 12;
+    surface.pattern_width = 16;
+    surface.pattern_height = 12;
+    assert(!service::projector::canPlaceSyncMarker(surface));
+    surface.surface_width = 24;
+    assert(service::projector::canPlaceSyncMarker(surface));
+
+    surface.surface_width = 9;
+    surface.surface_height = 10;
+    surface.pattern_x = 8;
+    surface.pattern_y = 9;
+    surface.pattern_width = 1;
+    surface.pattern_height = 1;
+    assert(!service::projector::canPlaceSyncMarker(surface));
+}
+
+void testCameraRoiScanRejectsStereoBeforeStart()
+{
+    FakeWindowBackend backend;
+    auto monitor_service = fakeMonitorService();
+    service::window::WindowService window_service{backend};
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
+    video::CameraManager cameras;
+    capture::CaptureService capture_service{cameras};
+    service::camera::CameraService camera_service{cameras};
+    service::scan::ScanEventQueue events;
+    service::scan::ScanService scan_service{projector_service, capture_service, camera_service, events};
+
+    service::scan::ScanStartConfig config;
+    config.projector_role = "projector";
+    config.left_role = "left";
+    config.right_role = "right";
+    config.output_dir = testTempDir("camera_roi_stereo_rejected");
+    config.sync_source = "camera_roi";
+    auto result = scan_service.startScan(config);
+    assert(!result.ok && result.error->code == "invalid_scan_config");
+
+    config.right_role.clear();
+    result = scan_service.startScan(config);
+    assert(!result.ok && result.error->code == "projector_not_open");
+
+    config.right_role = "right";
+    config.sync_source = "fixed_delay";
+    result = scan_service.startScan(config);
+    assert(!result.ok && result.error->code == "projector_not_open");
+}
+
 void testDecodeServiceFailures()
 {
     service::scan_dataset::ScanDatasetValidator validator;
@@ -1768,6 +1868,9 @@ int main()
     testProjectorServiceValidation();
     testScanDatasetValidator();
     testDecodeServiceSyntheticDataset();
+    testDecodeExcludesCameraSyncRoiOnly();
+    testSyncMarkerRequiresProjectorMargin();
+    testCameraRoiScanRejectsStereoBeforeStart();
     testDecodeServiceFailures();
     return 0;
 }

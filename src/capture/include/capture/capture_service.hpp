@@ -42,6 +42,9 @@ public:
     ///   <CaptureResult>: Captureと保存の成否、失敗時のerror、成功時の保存path。
     CaptureResult captureFrame(video::CameraId camera_id, const std::filesystem::path& output_path);
 
+    /** @brief 指定したring buffer frameを保存する。timestamp同期後の安全なframe選択に使用する。 */
+    CaptureResult saveFrameSample(const video::FrameSample& sample, const std::filesystem::path& output_path);
+
     /// @brief 左右cameraから近いタイミングでframeを取得し、それぞれ画像ファイルとして保存する。
     ///
     /// Args:

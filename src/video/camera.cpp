@@ -183,9 +183,20 @@ void Camera::workerLoop() {
 
         consecutive_read_failures = 0;
 
+        // read成功直後のhost時刻を記録する。hardware timestampとは呼ばない。
+        const auto capture_timestamp = std::chrono::steady_clock::now();
+
         // 2. 正常なフレームだけを保護しながら更新 (一瞬で終わる)
         std::lock_guard<std::mutex> lock(frame_mutex_);
         temp_frame.copyTo(last_frame_);
+        FrameSample sample;
+        sample.image = temp_frame.clone();
+        sample.sequence = ++next_frame_sequence_;
+        sample.timestamp = capture_timestamp;
+        frame_ring_.push_back(std::move(sample));
+        while (frame_ring_.size() > frame_ring_capacity_) {
+            frame_ring_.pop_front();
+        }
     }
 }
 
@@ -203,6 +214,34 @@ cv::Mat Camera::getFrame() {
     }
     
     return last_frame_.clone();
+}
+
+std::optional<FrameSample> Camera::getFrameSample() {
+    std::lock_guard<std::mutex> lock(frame_mutex_);
+    if (frame_ring_.empty()) return std::nullopt;
+    FrameSample result = frame_ring_.back();
+    result.image = result.image.clone();
+    return result;
+}
+
+std::optional<FrameSample> Camera::firstFrameAtOrAfter(
+    std::chrono::steady_clock::time_point timestamp) {
+    std::lock_guard<std::mutex> lock(frame_mutex_);
+    for (const auto& sample : frame_ring_) {
+        if (sample.timestamp >= timestamp) {
+            FrameSample result = sample;
+            result.image = result.image.clone();
+            return result;
+        }
+    }
+    return std::nullopt;
+}
+
+void Camera::setFrameRingCapacity(std::size_t capacity) {
+    if (capacity == 0) capacity = 1;
+    std::lock_guard<std::mutex> lock(frame_mutex_);
+    frame_ring_capacity_ = capacity;
+    while (frame_ring_.size() > frame_ring_capacity_) frame_ring_.pop_front();
 }
 
 // -----------------------------------------------------------------------------

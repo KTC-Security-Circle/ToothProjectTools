@@ -57,6 +57,8 @@ struct ProjectorSurfaceRequest
     ProjectorPlacement placement{ProjectorPlacement::center};
 };
 
+bool canPlaceSyncMarker(const ProjectorSurface& surface);
+
 struct ProjectorScanSnapshot
 {
     /// projector_role <std::string>: projector role名。
@@ -252,7 +254,7 @@ class ProjectorService
                                            int requested_height, std::optional<int> requested_x,
                                            std::optional<int> requested_y, ProjectorPlacement placement);
     ProjectorResult showPatternLocked(const std::string& projector_role, int index);
-    static cv::Mat composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface);
+    static cv::Mat composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface, int pattern_index);
 
     /// window_service_ <service::window::WindowService&>: pattern表示先window service。
     service::window::WindowService& window_service_;
