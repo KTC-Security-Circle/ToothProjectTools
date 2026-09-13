@@ -24,6 +24,8 @@ LAST_JSON=""
 REQUEST_SEQUENCE=0
 STEREO_PREVIEW_READY=false
 CLEANING_UP=false
+LEFT_STREAM_URL=""
+RIGHT_STREAM_URL=""
 
 die() {
   printf '[ERROR] %s\n' "$*" >&2
@@ -46,8 +48,10 @@ positive_number() {
   awk -v value="$1" 'BEGIN { exit !(value ~ /^[0-9]+([.][0-9]+)?$/ && value + 0 > 0) }'
 }
 
-send_shutdown() {
+send_cleanup_commands() {
   if [[ -n "${BACKEND_PID}" ]] && kill -0 "${BACKEND_PID}" 2>/dev/null && [[ -n "${BACKEND_IN}" ]]; then
+    printf '%s\n' '{"id":"cleanup-stop-left","cmd":"stop_stream","role":"left"}' >&"${BACKEND_IN}" 2>/dev/null || true
+    printf '%s\n' '{"id":"cleanup-stop-right","cmd":"stop_stream","role":"right"}' >&"${BACKEND_IN}" 2>/dev/null || true
     printf '%s\n' '{"id":"session-shutdown","cmd":"shutdown"}' >&"${BACKEND_IN}" 2>/dev/null || true
   fi
 }
@@ -57,7 +61,7 @@ cleanup() {
   CLEANING_UP=true
   trap - EXIT INT TERM
 
-  send_shutdown
+  send_cleanup_commands
   if [[ -n "${BACKEND_IN}" ]]; then
     exec {BACKEND_IN}>&- 2>/dev/null || true
   fi
@@ -342,7 +346,14 @@ print_menu() {
   printf '  l capture left mono         r capture right mono\n'
   printf '  1 calibrate left mono       2 calibrate right mono\n'
   printf '  3 calibrate stereo          i show image counts\n'
+  printf '  v show live preview URLs\n'
   printf '  q shutdown and quit\n\n'
+}
+
+show_live_preview() {
+  printf '\nLive preview:\n'
+  printf '  left : %s\n' "${LEFT_STREAM_URL}"
+  printf '  right: %s\n\n' "${RIGHT_STREAM_URL}"
 }
 
 start_backend() {
@@ -367,6 +378,43 @@ open_camera() {
   printf '[OK] opened %s camera: %s\n' "${role}" "${camera}"
 }
 
+start_stream() {
+  local role="$1" id json url
+  new_request_id
+  id="${REQUEST_ID}"
+  json="$(jq -cn --arg id "${id}" --arg role "${role}" \
+    '{id:$id,cmd:"start_stream",role:$role}')"
+  request "${id}" "${json}" || die "failed to start ${role} stream"
+  url="$(jq -r '.url // empty' <<<"${LAST_JSON}")"
+  [[ -n "${url}" ]] || die "start_stream response has no URL for ${role}"
+  if [[ "${role}" == left ]]; then
+    LEFT_STREAM_URL="${url}"
+  else
+    RIGHT_STREAM_URL="${url}"
+  fi
+}
+
+stop_stream() {
+  local role="$1" id json
+  new_request_id
+  id="${REQUEST_ID}"
+  json="$(jq -cn --arg id "${id}" --arg role "${role}" \
+    '{id:$id,cmd:"stop_stream",role:$role}')"
+  request "${id}" "${json}" || true
+}
+
+graceful_shutdown() {
+  local id json
+  stop_stream left
+  stop_stream right
+  new_request_id
+  id="${REQUEST_ID}"
+  json="$(jq -cn --arg id "${id}" '{id:$id,cmd:"shutdown"}')"
+  request "${id}" "${json}" || true
+  wait "${BACKEND_PID}" 2>/dev/null || true
+  BACKEND_PID=""
+}
+
 need_cmd jq
 need_cmd awk
 [[ -r /dev/tty ]] || die '/dev/tty is not available'
@@ -384,8 +432,11 @@ OUT_DIR="$(cd -- "${OUT_DIR}" && pwd)"
 
 start_backend
 open_camera left "${LEFT_CAMERA}"
+start_stream left
 open_camera right "${RIGHT_CAMERA}"
+start_stream right
 print_menu
+show_live_preview
 show_counts
 
 while true; do
@@ -401,9 +452,11 @@ while true; do
     2) calibrate_mono right ;;
     3) calibrate_stereo ;;
     i) show_counts ;;
+    v) show_live_preview ;;
     q) break ;;
     *) printf '[WARN] unknown key: %q\n' "${key}" >&2 ;;
   esac
 done
 
+graceful_shutdown
 printf 'Calibration session finished. Artifacts were kept in %s\n' "${OUT_DIR}"
