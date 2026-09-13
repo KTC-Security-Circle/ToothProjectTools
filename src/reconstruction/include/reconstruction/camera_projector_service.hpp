@@ -27,6 +27,14 @@ struct CalibrationResult
     std::string error;
 };
 
+struct ProjectorSurface
+{
+    int pattern_x{0};
+    int pattern_y{0};
+    int pattern_width{0};
+    int pattern_height{0};
+};
+
 /**
  * @brief Cameraと480x270 logical Projectorの校正を解く。
  *
@@ -39,6 +47,7 @@ CalibrationResult calibrate(const std::vector<CalibrationObservation>& observati
                             double square_size_mm);
 
 bool saveCalibration(const std::filesystem::path& path, cv::Size camera_size, cv::Size projector_size,
+                     const ProjectorSurface& surface,
                      const cv::Mat& camera_matrix, const cv::Mat& camera_distortion,
                      const CalibrationResult& result, double square_size_mm, std::string& error);
 

@@ -246,11 +246,21 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
 
     DecodeSideResult left;
     DecodeSideResult right;
+    cv::Rect excluded_roi;
+    if (metadata && metadata->sync_source == "camera_roi" && metadata->roi_width > 0 && metadata->roi_height > 0)
+    {
+        const int margin = std::max(0, metadata->roi_decode_margin);
+        const cv::Rect requested{metadata->roi_x - margin, metadata->roi_y - margin,
+                                 metadata->roi_width + 2 * margin, metadata->roi_height + 2 * margin};
+        excluded_roi = requested & cv::Rect{0, 0, left_patterns.front().cols, left_patterns.front().rows};
+    }
     try
     {
-        left = decodeSide(left_patterns, result.projector_width, result.projector_height, config.threshold);
+        left = decodeSide(left_patterns, result.projector_width, result.projector_height, config.threshold,
+                          excluded_roi);
         if (!single_camera)
-            right = decodeSide(right_patterns, result.projector_width, result.projector_height, config.threshold);
+            right = decodeSide(right_patterns, result.projector_width, result.projector_height, config.threshold,
+                               excluded_roi);
     }
     catch (const std::invalid_argument& error)
     {
@@ -313,7 +323,7 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
 }
 
 DecodeSideResult DecodeService::decodeSide(const std::vector<cv::Mat>& patterns, int projector_width,
-                                           int projector_height, int threshold) const
+                                           int projector_height, int threshold, const cv::Rect& excluded_roi) const
 {
     if (patterns.empty())
     {
@@ -360,6 +370,10 @@ DecodeSideResult DecodeService::decodeSide(const std::vector<cv::Mat>& patterns,
     {
         for (int x = 0; x < image_size.width; ++x)
         {
+            if (excluded_roi.contains({x, y}))
+            {
+                continue;
+            }
             bool valid = true;
             int gray_x = 0;
             int gray_y = 0;

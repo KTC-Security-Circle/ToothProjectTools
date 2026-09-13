@@ -57,7 +57,8 @@ class DecodeService
         const std::vector<cv::Mat>& patterns,
         int projector_width,
         int projector_height,
-        int threshold) const;
+        int threshold,
+        const cv::Rect& excluded_roi) const;
 
     /// @brief pattern_NNN.pngを順番に読み込む。
     std::vector<cv::Mat> loadPatternImages(

@@ -47,7 +47,8 @@ void writeDecodeResult(bool multiple_candidates = false,
     std::ofstream(decode_dir / "metadata.json")
         << "{\"version\":\"0.1.0\",\"image_width\":4,\"image_height\":2,"
         << "\"projector_width\":" << projector_width << ",\"projector_height\":"
-        << projector_height << '}';
+        << projector_height << ",\"surface\":{\"pattern_x\":0,\"pattern_y\":0,"
+        << "\"pattern_width\":16,\"pattern_height\":8}}";
     cv::Mat lx(2, 4, CV_32S, cv::Scalar(-1));
     cv::Mat ly(2, 4, CV_32S, cv::Scalar(-1));
     cv::Mat rx = lx.clone();
@@ -126,6 +127,20 @@ void writeCalibrationWithStringWidth()
     storage << "K1" << camera << "D1" << distortion << "K2" << camera << "D2" << distortion
             << "R" << cv::Mat::eye(3, 3, CV_64F) << "T" << translation
             << "image_width" << "4" << "image_height" << 2;
+}
+
+void writeCameraProjectorCalibration(int pattern_x)
+{
+    const cv::Mat camera =
+        (cv::Mat_<double>(3, 3) << 100.0, 0.0, 1.5, 0.0, 100.0, 0.5, 0.0, 0.0, 1.0);
+    cv::FileStorage storage(calibration_file.string(), cv::FileStorage::WRITE);
+    storage << "mode" << "camera_projector" << "camera_width" << 4 << "camera_height" << 2
+            << "projector_width" << 8 << "projector_height" << 4
+            << "pattern_x" << pattern_x << "pattern_y" << 0 << "pattern_width" << 16 << "pattern_height" << 8
+            << "camera_K" << camera << "camera_D" << cv::Mat::zeros(1, 5, CV_64F)
+            << "projector_K" << camera << "projector_D" << cv::Mat::zeros(1, 5, CV_64F)
+            << "R_camera_to_projector" << cv::Mat::eye(3, 3, CV_64F)
+            << "T_camera_to_projector" << (cv::Mat_<double>(3, 1) << -10.0, 0.0, 0.0);
 }
 
 reconstruction::ReconstructionInput input(double max_epipolar_error_px = 2.0)
@@ -435,6 +450,15 @@ void testHugeProjectorMetadataRejectedBeforeAllocation()
     writeDecodeResult();
 }
 
+void testCameraProjectorSurfaceMismatch()
+{
+    writeDecodeResult();
+    writeCameraProjectorCalibration(1);
+    const auto result = validateWithoutThrow();
+    REQUIRE(!result.valid && !result.issues.empty());
+    REQUIRE(result.issues.front().code == "projector_surface_mismatch");
+}
+
 } // namespace
 
 int main()
@@ -454,5 +478,6 @@ int main()
     testRotationMatrixValidation();
     testProjectorIndexMemoryPolicy();
     testHugeProjectorMetadataRejectedBeforeAllocation();
+    testCameraProjectorSurfaceMismatch();
     fs::remove_all(root);
 }

@@ -159,6 +159,12 @@ std::optional<ScanDatasetMetadata> ScanDatasetValidator::readMetadata(const std:
         metadata.projector_width = readIntOrZero(root, "projector_width");
         metadata.projector_height = readIntOrZero(root, "projector_height");
         metadata.settle_ms = readIntOrZero(root, "settle_ms");
+        metadata.sync_source = readString(root, "sync_source").value_or("");
+        metadata.roi_x = readIntOrZero(root, "roi_x");
+        metadata.roi_y = readIntOrZero(root, "roi_y");
+        metadata.roi_width = readIntOrZero(root, "roi_width");
+        metadata.roi_height = readIntOrZero(root, "roi_height");
+        metadata.roi_decode_margin = readIntOrZero(root, "roi_decode_margin");
 
         const auto surface = root["surface"];
         if (!surface.empty() && surface.isMap())

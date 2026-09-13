@@ -116,6 +116,7 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     if (config.projector_role.empty() || config.left_role.empty() || config.settle_ms < 0 || !valid_source ||
         config.sync_timeout_ms <= 0 || config.sync_guard_ms < 0 || config.sync_stable_frames <= 0 ||
         config.roi_x < 0 || config.roi_y < 0 || config.roi_width <= 0 || config.roi_height <= 0 ||
+        config.roi_decode_margin < 0 ||
         config.roi_black_threshold < 0 || config.roi_white_threshold > 255 ||
         config.roi_black_threshold >= config.roi_white_threshold)
     {
@@ -150,6 +151,11 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     if (snapshot->patterns_dirty || snapshot->pattern_count <= 0)
     {
         return ScanResult::failure(scan_id, "pattern_not_generated", "patterns are not generated");
+    }
+    if (config.sync_source == "camera_roi" && !service::projector::canPlaceSyncMarker(snapshot->surface))
+    {
+        return ScanResult::failure(scan_id, "sync_marker_margin_unavailable",
+                                   "camera_roi synchronization requires projector margin outside the active pattern");
     }
 
     const auto left_id = camera_service_.resolveCameraId(config.left_role);
@@ -571,6 +577,11 @@ bool ScanService::writeMetadata(const ScanStartConfig& config, const std::string
                << "  \"sync_source\": \"" << jsonEscape(config.sync_source) << "\",\n"
                << "  \"sync_timeout_ms\": " << config.sync_timeout_ms << ",\n"
                << "  \"sync_guard_ms\": " << config.sync_guard_ms << ",\n"
+               << "  \"roi_x\": " << config.roi_x << ",\n"
+               << "  \"roi_y\": " << config.roi_y << ",\n"
+               << "  \"roi_width\": " << config.roi_width << ",\n"
+               << "  \"roi_height\": " << config.roi_height << ",\n"
+               << "  \"roi_decode_margin\": " << config.roi_decode_margin << ",\n"
                << "  \"pattern_count\": " << pattern_count << ",\n"
                << "  \"projector_width\": " << code_width << ",\n"
                << "  \"projector_height\": " << code_height << ",\n"

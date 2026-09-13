@@ -54,10 +54,13 @@ CalibrationResult calibrate(const std::vector<CalibrationObservation>& observati
 }
 
 bool saveCalibration(const std::filesystem::path& path, cv::Size camera_size, cv::Size projector_size,
+                     const ProjectorSurface& surface,
                      const cv::Mat& camera_matrix, const cv::Mat& camera_distortion, const CalibrationResult& result,
                      double square_size_mm, std::string& error)
 {
-    if (!result.ok || !validBaseline(result.translation_camera_to_projector)) { error = "cannot save invalid calibration"; return false; }
+    if (!result.ok || !validBaseline(result.translation_camera_to_projector) || surface.pattern_x < 0 ||
+        surface.pattern_y < 0 || surface.pattern_width <= 0 || surface.pattern_height <= 0)
+    { error = "cannot save invalid calibration"; return false; }
     try {
         cv::FileStorage storage(path.string(), cv::FileStorage::WRITE);
         if (!storage.isOpened()) { error = "failed to open calibration output"; return false; }
@@ -65,6 +68,8 @@ bool saveCalibration(const std::filesystem::path& path, cv::Size camera_size, cv
                 << "square_size_mm" << square_size_mm;
         storage << "camera_width" << camera_size.width << "camera_height" << camera_size.height
                 << "projector_width" << projector_size.width << "projector_height" << projector_size.height;
+        storage << "pattern_x" << surface.pattern_x << "pattern_y" << surface.pattern_y
+                << "pattern_width" << surface.pattern_width << "pattern_height" << surface.pattern_height;
         storage << "camera_K" << camera_matrix << "camera_D" << camera_distortion
                 << "projector_K" << result.projector_matrix << "projector_D" << result.projector_distortion
                 << "R_camera_to_projector" << result.rotation_camera_to_projector

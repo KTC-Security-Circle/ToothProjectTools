@@ -60,6 +60,7 @@ struct ScanStartConfig
     int roi_height{32};
     int roi_black_threshold{40};
     int roi_white_threshold{180};
+    int roi_decode_margin{4};
 };
 
 class ScanService

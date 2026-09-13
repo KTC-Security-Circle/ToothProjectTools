@@ -57,6 +57,8 @@ struct ProjectorSurfaceRequest
     ProjectorPlacement placement{ProjectorPlacement::center};
 };
 
+bool canPlaceSyncMarker(const ProjectorSurface& surface);
+
 struct ProjectorScanSnapshot
 {
     /// projector_role <std::string>: projector role名。

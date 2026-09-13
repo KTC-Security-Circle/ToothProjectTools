@@ -15,6 +15,28 @@ namespace service::projector
 {
 namespace
 {
+constexpr int sync_marker_size = 8;
+
+cv::Rect syncMarkerRect(const ProjectorSurface& surface)
+{
+    if (surface.pattern_x >= sync_marker_size)
+        return {surface.pattern_x - sync_marker_size, surface.pattern_y, sync_marker_size, sync_marker_size};
+    if (surface.surface_width - (surface.pattern_x + surface.pattern_width) >= sync_marker_size)
+        return {surface.pattern_x + surface.pattern_width, surface.pattern_y, sync_marker_size, sync_marker_size};
+    if (surface.pattern_y >= sync_marker_size)
+        return {surface.pattern_x, surface.pattern_y - sync_marker_size, sync_marker_size, sync_marker_size};
+    if (surface.surface_height - (surface.pattern_y + surface.pattern_height) >= sync_marker_size)
+        return {surface.pattern_x, surface.pattern_y + surface.pattern_height, sync_marker_size, sync_marker_size};
+    return {};
+}
+} // namespace
+
+bool canPlaceSyncMarker(const ProjectorSurface& surface)
+{
+    return syncMarkerRect(surface).area() > 0;
+}
+namespace
+{
 
 std::string windowErrorMessage(const service::window::WindowResult& result, const std::string& fallback)
 {
@@ -447,16 +469,7 @@ cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const Pro
     display_pattern.copyTo(canvas(roi));
     // Gray Code領域外の余白へ同期markerを置く。余白がない場合は
     // active patternを壊さないためmarkerを描画しない。
-    constexpr int marker_size = 8;
-    cv::Rect marker;
-    if (surface.pattern_x >= marker_size)
-        marker = {surface.pattern_x - marker_size, surface.pattern_y, marker_size, marker_size};
-    else if (surface.surface_width - (surface.pattern_x + surface.pattern_width) >= marker_size)
-        marker = {surface.pattern_x + surface.pattern_width, surface.pattern_y, marker_size, marker_size};
-    else if (surface.pattern_y >= marker_size)
-        marker = {surface.pattern_x, surface.pattern_y - marker_size, marker_size, marker_size};
-    else if (surface.surface_height - (surface.pattern_y + surface.pattern_height) >= marker_size)
-        marker = {surface.pattern_x, surface.pattern_y + surface.pattern_height, marker_size, marker_size};
+    const auto marker = syncMarkerRect(surface);
     if (marker.area() > 0)
         canvas(marker).setTo((pattern_index % 2) == 0 ? cv::Scalar::all(0) : cv::Scalar::all(255));
     return canvas;

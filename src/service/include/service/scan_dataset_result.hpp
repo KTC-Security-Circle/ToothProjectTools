@@ -79,6 +79,13 @@ struct ScanDatasetMetadata
 
     /// display_y <int>: surface内の表示領域左上Y座標。
     int display_y{0};
+
+    std::string sync_source;
+    int roi_x{0};
+    int roi_y{0};
+    int roi_width{0};
+    int roi_height{0};
+    int roi_decode_margin{0};
 };
 
 struct ScanDatasetValidationResult

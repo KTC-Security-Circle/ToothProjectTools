@@ -561,6 +561,22 @@ bool loadInput(const ReconstructionInput& input,
                              "decode and calibration projector logical resolutions differ", input.decode_dir);
                     return false;
                 }
+                const auto surface = metadata["surface"];
+                const auto calibration_pattern_x = calibration["pattern_x"];
+                const auto calibration_pattern_y = calibration["pattern_y"];
+                const auto calibration_pattern_width = calibration["pattern_width"];
+                const auto calibration_pattern_height = calibration["pattern_height"];
+                if (surface.empty() || calibration_pattern_x.empty() || calibration_pattern_y.empty() ||
+                    calibration_pattern_width.empty() || calibration_pattern_height.empty() ||
+                    static_cast<int>(surface["pattern_x"]) != static_cast<int>(calibration_pattern_x) ||
+                    static_cast<int>(surface["pattern_y"]) != static_cast<int>(calibration_pattern_y) ||
+                    static_cast<int>(surface["pattern_width"]) != static_cast<int>(calibration_pattern_width) ||
+                    static_cast<int>(surface["pattern_height"]) != static_cast<int>(calibration_pattern_height))
+                {
+                    addIssue(result, "projector_surface_mismatch",
+                             "decode and calibration projector surfaces differ", input.decode_dir);
+                    return false;
+                }
             }
             if (data.left.x.empty() || data.left.y.empty() || data.left.mask.empty())
             {
