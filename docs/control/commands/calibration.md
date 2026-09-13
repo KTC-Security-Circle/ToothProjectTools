@@ -1,5 +1,18 @@
 # キャリブレーションcommand
 
+## 実機session script
+
+`scripts/calibration_session.sh` はtooth-backendを1度だけ起動し、Enter不要の1-key UIでpreview、撮影、mono/stereo calibrationを順番に実行する。
+
+```bash
+BIN=./build/release-opencv-4.10-static/src/serve/tooth-backend \
+LEFT_CAMERA=0 RIGHT_CAMERA=2 OUT_DIR=./data/calib \
+BOARD_X=10 BOARD_Y=7 SQUARE_MM=10.0 \
+./scripts/calibration_session.sh
+```
+
+`p` で左右corner preview、`c` でstereo pair、`l` / `r` でmono画像を撮影する。`1` / `2` / `3` は左mono / 右mono / stereo calibration、`i` は枚数表示、`q` はshutdownである。Stereo撮影は直前の `p` が `both_found=true` の場合のみ許可され、撮影後は再度previewが必要になる。画像番号は既存fileの最大番号の次から再開する。
+
 ## BoardConfig
 
 corner preview、mono calibration、stereo calibrationは共通の `board_corners_x`、`board_corners_y`、`square_size_mm` を使う。すべて省略可能で、既定値は 10×7 corner / 10 mm。物理checkerboardの実測値を `square_size_mm` に指定する。指定値はすべて正でなければならない。
