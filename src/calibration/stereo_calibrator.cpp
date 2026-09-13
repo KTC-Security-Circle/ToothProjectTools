@@ -7,11 +7,7 @@
 
 namespace calib {
 
-StereoCalibrator::StereoCalibrator() {
-    // デフォルト設定
-    config_.pattern_size = cv::Size(10, 7); 
-    config_.square_size_mm = 10.0f;
-}
+StereoCalibrator::StereoCalibrator() = default;
 
 void StereoCalibrator::setBoardConfig(const BoardConfig& config) {
     config_ = config;

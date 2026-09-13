@@ -193,7 +193,9 @@ std::optional<common::CommandResult> HeadlessDispatcher::rejectIfScanResourceBus
                 return busyCameraResult(scan_service_, typed.role);
             }
             else if constexpr (std::is_same_v<T, cmd::CmdCaptureFrame> || std::is_same_v<T, cmd::CmdCaptureStereo> ||
-                               std::is_same_v<T, cmd::CmdCalibCapture>)
+                               std::is_same_v<T, cmd::CmdCalibCapture> ||
+                               std::is_same_v<T, cmd::CmdDetectCalibrationCorners> ||
+                               std::is_same_v<T, cmd::CmdDetectStereoCalibrationCorners>)
             {
                 return busyCaptureResult(scan_service_);
             }

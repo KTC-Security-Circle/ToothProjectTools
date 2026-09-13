@@ -51,6 +51,14 @@ common::CommandResult handle(runtime::MonoCalibrationCalcContext& ctx, const cmd
                 const auto result = service::calibration::calibrate(ctx, c);
                 return command_result_mapper::calibration::toCommandResult(c.role, c, result);
             }
+            else if constexpr (std::is_same_v<T, cmd::CmdDetectCalibrationCorners>)
+            {
+                return service::calibration::detectCorners(ctx, c);
+            }
+            else if constexpr (std::is_same_v<T, cmd::CmdDetectStereoCalibrationCorners>)
+            {
+                return service::calibration::detectStereoCorners(ctx, c);
+            }
             else
             {
                 return common::notHandled();

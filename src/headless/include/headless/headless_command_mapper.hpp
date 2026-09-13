@@ -204,6 +204,9 @@ class HeadlessCommandMapper
     ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
     CommandMapResult mapCalibrationCaptureStereo(const control::ControlMessage& message);
 
+    CommandMapResult mapDetectCalibrationCorners(const control::ControlMessage& message);
+    CommandMapResult mapDetectStereoCalibrationCorners(const control::ControlMessage& message);
+
     /// @brief mono_calibrate用ControlMessageをCmdCalibrateへ変換する。
     ///
     /// Args:

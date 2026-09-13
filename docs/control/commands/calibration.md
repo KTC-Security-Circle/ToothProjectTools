@@ -1,5 +1,42 @@
 # キャリブレーションcommand
 
+## 実機session script
+
+`scripts/calibration_session.sh` はtooth-backendを1度だけ起動し、Enter不要の1-key UIでpreview、撮影、mono/stereo calibrationを順番に実行する。
+
+```bash
+BIN=./build/release-opencv-4.10-static/src/serve/tooth-backend \
+LEFT_CAMERA=0 RIGHT_CAMERA=2 OUT_DIR=./data/calib \
+BOARD_X=10 BOARD_Y=7 SQUARE_MM=10.0 \
+./scripts/calibration_session.sh
+```
+
+`p` で左右corner preview、`c` でstereo pair、`l` / `r` でmono画像を撮影する。`1` / `2` / `3` は左mono / 右mono / stereo calibration、`i` は枚数表示、`q` はshutdownである。Stereo撮影は直前の `p` が `both_found=true` の場合のみ許可され、撮影後は再度previewが必要になる。画像番号は既存fileの最大番号の次から再開する。
+
+## BoardConfig
+
+corner preview、mono calibration、stereo calibrationは共通の `board_corners_x`、`board_corners_y`、`square_size_mm` を使う。すべて省略可能で、既定値は 10×7 corner / 10 mm。物理checkerboardの実測値を `square_size_mm` に指定する。指定値はすべて正でなければならない。
+
+## calib_detect_corners
+
+open済みcameraの最新frameに対し、GUIと同じ `Calibrator::detectAndDraw()` でcorner検出とoverlay描画を行う。検出失敗は `ok=true, found=false` の正常結果で、overlayのないcamera frameも保存される。preview画像はcalibration datasetへ登録されない。
+
+```json
+{"id":"preview-left","cmd":"calib_detect_corners","role":"left","output":"./data/calib/preview/left.png","board_corners_x":10,"board_corners_y":7,"square_size_mm":10.0}
+```
+
+return: `role`, `found`, `corner_count`, `expected_corner_count`, `path`。cameraがopenされていない場合や出力できない場合はcommand errorになる。
+
+## calib_detect_stereo_corners
+
+左右の最新frameを1回のpreview operationで取得し、同じBoardConfigで個別にcorner検出する。
+
+```json
+{"id":"preview-stereo","cmd":"calib_detect_stereo_corners","left_role":"left","right_role":"right","left_output":"./data/calib/preview/left.png","right_output":"./data/calib/preview/right.png","board_corners_x":10,"board_corners_y":7,"square_size_mm":10.0}
+```
+
+return: `left_found`, `right_found`, `both_found`, `left_corner_count`, `right_corner_count`, `expected_corner_count`, `left_path`, `right_path`。
+
 ## mono_calibrate
 
 ### 役割
@@ -26,6 +63,9 @@ mono_calibrate はファイル処理commandである。
 | `output_file` | 必須 | 出力file。 |
 | `role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
 | `apply_to_camera` | 任意 | trueの場合のみ、roleに対応するopen済みcameraへK/Dを反映する。省略時はfalse。 |
+| `board_corners_x` | 任意 | checkerboardの横方向内部corner数。 |
+| `board_corners_y` | 任意 | checkerboardの縦方向内部corner数。 |
+| `square_size_mm` | 任意 | squareの実測サイズ(mm)。 |
 
 ### return
 
@@ -95,6 +135,9 @@ open済みcameraのK/Dではなく、`left_calibration_file` / `right_calibratio
 | `left_role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
 | `right_role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
 | `apply_to_camera` | 任意 | trueの場合のみ、left/right roleのopen済みcameraを確認する。省略時はfalse。 |
+| `board_corners_x` | 任意 | checkerboardの横方向内部corner数。 |
+| `board_corners_y` | 任意 | checkerboardの縦方向内部corner数。 |
+| `square_size_mm` | 任意 | squareの実測サイズ(mm)。 |
 
 `image_folder_left` / `image_folder_right`、`left_image_folder` / `right_image_folder` は `left_dir` / `right_dir` の互換aliasとして受け付ける。
 

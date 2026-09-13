@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include "video/video_types.hpp"
+#include "calibration/calibrator.hpp"
 
 namespace cmd {
 
@@ -177,6 +178,25 @@ struct CmdCaptureStereo {
   std::filesystem::path right_output_path;
 };
 
+/// @brief camera frameのcheckerboard cornerを検出しpreview画像へ描画するcommand。
+struct CmdDetectCalibrationCorners {
+  video::CameraId camera_id{video::kInvalidCameraId};
+  std::string role;
+  std::filesystem::path output_path;
+  calib::BoardConfig board_config;
+};
+
+/// @brief 左右camera frameのcorner previewを1回のoperationで生成するcommand。
+struct CmdDetectStereoCalibrationCorners {
+  video::CameraId left_camera_id{video::kInvalidCameraId};
+  video::CameraId right_camera_id{video::kInvalidCameraId};
+  std::string left_role;
+  std::string right_role;
+  std::filesystem::path left_output_path;
+  std::filesystem::path right_output_path;
+  calib::BoardConfig board_config;
+};
+
 struct CmdShowPattern { 
   int index; 
 };
@@ -293,6 +313,9 @@ struct CmdCalibrate {
 
   /// apply_to_camera <bool>: trueの場合のみopen済みcameraへ結果を反映する。
   bool apply_to_camera{false};
+
+  /// board_config <calib::BoardConfig>: 検出と実寸座標に使うcheckerboard設定。
+  calib::BoardConfig board_config;
 };
 
 // キャリブレーション用フォルダのクリア
@@ -337,6 +360,9 @@ struct CmdStereoCalibrate {
 
     /// apply_to_camera <bool>: trueの場合のみopen済みcameraへ結果を反映する。
     bool apply_to_camera{false};
+
+    /// board_config <calib::BoardConfig>: monoと同じcheckerboard設定。
+    calib::BoardConfig board_config;
 };
 
 struct ReconstructionGeometryConfig { double max_epipolar_error_px{2.0}; std::optional<double> min_depth_mm; std::optional<double> max_depth_mm; };
@@ -370,6 +396,8 @@ using Command = std::variant<
   CmdProjectorPrevPattern,
   CmdCaptureFrame,
   CmdCaptureStereo,
+  CmdDetectCalibrationCorners,
+  CmdDetectStereoCalibrationCorners,
   CmdShowPattern,
   CmdNextPattern,
   CmdPrevPattern,

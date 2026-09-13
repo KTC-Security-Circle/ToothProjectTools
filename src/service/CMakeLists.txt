@@ -17,6 +17,7 @@ target_link_libraries(service
   PUBLIC
     runtime
     capture
+    common
   PRIVATE
     cv_lib
     logger
