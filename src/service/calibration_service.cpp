@@ -8,6 +8,7 @@
 #include "runtime/handler_context.hpp"
 #include "video/camera.hpp"
 #include "video/camera_manager.hpp"
+#include "video/video_types.hpp"
 #include "window/window.hpp"
 
 #include <algorithm>
@@ -101,6 +102,20 @@ bool validMonoResult(const cv::Mat& camera_matrix, const cv::Mat& dist_coeffs, d
     return fx > 0.0 && fy > 0.0 && cx >= 0.0 && cx < image_size.width && cy >= 0.0 && cy < image_size.height;
 }
 
+std::optional<common::CommandResult> writePreview(const fs::path& path, const cv::Mat& image)
+{
+    try
+    {
+        if (!ensureOutputParent(path) || !cv::imwrite(path.string(), image))
+            return common::failure("calibration_output_write_failed", "failed to write corner preview image");
+    }
+    catch (const std::exception& error)
+    {
+        return common::failure("calibration_output_write_failed", error.what());
+    }
+    return std::nullopt;
+}
+
 } // namespace
 
 void clear(runtime::CalibrationHandlerContext& ctx, win::Window& target_window, const cmd::CmdCalibClear& command)
@@ -159,6 +174,7 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
         return failure(output_file, "calibration_failed", "mono calibrator is not available");
     }
 
+    ctx.calibrator->setBoardConfig(command.board_config);
     const fs::path image_folder{command.image_folder};
     if (!fs::exists(image_folder) || !fs::is_directory(image_folder))
     {
@@ -212,6 +228,9 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
             return failure(output_file, "calibration_output_write_failed", "failed to open mono calibration output file");
         }
         fs_out << "RMS" << rms << "image_width" << image_size.width << "image_height" << image_size.height
+               << "board_corners_x" << command.board_config.pattern_size.width
+               << "board_corners_y" << command.board_config.pattern_size.height
+               << "square_size_mm" << command.board_config.square_size_mm
                << "K" << K << "D" << D;
         fs_out.release();
         fs::rename(*temporary_file, output_file);
@@ -247,6 +266,55 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
     result.rms = rms;
     result.output_file = output_file;
     return result;
+}
+
+common::CommandResult detectCorners(runtime::MonoCalibrationCalcContext& ctx,
+                                    const cmd::CmdDetectCalibrationCorners& command)
+{
+    if (!ctx.calibrator) return common::failure("calibration_failed", "mono calibrator is not available");
+    auto* camera = ctx.cameras.get(command.camera_id);
+    if (!camera || !camera->isOpened()) return common::failure("camera_not_open", "camera is not open");
+    const auto sample = camera->getFrameSample();
+    if (!sample || sample->image.empty()) return common::failure("empty_frame", "valid camera frame is not available");
+    ctx.calibrator->setBoardConfig(command.board_config);
+    cv::Mat preview;
+    std::vector<cv::Point2f> corners;
+    const bool found = ctx.calibrator->detectAndDraw(sample->image, preview, corners);
+    if (const auto failure = writePreview(command.output_path, preview)) return *failure;
+    return common::success({{"role", command.role}, {"found", found ? "true" : "false"},
+                            {"corner_count", std::to_string(found ? corners.size() : 0)},
+                            {"expected_corner_count", std::to_string(command.board_config.pattern_size.area())},
+                            {"path", command.output_path.string()}});
+}
+
+common::CommandResult detectStereoCorners(runtime::MonoCalibrationCalcContext& ctx,
+                                          const cmd::CmdDetectStereoCalibrationCorners& command)
+{
+    if (!ctx.calibrator) return common::failure("calibration_failed", "mono calibrator is not available");
+    auto* left = ctx.cameras.get(command.left_camera_id);
+    auto* right = ctx.cameras.get(command.right_camera_id);
+    if (!left || !right || !left->isOpened() || !right->isOpened())
+        return common::failure("camera_not_open", "left or right camera is not open");
+    const auto left_sample = left->getFrameSample();
+    const auto right_sample = right->getFrameSample();
+    if (!left_sample || !right_sample || left_sample->image.empty() || right_sample->image.empty())
+        return common::failure("empty_frame", "valid left or right camera frame is not available");
+
+    ctx.calibrator->setBoardConfig(command.board_config);
+    cv::Mat left_preview, right_preview;
+    std::vector<cv::Point2f> left_corners, right_corners;
+    const bool left_found = ctx.calibrator->detectAndDraw(left_sample->image, left_preview, left_corners);
+    const bool right_found = ctx.calibrator->detectAndDraw(right_sample->image, right_preview, right_corners);
+    if (const auto failure = writePreview(command.left_output_path, left_preview)) return *failure;
+    if (const auto failure = writePreview(command.right_output_path, right_preview)) return *failure;
+    return common::success({{"left_found", left_found ? "true" : "false"},
+                            {"right_found", right_found ? "true" : "false"},
+                            {"both_found", left_found && right_found ? "true" : "false"},
+                            {"left_corner_count", std::to_string(left_found ? left_corners.size() : 0)},
+                            {"right_corner_count", std::to_string(right_found ? right_corners.size() : 0)},
+                            {"expected_corner_count", std::to_string(command.board_config.pattern_size.area())},
+                            {"left_path", command.left_output_path.string()},
+                            {"right_path", command.right_output_path.string()}});
 }
 
 MonoCalibrationResult calibrate(runtime::CalibrationHandlerContext& ctx, const cmd::CmdCalibrate& command)

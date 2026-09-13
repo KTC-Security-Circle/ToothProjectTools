@@ -8,6 +8,7 @@ target_include_directories(cmd_commands
 target_link_libraries(cmd_commands
   INTERFACE
     video
+    calibration
 )
 
 # ヘッダ専用ライブラリ

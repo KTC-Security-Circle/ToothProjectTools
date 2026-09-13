@@ -31,6 +31,9 @@ mono calibration file は単眼cameraの内部parameterを保存するfileであ
 | `source_image_folder` | 入力画像directory。 |
 | `image_width` | 新規mono calibrationの画像幅。単位pixel。生成時は`image_height`とともに保存する。 |
 | `image_height` | 新規mono calibrationの画像高さ。単位pixel。生成時は`image_width`とともに保存する。 |
+| `board_corners_x` | 生成に使ったcheckerboardの横方向内部corner数。 |
+| `board_corners_y` | 生成に使ったcheckerboardの縦方向内部corner数。 |
+| `square_size_mm` | 生成に使ったsquareの実測サイズ(mm)。 |
 
 ### file format
 
@@ -74,6 +77,9 @@ stereo calibration file はleft/right camera間の外部parameterを保存する
 | `created_at` | 生成時刻。 |
 | `left_dir` | left入力画像directory。 |
 | `right_dir` | right入力画像directory。 |
+| `board_corners_x` | 生成に使ったcheckerboardの横方向内部corner数。 |
+| `board_corners_y` | 生成に使ったcheckerboardの縦方向内部corner数。 |
+| `square_size_mm` | 生成に使ったsquareの実測サイズ(mm)。 |
 
 ### file format
 

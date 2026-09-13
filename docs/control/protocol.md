@@ -195,6 +195,8 @@ serve app。
 - `capture_stereo`
 - `calib_capture_frame`
 - `calib_capture_stereo`
+- `calib_detect_corners`
+- `calib_detect_stereo_corners`
 - `mono_calibrate`
 - `stereo_calibrate`
 - `open_window`

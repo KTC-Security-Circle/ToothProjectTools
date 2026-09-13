@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cmd/commands.hpp"
+#include "common/command_result.hpp"
 
 #include <filesystem>
 #include <optional>
@@ -66,5 +67,10 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
 /// Return:
 ///   <MonoCalibrationResult>: calibration成否、RMS、出力file、失敗時error。
 MonoCalibrationResult calibrate(runtime::CalibrationHandlerContext& ctx, const cmd::CmdCalibrate& command);
+
+common::CommandResult detectCorners(runtime::MonoCalibrationCalcContext& ctx,
+                                    const cmd::CmdDetectCalibrationCorners& command);
+common::CommandResult detectStereoCorners(runtime::MonoCalibrationCalcContext& ctx,
+                                          const cmd::CmdDetectStereoCalibrationCorners& command);
 
 } // namespace service::calibration

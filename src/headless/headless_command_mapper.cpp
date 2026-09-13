@@ -71,6 +71,25 @@ std::filesystem::path normalizeOutputPathForCompare(const std::filesystem::path&
     return std::filesystem::absolute(path).lexically_normal();
 }
 
+std::optional<CommandMapResult> validateBoardConfig(const control::ControlMessage& message)
+{
+    if (message.board_corners_x && *message.board_corners_x <= 0)
+        return mapFailure("invalid_command", "board_corners_x must be positive");
+    if (message.board_corners_y && *message.board_corners_y <= 0)
+        return mapFailure("invalid_command", "board_corners_y must be positive");
+    if (message.square_size_mm && *message.square_size_mm <= 0.0)
+        return mapFailure("invalid_command", "square_size_mm must be positive");
+    return std::nullopt;
+}
+
+calib::BoardConfig boardConfig(const control::ControlMessage& message)
+{
+    const calib::BoardConfig defaults;
+    return {{message.board_corners_x.value_or(defaults.pattern_size.width),
+             message.board_corners_y.value_or(defaults.pattern_size.height)},
+            static_cast<float>(message.square_size_mm.value_or(defaults.square_size_mm))};
+}
+
 
 } // namespace
 
@@ -570,6 +589,43 @@ CommandMapResult HeadlessCommandMapper::mapCalibrationCaptureStereo(const contro
     return mapCaptureStereo(message);
 }
 
+CommandMapResult HeadlessCommandMapper::mapDetectCalibrationCorners(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.role, "role")) return *failure;
+    if (auto failure = requireString(message.output, "output")) return *failure;
+    if (auto failure = validateBoardConfig(message)) return *failure;
+    const auto camera_id = resolveCameraId(camera_service_, *message.role);
+    if (!camera_id) return mapFailure("camera_not_open", "role is not opened: " + *message.role);
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdDetectCalibrationCorners{*camera_id, *message.role, *message.output, boardConfig(message)};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapDetectStereoCalibrationCorners(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.left_role, "left_role")) return *failure;
+    if (auto failure = requireString(message.right_role, "right_role")) return *failure;
+    if (auto failure = requireString(message.left_output, "left_output")) return *failure;
+    if (auto failure = requireString(message.right_output, "right_output")) return *failure;
+    if (auto failure = validateBoardConfig(message)) return *failure;
+    const auto left_id = resolveCameraId(camera_service_, *message.left_role);
+    const auto right_id = resolveCameraId(camera_service_, *message.right_role);
+    if (!left_id) return mapFailure("camera_not_open", "role is not opened: " + *message.left_role);
+    if (!right_id) return mapFailure("camera_not_open", "role is not opened: " + *message.right_role);
+    if (*left_id == *right_id) return mapFailure("invalid_command", "left_role and right_role must resolve to different cameras");
+    const std::filesystem::path left_path{*message.left_output};
+    const std::filesystem::path right_path{*message.right_output};
+    if (normalizeOutputPathForCompare(left_path) == normalizeOutputPathForCompare(right_path))
+        return mapFailure("invalid_command", "left_output and right_output must be different paths");
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdDetectStereoCalibrationCorners{*left_id, *right_id, *message.left_role,
+                                                             *message.right_role, left_path, right_path,
+                                                             boardConfig(message)};
+    return result;
+}
+
 CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlMessage& message)
 {
     if (auto failure = requireString(message.image_folder, "image_folder"))
@@ -580,6 +636,7 @@ CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlM
     {
         return *failure;
     }
+    if (auto failure = validateBoardConfig(message)) return *failure;
 
     const bool apply_to_camera = message.apply_to_camera.value_or(false);
     video::CameraId camera_id = video::kInvalidCameraId;
@@ -605,6 +662,7 @@ CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlM
         *message.output_file,
         message.role.value_or(std::string{}),
         apply_to_camera,
+        boardConfig(message),
     };
     return result;
 }
@@ -631,6 +689,7 @@ CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::Contro
     {
         return *failure;
     }
+    if (auto failure = validateBoardConfig(message)) return *failure;
 
     const auto left_dir = std::filesystem::path{*message.left_dir};
     const auto right_dir = std::filesystem::path{*message.right_dir};
@@ -683,6 +742,7 @@ CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::Contro
         *message.left_calibration_file,
         *message.right_calibration_file,
         apply_to_camera,
+        boardConfig(message),
     };
     return result;
 }

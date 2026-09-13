@@ -125,6 +125,9 @@ ReadResult JsonLineReader::read() {
         !readString(root, "input_dir", message.input_dir, error_message) ||
         !readBool(root, "allow_partial", message.allow_partial, error_message) ||
         !readBool(root, "apply_to_camera", message.apply_to_camera, error_message) ||
+        !readInteger(root, "board_corners_x", message.board_corners_x, error_message) ||
+        !readInteger(root, "board_corners_y", message.board_corners_y, error_message) ||
+        !readNumber(root, "square_size_mm", message.square_size_mm, error_message) ||
         !readInteger(root, "settle_ms", message.settle_ms, error_message) ||
         !readString(root, "sync_source", message.sync_source, error_message) ||
         !readInteger(root, "sync_timeout_ms", message.sync_timeout_ms, error_message) ||

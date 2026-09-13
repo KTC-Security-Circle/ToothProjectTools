@@ -1,4 +1,5 @@
 #include "cmd/commands.hpp"
+#include "calibration/calibrator.hpp"
 #include "capture/capture_service.hpp"
 #include "control/control_message.hpp"
 #include "handler/camera_command_handler.hpp"
@@ -32,6 +33,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/core/persistence.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -676,6 +678,27 @@ void testScanMapper()
     assert(mono.target_camera_id == video::kInvalidCameraId);
     assert(!mono.apply_to_camera);
     assert(mono.role.empty());
+    assert(mono.board_config.pattern_size == cv::Size(10, 7));
+    assert(mono.board_config.square_size_mm == 10.0f);
+
+    message.board_corners_x = 9;
+    message.board_corners_y = 6;
+    message.square_size_mm = 12.5;
+    result = mapper.mapMonoCalibrate(message);
+    const auto configured_mono = std::get<cmd::CmdCalibrate>(*result.command);
+    assert(configured_mono.board_config.pattern_size == cv::Size(9, 6));
+    assert(configured_mono.board_config.square_size_mm == 12.5f);
+    message.board_corners_x = 0;
+    result = mapper.mapMonoCalibrate(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+    message.board_corners_x = 10;
+    message.board_corners_y = 0;
+    result = mapper.mapMonoCalibrate(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+    message.board_corners_y = 7;
+    message.square_size_mm = 0.0;
+    result = mapper.mapMonoCalibrate(message);
+    assert(!result.ok && result.error->code == "invalid_command");
 
     message = messageWithId();
     message.left_dir = "./data/calib/stereo_left";
@@ -691,6 +714,30 @@ void testScanMapper()
     assert(!stereo.apply_to_camera);
     assert(stereo.left_calibration_file == "./data/calib/mono_left.yml");
     assert(stereo.right_calibration_file == "./data/calib/mono_right.yml");
+    assert(stereo.board_config.pattern_size == cv::Size(10, 7));
+    assert(stereo.board_config.square_size_mm == 10.0f);
+}
+
+void testSyntheticCornerDetection()
+{
+    constexpr int square = 48;
+    constexpr int margin = 32;
+    cv::Mat board(8 * square + 2 * margin, 11 * square + 2 * margin, CV_8UC1, cv::Scalar(255));
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < 11; ++x)
+            if ((x + y) % 2 == 0)
+                cv::rectangle(board, {margin + x * square, margin + y * square, square, square}, cv::Scalar(0), cv::FILLED);
+
+    calib::Calibrator calibrator;
+    calibrator.setBoardConfig({cv::Size(10, 7), 10.0f});
+    cv::Mat overlay;
+    std::vector<cv::Point2f> corners;
+    assert(calibrator.detectAndDraw(board, overlay, corners));
+    assert(corners.size() == 70);
+    assert(!overlay.empty() && overlay.channels() == 3);
+    const auto output = testTempDir("corner_preview") / "overlay.png";
+    assert(cv::imwrite(output.string(), overlay));
+    assert(std::filesystem::exists(output));
 }
 
 void testWindowHandler()
@@ -1843,6 +1890,7 @@ void testServiceValidation()
 int main()
 {
     testMapper();
+    testSyntheticCornerDetection();
     testWindowMapper();
     testProjectorMapper();
     testMonitorService();

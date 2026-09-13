@@ -123,6 +123,7 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     {
         return failure(output_file, "stereo_calibration_failed", "stereo calibrator is not available");
     }
+    ctx.stereo_calibrator->setBoardConfig(command.board_config);
     LOG_INFO("step2: Stereo: mono calibration file読込");
 
     std::string calibration_error;
@@ -252,7 +253,11 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
             }
             return failure(output_file, "file_write_failed", "failed to open stereo calibration output file");
         }
-        fs_out << "version" << "0.1.0" << "image_width" << image_size.width << "image_height" << image_size.height << "RMS" << rms << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R
+        fs_out << "version" << "0.1.0" << "image_width" << image_size.width << "image_height" << image_size.height << "RMS" << rms
+               << "board_corners_x" << command.board_config.pattern_size.width
+               << "board_corners_y" << command.board_config.pattern_size.height
+               << "square_size_mm" << command.board_config.square_size_mm
+               << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R
                << "T" << res.T << "Q" << res.Q;
         fs_out.release();
         fs::rename(*temporary_file, output_file);

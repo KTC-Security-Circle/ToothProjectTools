@@ -61,6 +61,11 @@ struct ControlMessage {
   /// apply_to_camera <std::optional<bool>>: calibration結果をopen済みcameraへ反映するか。
   std::optional<bool> apply_to_camera;
 
+  /// checkerboardの内部corner数と実測square size。
+  std::optional<int> board_corners_x;
+  std::optional<int> board_corners_y;
+  std::optional<double> square_size_mm;
+
   /// scan_id <std::optional<std::string>>: scan session識別子。
   std::optional<std::string> scan_id;
 

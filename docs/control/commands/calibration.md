@@ -1,5 +1,29 @@
 # キャリブレーションcommand
 
+## BoardConfig
+
+corner preview、mono calibration、stereo calibrationは共通の `board_corners_x`、`board_corners_y`、`square_size_mm` を使う。すべて省略可能で、既定値は 10×7 corner / 10 mm。物理checkerboardの実測値を `square_size_mm` に指定する。指定値はすべて正でなければならない。
+
+## calib_detect_corners
+
+open済みcameraの最新frameに対し、GUIと同じ `Calibrator::detectAndDraw()` でcorner検出とoverlay描画を行う。検出失敗は `ok=true, found=false` の正常結果で、overlayのないcamera frameも保存される。preview画像はcalibration datasetへ登録されない。
+
+```json
+{"id":"preview-left","cmd":"calib_detect_corners","role":"left","output":"./data/calib/preview/left.png","board_corners_x":10,"board_corners_y":7,"square_size_mm":10.0}
+```
+
+return: `role`, `found`, `corner_count`, `expected_corner_count`, `path`。cameraがopenされていない場合や出力できない場合はcommand errorになる。
+
+## calib_detect_stereo_corners
+
+左右の最新frameを1回のpreview operationで取得し、同じBoardConfigで個別にcorner検出する。
+
+```json
+{"id":"preview-stereo","cmd":"calib_detect_stereo_corners","left_role":"left","right_role":"right","left_output":"./data/calib/preview/left.png","right_output":"./data/calib/preview/right.png","board_corners_x":10,"board_corners_y":7,"square_size_mm":10.0}
+```
+
+return: `left_found`, `right_found`, `both_found`, `left_corner_count`, `right_corner_count`, `expected_corner_count`, `left_path`, `right_path`。
+
 ## mono_calibrate
 
 ### 役割
@@ -26,6 +50,9 @@ mono_calibrate はファイル処理commandである。
 | `output_file` | 必須 | 出力file。 |
 | `role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
 | `apply_to_camera` | 任意 | trueの場合のみ、roleに対応するopen済みcameraへK/Dを反映する。省略時はfalse。 |
+| `board_corners_x` | 任意 | checkerboardの横方向内部corner数。 |
+| `board_corners_y` | 任意 | checkerboardの縦方向内部corner数。 |
+| `square_size_mm` | 任意 | squareの実測サイズ(mm)。 |
 
 ### return
 
@@ -95,6 +122,9 @@ open済みcameraのK/Dではなく、`left_calibration_file` / `right_calibratio
 | `left_role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
 | `right_role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
 | `apply_to_camera` | 任意 | trueの場合のみ、left/right roleのopen済みcameraを確認する。省略時はfalse。 |
+| `board_corners_x` | 任意 | checkerboardの横方向内部corner数。 |
+| `board_corners_y` | 任意 | checkerboardの縦方向内部corner数。 |
+| `square_size_mm` | 任意 | squareの実測サイズ(mm)。 |
 
 `image_folder_left` / `image_folder_right`、`left_image_folder` / `right_image_folder` は `left_dir` / `right_dir` の互換aliasとして受け付ける。
 

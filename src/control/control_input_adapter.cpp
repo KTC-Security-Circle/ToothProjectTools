@@ -226,6 +226,16 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
         return handleCaptureStereoCommand(id, message, true);
     }
 
+    if (*message.cmd == "calib_detect_corners")
+    {
+        return handleCornerPreviewCommand(id, message, false);
+    }
+
+    if (*message.cmd == "calib_detect_stereo_corners")
+    {
+        return handleCornerPreviewCommand(id, message, true);
+    }
+
     if (*message.cmd == "mono_calibrate")
     {
         return handleCalibrationCommand(id, message, false);
@@ -569,6 +579,52 @@ AdapterResult ControlInputAdapter::handleCalibrationCommand(const std::string& i
                                              {"rms", valueOrEmpty(result, "rms")}}});
         }
     }
+    return AdapterResult::continue_running;
+}
+
+AdapterResult ControlInputAdapter::handleCornerPreviewCommand(const std::string& id, const ControlMessage& message,
+                                                               bool stereo)
+{
+    const auto mapped = stereo ? headless_mapper_.mapDetectStereoCalibrationCorners(message)
+                               : headless_mapper_.mapDetectCalibrationCorners(message);
+    if (!mapped.ok)
+    {
+        writeHeadlessFailure(id, mapped.error.value_or(
+            common::CommandError{"invalid_command", "failed to map corner preview command"}));
+        return AdapterResult::continue_running;
+    }
+    const auto result = headless_dispatcher_.execute(*mapped.command);
+    if (!result.handled || !result.ok)
+    {
+        writer_.writeResponse(toControlResponse(id, result));
+        return AdapterResult::continue_running;
+    }
+
+    ControlFields fields;
+    const auto addBool = [&](const char* name) { fields.emplace_back(name, result.values.at(name) == "true"); };
+    const auto addInteger = [&](const char* name) {
+        fields.emplace_back(name, static_cast<std::int64_t>(std::stoll(result.values.at(name))));
+    };
+    if (stereo)
+    {
+        addBool("left_found");
+        addBool("right_found");
+        addBool("both_found");
+        addInteger("left_corner_count");
+        addInteger("right_corner_count");
+        addInteger("expected_corner_count");
+        fields.emplace_back("left_path", result.values.at("left_path"));
+        fields.emplace_back("right_path", result.values.at("right_path"));
+    }
+    else
+    {
+        fields.emplace_back("role", result.values.at("role"));
+        addBool("found");
+        addInteger("corner_count");
+        addInteger("expected_corner_count");
+        fields.emplace_back("path", result.values.at("path"));
+    }
+    writer_.writeResponse(ControlResponse::success(id, std::move(fields)));
     return AdapterResult::continue_running;
 }
 

@@ -162,6 +162,8 @@ private:
       const ControlMessage& message,
       bool stereo);
 
+  AdapterResult handleCornerPreviewCommand(const std::string& id, const ControlMessage& message, bool stereo);
+
   /// @brief SidecarService由来の失敗をControlResponseへ変換して書き出す。
   ///
   /// Args:

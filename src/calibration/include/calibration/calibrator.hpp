@@ -6,7 +6,7 @@ namespace calib {
 
 struct BoardConfig {
     cv::Size pattern_size{10, 7}; // 交点の数 (行, 列) ※マス目の数ではない注意
-    float square_size_mm{24.0f};  // マス目のサイズ
+    float square_size_mm{10.0f};  // マス目のサイズ
 };
 
 class Calibrator {
