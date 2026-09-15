@@ -4,7 +4,7 @@
 #include "headless/headless_command_mapper.hpp"
 #include "headless/headless_command_executor.hpp"
 
-namespace service {
+namespace serve {
 class SidecarService;
 struct SidecarResult;
 }
@@ -27,12 +27,12 @@ public:
   /// @brief SidecarServiceとJsonLineWriterを参照してControlInputAdapterを構築する。
   ///
   /// Args:
-  ///   service <service::SidecarService&>: sidecar固有のstreamとprocess lifecycleを担当するservice。
+  ///   service <serve::SidecarService&>: sidecar固有のstreamとprocess lifecycleを担当するservice。
   ///   writer <JsonLineWriter&>: responseとeventを書き出すJSON Lines writer。
   ///
   /// Return:
   ///   <ControlInputAdapter>: headless mapperとdispatcherを保持するadapter。
-  ControlInputAdapter(service::SidecarService& service, JsonLineWriter& writer);
+  ControlInputAdapter(serve::SidecarService& service, JsonLineWriter& writer);
 
   /// @brief ControlMessageを処理し、必要なresponseまたはeventを書き出す。
   ///
@@ -166,13 +166,13 @@ private:
   ///
   /// Args:
   ///   id <const std::string&>: responseへ設定するrequest id。
-  ///   result <const service::SidecarResult&>: SidecarServiceから返された失敗結果。
+  ///   result <const serve::SidecarResult&>: SidecarServiceから返された失敗結果。
   ///
   /// Return:
   ///   <void>: 戻り値なし。
   void writeServiceFailure(
       const std::string& id,
-      const service::SidecarResult& result);
+      const serve::SidecarResult& result);
 
   /// @brief command変換由来の失敗をControlResponseへ変換して書き出す。
   ///
@@ -186,8 +186,8 @@ private:
       const std::string& id,
       const common::CommandError& error);
 
-  /// service_ <service::SidecarService&>: streamとprocess lifecycleを担当するservice。
-  service::SidecarService& service_;
+  /// service_ <serve::SidecarService&>: streamとprocess lifecycleを担当するservice。
+  serve::SidecarService& service_;
 
   /// writer_ <JsonLineWriter&>: responseとeventを書き出すJSON Lines writer。
   JsonLineWriter& writer_;

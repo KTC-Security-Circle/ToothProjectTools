@@ -10,21 +10,21 @@ namespace headless
 {
 namespace
 {
-std::optional<common::CommandResult> busyProjectorResult(const service::scan::ScanService& service,
+std::optional<common::CommandResult> busyProjectorResult(const scan::ScanService& service,
                                                           const std::string& role)
 {
     if (!service.isProjectorRoleBusy(role)) return std::nullopt;
     return common::failure("scan_resource_busy", "projector role is used by active scan: " + role);
 }
 
-std::optional<common::CommandResult> busyCameraResult(const service::scan::ScanService& service,
+std::optional<common::CommandResult> busyCameraResult(const scan::ScanService& service,
                                                        const std::string& role)
 {
     if (!service.isCameraRoleBusy(role)) return std::nullopt;
     return common::failure("scan_resource_busy", "camera role is used by active scan: " + role);
 }
 
-std::optional<common::CommandResult> busyWindowResult(const service::scan::ScanService& service,
+std::optional<common::CommandResult> busyWindowResult(const scan::ScanService& service,
                                                        const std::string& role)
 {
     if (!service.isWindowRoleBusy(role)) return std::nullopt;
@@ -33,10 +33,10 @@ std::optional<common::CommandResult> busyWindowResult(const service::scan::ScanS
 } // namespace
 
 HeadlessCommandExecutor::HeadlessCommandExecutor(
-    service::camera::CameraService& camera_service, service::window::WindowService& window_service,
-    service::projector::ProjectorService& projector_service, service::scan::ScanService& scan_service,
-    service::scan_dataset::ScanDatasetValidator& scan_dataset_validator,
-    service::decode::DecodeService& decode_service, capture::CaptureService& capture_service,
+    video::CameraService& camera_service, win::WindowService& window_service,
+    projector::ProjectorService& projector_service, scan::ScanService& scan_service,
+    scan::dataset::ScanDatasetValidator& scan_dataset_validator,
+    decode::DecodeService& decode_service, capture::CaptureService& capture_service,
     video::CameraManager& cameras, calib::Calibrator* calibrator,
     calib::StereoCalibrator* stereo_calibrator, calib::StereoData& stereo_data,
     reconstruction::ReconstructionService& reconstruction_service)

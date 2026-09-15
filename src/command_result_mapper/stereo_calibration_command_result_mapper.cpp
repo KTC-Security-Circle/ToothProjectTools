@@ -28,7 +28,7 @@ common::CommandResult toCommandResult(
     const std::string& left_role,
     const std::string& right_role,
     const cmd::CmdStereoCalibrate& command,
-    const service::stereo_calibration::StereoCalibrationResult& result)
+    const calib::StereoCalibrationResult& result)
 {
     if (!result.ok)
     {

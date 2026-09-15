@@ -20,7 +20,7 @@ std::string doubleString(double value)
 
 } // namespace
 
-common::CommandResult toCommandResult(const service::decode::DecodePatternsResult& result)
+common::CommandResult toCommandResult(const ::decode::DecodePatternsResult& result)
 {
     if (!result.ok)
     {

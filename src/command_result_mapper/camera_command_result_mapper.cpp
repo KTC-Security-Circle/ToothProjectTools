@@ -7,7 +7,7 @@
 namespace command_result_mapper::camera
 {
 
-common::CommandResult toCommandResult(const service::camera::CameraResult& result, bool include_camera_id)
+common::CommandResult toCommandResult(const video::CameraResult& result, bool include_camera_id)
 {
     if (!result.ok)
     {

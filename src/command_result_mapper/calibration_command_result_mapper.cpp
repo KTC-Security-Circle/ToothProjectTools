@@ -27,7 +27,7 @@ std::string formatRms(double rms)
 common::CommandResult toCommandResult(
     const std::string& role,
     const cmd::CmdCalibrate& command,
-    const service::calibration::MonoCalibrationResult& result)
+    const calib::MonoCalibrationResult& result)
 {
     if (!result.ok)
     {

@@ -41,7 +41,7 @@ std::string valueOrEmpty(const common::CommandResult& result, const std::string&
 
 } // namespace
 
-ControlInputAdapter::ControlInputAdapter(service::SidecarService& service, JsonLineWriter& writer)
+ControlInputAdapter::ControlInputAdapter(serve::SidecarService& service, JsonLineWriter& writer)
     : service_(service), writer_(writer), headless_mapper_(service.cameraService()),
       command_executor_(service.cameraService(), service.windowService(), service.projectorService(),
                            service.scanService(), service.scanDatasetValidator(), service.decodeService(),
@@ -571,9 +571,9 @@ AdapterResult ControlInputAdapter::handleCalibrationCommand(const std::string& i
     return AdapterResult::continue_running;
 }
 
-void ControlInputAdapter::writeServiceFailure(const std::string& id, const service::SidecarResult& result)
+void ControlInputAdapter::writeServiceFailure(const std::string& id, const serve::SidecarResult& result)
 {
-    const auto code = result.error ? std::string(service::toString(result.error->code)) : std::string{"internal_error"};
+    const auto code = result.error ? std::string(serve::toString(result.error->code)) : std::string{"internal_error"};
 
     const auto message =
         result.error ? result.error->message : std::string{"sidecar command failed without error detail"};

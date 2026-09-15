@@ -7,7 +7,7 @@
 namespace command_result_mapper::scan
 {
 
-common::CommandResult toCommandResult(const service::scan::ScanResult& result)
+common::CommandResult toCommandResult(const ::scan::ScanResult& result)
 {
     if (!result.ok)
     {
@@ -20,7 +20,7 @@ common::CommandResult toCommandResult(const service::scan::ScanResult& result)
 
     std::map<std::string, std::string> values{
         {"scan_id", result.scan_id},
-        {"status", service::scan::toString(result.status)},
+        {"status", ::scan::toString(result.status)},
         {"projector_role", result.projector_role},
         {"left_role", result.left_role},
         {"right_role", result.right_role},

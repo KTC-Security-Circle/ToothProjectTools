@@ -13,7 +13,7 @@
 #include <sstream>
 #include <utility>
 
-namespace service
+namespace serve
 {
 
 SidecarResult SidecarResult::success(std::string value)
@@ -67,12 +67,12 @@ std::string_view toString(SidecarErrorCode code)
     return "internal_error";
 }
 
-camera::CameraResult SidecarService::openCamera(video::CameraId device_index, const std::string& role)
+video::CameraResult SidecarService::openCamera(video::CameraId device_index, const std::string& role)
 {
     return camera_service_.openCamera(device_index, role);
 }
 
-camera::CameraResult SidecarService::closeCamera(const std::string& role)
+video::CameraResult SidecarService::closeCamera(const std::string& role)
 {
     stopStreamIfRunning(role);
     streams_.removeRole(role);
@@ -187,17 +187,17 @@ std::optional<video::CameraId> SidecarService::resolveCameraId(const std::string
     return camera_service_.resolveCameraId(role);
 }
 
-camera::CameraService& SidecarService::cameraService()
+video::CameraService& SidecarService::cameraService()
 {
     return camera_service_;
 }
 
-window::WindowService& SidecarService::windowService()
+win::WindowService& SidecarService::windowService()
 {
     return window_service_;
 }
 
-monitor::MonitorService& SidecarService::monitorService()
+win::MonitorService& SidecarService::monitorService()
 {
     return monitor_service_;
 }
@@ -217,7 +217,7 @@ scan::ScanService& SidecarService::scanService()
     return scan_service_;
 }
 
-scan_dataset::ScanDatasetValidator& SidecarService::scanDatasetValidator()
+scan::dataset::ScanDatasetValidator& SidecarService::scanDatasetValidator()
 {
     return scan_dataset_validator_;
 }
@@ -280,4 +280,4 @@ std::string SidecarService::streamUrl(const std::string& role) const
     return url.str();
 }
 
-} // namespace service
+} // namespace serve

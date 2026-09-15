@@ -33,7 +33,7 @@ common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdStopSc
 
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdValidateScanDataset& command)
 {
-    service::scan_dataset::ScanDatasetValidationConfig config;
+    scan::dataset::ScanDatasetValidationConfig config;
     if (!command.input_dir.empty()) config.input_dir = std::filesystem::path{command.input_dir};
     if (!command.left_dir.empty()) config.left_dir = std::filesystem::path{command.left_dir};
     if (!command.right_dir.empty()) config.right_dir = std::filesystem::path{command.right_dir};
@@ -44,7 +44,7 @@ common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdValida
 
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdDecodePatterns& command)
 {
-    service::decode::DecodePatternsConfig config;
+    decode::DecodePatternsConfig config;
     if (!command.input_dir.empty()) config.input_dir = std::filesystem::path{command.input_dir};
     if (!command.left_dir.empty()) config.left_dir = std::filesystem::path{command.left_dir};
     if (!command.right_dir.empty()) config.right_dir = std::filesystem::path{command.right_dir};

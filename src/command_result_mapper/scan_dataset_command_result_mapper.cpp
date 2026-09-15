@@ -45,7 +45,7 @@ std::string jsonEscape(const std::string& value)
     return escaped;
 }
 
-std::string issuesJson(const std::vector<service::scan_dataset::ScanDatasetIssue>& issues)
+std::string issuesJson(const std::vector<scan::dataset::ScanDatasetIssue>& issues)
 {
     std::ostringstream stream;
     stream << '[';
@@ -67,7 +67,7 @@ std::string issuesJson(const std::vector<service::scan_dataset::ScanDatasetIssue
 
 } // namespace
 
-common::CommandResult toCommandResult(const service::scan_dataset::ScanDatasetValidationResult& result)
+common::CommandResult toCommandResult(const ::scan::dataset::ScanDatasetValidationResult& result)
 {
     if (!result.ok)
     {

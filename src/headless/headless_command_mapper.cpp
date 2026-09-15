@@ -49,12 +49,12 @@ std::optional<CommandMapResult> requireString(const std::optional<std::string>& 
 /// @brief role名からcamera_idを解決する。
 ///
 /// Args:
-///   camera_service <service::camera::CameraService&>: role bindingを保持するdomain service。
+///   camera_service <video::CameraService&>: role bindingを保持するdomain service。
 ///   role <const std::string&>: 解決対象のcamera role名。
 ///
 /// Return:
 ///   <std::optional<video::CameraId>>: role登録済みならcamera_id、未登録ならstd::nullopt。
-std::optional<video::CameraId> resolveCameraId(service::camera::CameraService& camera_service, const std::string& role)
+std::optional<video::CameraId> resolveCameraId(video::CameraService& camera_service, const std::string& role)
 {
     return camera_service.resolveCameraId(role);
 }
@@ -74,7 +74,7 @@ std::filesystem::path normalizeOutputPathForCompare(const std::filesystem::path&
 
 } // namespace
 
-HeadlessCommandMapper::HeadlessCommandMapper(service::camera::CameraService& camera_service)
+HeadlessCommandMapper::HeadlessCommandMapper(video::CameraService& camera_service)
     : camera_service_(camera_service)
 {
 }

@@ -26,8 +26,8 @@ common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdListMo
 
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdConfigureProjectorSurface& command)
 {
-    const auto placement = command.placement == "custom" ? service::projector::ProjectorPlacement::custom
-                                                          : service::projector::ProjectorPlacement::center;
+    const auto placement = command.placement == "custom" ? projector::ProjectorPlacement::custom
+                                                          : projector::ProjectorPlacement::center;
     return command_result_mapper::projector::toCommandResult(
         projector_service_.configureSurface({command.projector_role, command.monitor_index, command.width,
                                              command.height, command.x, command.y, placement}),

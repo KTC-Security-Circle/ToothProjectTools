@@ -6,6 +6,6 @@
 namespace command_result_mapper::scan
 {
 
-common::CommandResult toCommandResult(const service::scan::ScanResult& result);
+common::CommandResult toCommandResult(const ::scan::ScanResult& result);
 
 } // namespace command_result_mapper::scan

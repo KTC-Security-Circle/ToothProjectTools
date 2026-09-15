@@ -9,7 +9,7 @@ namespace command_result_mapper::projector
 /// @brief ProjectorResultをCommandResultへ変換する。
 ///
 /// Args:
-///   result <const service::projector::ProjectorResult&>: ProjectorService実行結果。
+///   result <const ::projector::ProjectorResult&>: ProjectorService実行結果。
 ///   include_window_role <bool>: response valuesへwindow_roleを含めるか。
 ///   include_size <bool>: response valuesへwidth/heightを含めるか。
 ///   include_pattern_count <bool>: response valuesへpattern_countを含めるか。
@@ -17,10 +17,10 @@ namespace command_result_mapper::projector
 ///
 /// Return:
 ///   <common::CommandResult>: 共通command実行結果。
-common::CommandResult toCommandResult(const service::projector::ProjectorResult& result, bool include_window_role,
+common::CommandResult toCommandResult(const ::projector::ProjectorResult& result, bool include_window_role,
                                       bool include_size, bool include_pattern_count, bool include_pattern_index);
 
 /// @brief list_monitors結果をCommandResultへ変換する。
-common::CommandResult toMonitorListCommandResult(const service::projector::ProjectorResult& result);
+common::CommandResult toMonitorListCommandResult(const ::projector::ProjectorResult& result);
 
 } // namespace command_result_mapper::projector

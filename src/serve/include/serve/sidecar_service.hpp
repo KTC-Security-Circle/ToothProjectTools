@@ -28,7 +28,7 @@ class FramePublisher;
 class StreamRegistry;
 } // namespace stream
 
-namespace service
+namespace serve
 {
 
 enum class SidecarErrorCode
@@ -82,7 +82,7 @@ class SidecarService
     ///
     /// Return:
     ///   <SidecarResult>: openとrole bindingの成否。
-    service::camera::CameraResult openCamera(video::CameraId device_index, const std::string& role);
+    video::CameraResult openCamera(video::CameraId device_index, const std::string& role);
 
     /// @brief sidecar roleに紐づくcameraをcloseする。
     ///
@@ -91,7 +91,7 @@ class SidecarService
     ///
     /// Return:
     ///   <SidecarResult>: closeの成否。
-    service::camera::CameraResult closeCamera(const std::string& role);
+    video::CameraResult closeCamera(const std::string& role);
 
     /// @brief sidecar roleに紐づくcameraのMJPEG streamを開始する。
     ///
@@ -145,8 +145,8 @@ class SidecarService
     ///   none <void>: 引数なし。
     ///
     /// Return:
-    ///   <service::camera::CameraService&>: sidecar所有CameraManagerを使うcamera service。
-    service::camera::CameraService& cameraService();
+    ///   <video::CameraService&>: sidecar所有CameraManagerを使うcamera service。
+    video::CameraService& cameraService();
 
     /// @brief window resource commandを実行するdomain serviceを取得する。
     ///
@@ -154,11 +154,11 @@ class SidecarService
     ///   none <void>: 引数なし。
     ///
     /// Return:
-    ///   <service::window::WindowService&>: sidecar所有WindowManagerを使うwindow service。
-    service::window::WindowService& windowService();
+    ///   <win::WindowService&>: sidecar所有WindowManagerを使うwindow service。
+    win::WindowService& windowService();
 
     /// @brief monitor情報を取得するdomain serviceを取得する。
-    service::monitor::MonitorService& monitorService();
+    win::MonitorService& monitorService();
 
     /// @brief projector commandを実行するdomain serviceを取得する。
     ///
@@ -166,8 +166,8 @@ class SidecarService
     ///   none <void>: 引数なし。
     ///
     /// Return:
-    ///   <service::projector::ProjectorService&>: sidecar所有WindowServiceを使うprojector service。
-    service::projector::ProjectorService& projectorService();
+    ///   <projector::ProjectorService&>: sidecar所有WindowServiceを使うprojector service。
+    projector::ProjectorService& projectorService();
 
     /// @brief sidecarが所有するCameraManagerを参照するCaptureServiceを取得する。
     ///
@@ -179,7 +179,7 @@ class SidecarService
     capture::CaptureService& captureService();
 
     /// @brief scan commandを実行するdomain serviceを取得する。
-    service::scan::ScanService& scanService();
+    scan::ScanService& scanService();
 
     /// @brief scan dataset検証serviceを取得する。
     ///
@@ -187,8 +187,8 @@ class SidecarService
     ///   none <void>: 引数なし。
     ///
     /// Return:
-    ///   <service::scan_dataset::ScanDatasetValidator&>: sidecar所有scan dataset validator。
-    service::scan_dataset::ScanDatasetValidator& scanDatasetValidator();
+    ///   <scan::dataset::ScanDatasetValidator&>: sidecar所有scan dataset validator。
+    scan::dataset::ScanDatasetValidator& scanDatasetValidator();
 
     /// @brief GrayCode decode serviceを取得する。
     ///
@@ -196,11 +196,11 @@ class SidecarService
     ///   none <void>: 引数なし。
     ///
     /// Return:
-    ///   <service::decode::DecodeService&>: sidecar所有decode service。
-    service::decode::DecodeService& decodeService();
+    ///   <decode::DecodeService&>: sidecar所有decode service。
+    decode::DecodeService& decodeService();
 
     /// @brief scan worker event queueを取得する。
-    service::scan::ScanEventQueue& scanEventQueue();
+    scan::ScanEventQueue& scanEventQueue();
 
     /// @brief sidecarが所有するCameraManagerを取得する。
     ///
@@ -271,31 +271,31 @@ class SidecarService
     /// window_manager_ <win::WindowManager>: sidecar window resourceを管理するmanager。
     win::WindowManager window_manager_;
 
-    /// camera_service_ <service::camera::CameraService>: camera resourceとrole bindingを管理するdomain service。
-    camera::CameraService camera_service_{cameras_};
+    /// camera_service_ <video::CameraService>: camera resourceとrole bindingを管理するdomain service。
+    video::CameraService camera_service_{cameras_};
 
-    /// monitor_service_ <service::monitor::MonitorService>: monitor情報を取得するdomain service。
-    monitor::MonitorService monitor_service_;
+    /// monitor_service_ <win::MonitorService>: monitor情報を取得するdomain service。
+    win::MonitorService monitor_service_;
 
-    /// window_service_ <service::window::WindowService>: window resourceとrole bindingを管理するdomain service。
-    window::WindowService window_service_{window_manager_, monitor_service_};
+    /// window_service_ <win::WindowService>: window resourceとrole bindingを管理するdomain service。
+    win::WindowService window_service_{window_manager_, monitor_service_};
 
-    /// projector_service_ <service::projector::ProjectorService>: projector roleとpattern表示を管理するdomain service。
+    /// projector_service_ <projector::ProjectorService>: projector roleとpattern表示を管理するdomain service。
     projector::ProjectorService projector_service_{window_service_, monitor_service_};
 
     /// capture_service_ <capture::CaptureService>: sidecar所有camera群を使うcapture用domain service。
     capture::CaptureService capture_service_{cameras_};
 
-    /// scan_event_queue_ <service::scan::ScanEventQueue>: scan worker event queue。
+    /// scan_event_queue_ <scan::ScanEventQueue>: scan worker event queue。
     scan::ScanEventQueue scan_event_queue_;
 
-    /// scan_service_ <service::scan::ScanService>: 自動構造光scan domain service。
+    /// scan_service_ <scan::ScanService>: 自動構造光scan domain service。
     scan::ScanService scan_service_{projector_service_, capture_service_, camera_service_, scan_event_queue_};
 
-    /// scan_dataset_validator_ <service::scan_dataset::ScanDatasetValidator>: scan dataset検証service。
-    scan_dataset::ScanDatasetValidator scan_dataset_validator_;
+    /// scan_dataset_validator_ <scan::dataset::ScanDatasetValidator>: scan dataset検証service。
+    scan::dataset::ScanDatasetValidator scan_dataset_validator_;
 
-    /// decode_service_ <service::decode::DecodeService>: scan datasetからGrayCode decode結果を生成するservice。
+    /// decode_service_ <decode::DecodeService>: scan datasetからGrayCode decode結果を生成するservice。
     decode::DecodeService decode_service_{scan_dataset_validator_};
 
     /// calibrator_ <calib::Calibrator>: sidecar用mono calibration計算器。
@@ -312,4 +312,4 @@ class SidecarService
     std::map<std::string, CameraBinding> bindings_;
 };
 
-} // namespace service
+} // namespace serve

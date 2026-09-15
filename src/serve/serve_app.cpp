@@ -13,7 +13,7 @@ namespace serve {
 namespace
 {
 
-control::ControlEvent toControlEvent(const service::scan::ScanEvent& scan_event)
+control::ControlEvent toControlEvent(const scan::ScanEvent& scan_event)
 {
   control::ControlFields fields;
   fields.reserve(scan_event.values.size());
@@ -68,9 +68,9 @@ int ServeApp::run() {
       writer_.writeEvent(toControlEvent(event));
     }
     const auto status = service_.scanService().scanStatus();
-    if (!status.ok || status.status == service::scan::ScanState::idle ||
-        status.status == service::scan::ScanState::completed || status.status == service::scan::ScanState::failed ||
-        status.status == service::scan::ScanState::stopped) {
+    if (!status.ok || status.status == scan::ScanState::idle ||
+        status.status == scan::ScanState::completed || status.status == scan::ScanState::failed ||
+        status.status == scan::ScanState::stopped) {
       break;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(5));

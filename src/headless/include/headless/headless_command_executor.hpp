@@ -9,12 +9,12 @@ namespace calib { class Calibrator; class StereoCalibrator; struct StereoData; }
 namespace capture { class CaptureService; }
 namespace video { class CameraManager; }
 namespace reconstruction { class ReconstructionService; }
-namespace service::camera { class CameraService; }
-namespace service::window { class WindowService; }
-namespace service::projector { class ProjectorService; }
-namespace service::scan { class ScanService; }
-namespace service::scan_dataset { class ScanDatasetValidator; }
-namespace service::decode { class DecodeService; }
+namespace video { class CameraService; }
+namespace win { class WindowService; }
+namespace projector { class ProjectorService; }
+namespace scan { class ScanService; }
+namespace scan::dataset { class ScanDatasetValidator; }
+namespace decode { class DecodeService; }
 
 namespace headless
 {
@@ -28,12 +28,12 @@ namespace headless
 class HeadlessCommandExecutor
 {
   public:
-    HeadlessCommandExecutor(service::camera::CameraService& camera_service,
-                            service::window::WindowService& window_service,
-                            service::projector::ProjectorService& projector_service,
-                            service::scan::ScanService& scan_service,
-                            service::scan_dataset::ScanDatasetValidator& scan_dataset_validator,
-                            service::decode::DecodeService& decode_service,
+    HeadlessCommandExecutor(video::CameraService& camera_service,
+                            win::WindowService& window_service,
+                            projector::ProjectorService& projector_service,
+                            scan::ScanService& scan_service,
+                            scan::dataset::ScanDatasetValidator& scan_dataset_validator,
+                            decode::DecodeService& decode_service,
                             capture::CaptureService& capture_service, video::CameraManager& cameras,
                             calib::Calibrator* calibrator, calib::StereoCalibrator* stereo_calibrator,
                             calib::StereoData& stereo_data,
@@ -71,12 +71,12 @@ class HeadlessCommandExecutor
     common::CommandResult executeTyped(const cmd::CmdValidateReconstruction& command);
     common::CommandResult executeTyped(const cmd::CmdReconstructPointCloud& command);
 
-    service::camera::CameraService& camera_service_;
-    service::window::WindowService& window_service_;
-    service::projector::ProjectorService& projector_service_;
-    service::scan::ScanService& scan_service_;
-    service::scan_dataset::ScanDatasetValidator& scan_dataset_validator_;
-    service::decode::DecodeService& decode_service_;
+    video::CameraService& camera_service_;
+    win::WindowService& window_service_;
+    projector::ProjectorService& projector_service_;
+    scan::ScanService& scan_service_;
+    scan::dataset::ScanDatasetValidator& scan_dataset_validator_;
+    decode::DecodeService& decode_service_;
     capture::CaptureService& capture_service_;
     video::CameraManager& cameras_;
     calib::Calibrator* calibrator_;

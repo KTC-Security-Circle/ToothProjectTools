@@ -29,7 +29,7 @@ std::string jsonEscape(const std::string& value)
     return escaped;
 }
 
-std::string monitorsJson(const std::vector<service::monitor::MonitorInfo>& monitors)
+std::string monitorsJson(const std::vector<win::MonitorInfo>& monitors)
 {
     std::ostringstream stream;
     stream << '[';
@@ -51,7 +51,7 @@ std::string monitorsJson(const std::vector<service::monitor::MonitorInfo>& monit
 
 } // namespace
 
-common::CommandResult toCommandResult(const service::projector::ProjectorResult& result, bool include_window_role,
+common::CommandResult toCommandResult(const ::projector::ProjectorResult& result, bool include_window_role,
                                       bool include_size, bool include_pattern_count, bool include_pattern_index)
 {
     if (!result.ok)
@@ -114,7 +114,7 @@ common::CommandResult toCommandResult(const service::projector::ProjectorResult&
     return common::success(std::move(values));
 }
 
-common::CommandResult toMonitorListCommandResult(const service::projector::ProjectorResult& result)
+common::CommandResult toMonitorListCommandResult(const ::projector::ProjectorResult& result)
 {
     if (!result.ok)
     {

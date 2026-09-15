@@ -7,7 +7,7 @@
 namespace command_result_mapper::window
 {
 
-common::CommandResult toCommandResult(const service::window::WindowResult& result, bool include_size)
+common::CommandResult toCommandResult(const win::WindowResult& result, bool include_size)
 {
     if (!result.ok)
     {

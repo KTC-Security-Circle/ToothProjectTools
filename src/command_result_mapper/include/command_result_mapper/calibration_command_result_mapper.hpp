@@ -14,13 +14,13 @@ namespace command_result_mapper::calibration
 /// Args:
 ///   role <const std::string&>: mono calibration対象のsidecar role。
 ///   command <const cmd::CmdCalibrate&>: 実行したmono calibration command。
-///   result <const service::calibration::MonoCalibrationResult&>: serviceから返されたmono calibration結果。
+///   result <const calib::MonoCalibrationResult&>: serviceから返されたmono calibration結果。
 ///
 /// Return:
 ///   <common::CommandResult>: Command Executorで共通利用するcommand実行結果。
 common::CommandResult toCommandResult(
     const std::string& role,
     const cmd::CmdCalibrate& command,
-    const service::calibration::MonoCalibrationResult& result);
+    const calib::MonoCalibrationResult& result);
 
 } // namespace command_result_mapper::calibration

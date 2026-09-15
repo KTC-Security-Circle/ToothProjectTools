@@ -11,13 +11,13 @@ namespace headless
 {
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdCalibrate& command)
 {
-    const auto result = service::calibration::calibrate(cameras_, calibrator_, command);
+    const auto result = calib::calibrate(cameras_, calibrator_, command);
     return command_result_mapper::calibration::toCommandResult(command.role, command, result);
 }
 
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdStereoCalibrate& command)
 {
-    const auto result = service::stereo_calibration::calibrate(
+    const auto result = calib::calibrate(
         cameras_, stereo_calibrator_, stereo_data_, command);
     return command_result_mapper::stereo_calibration::toCommandResult(
         command.left_role, command.right_role, command, result);

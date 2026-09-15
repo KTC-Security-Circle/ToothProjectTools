@@ -42,7 +42,7 @@ private:
 
   ServeOptions options_;
   stream::StreamRegistry streams_;
-  service::SidecarService service_;
+  SidecarService service_;
   stream::MjpegServer mjpeg_server_;
   control::JsonLineReader reader_;
   control::JsonLineWriter writer_;
