@@ -1,8 +1,6 @@
 #include "headless/headless_command_executor.hpp"
 
 #include "command_result_adapters.hpp"
-#include "command_result_adapters.hpp"
-#include "command_result_adapters.hpp"
 #include "reconstruction/reconstruction_service.hpp"
 #include "calibration/calibration_service.hpp"
 #include "calibration/stereo_calibration_service.hpp"

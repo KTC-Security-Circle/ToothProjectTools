@@ -1,7 +1,6 @@
 #include "headless/headless_command_executor.hpp"
 
 #include "command_result_adapters.hpp"
-#include "command_result_adapters.hpp"
 #include "projector/projector_service.hpp"
 #include "window/window_service.hpp"
 

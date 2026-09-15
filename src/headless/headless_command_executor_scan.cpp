@@ -1,8 +1,6 @@
 #include "headless/headless_command_executor.hpp"
 
 #include "command_result_adapters.hpp"
-#include "command_result_adapters.hpp"
-#include "command_result_adapters.hpp"
 #include "decode/decode_service.hpp"
 #include "scan/scan_dataset_validator.hpp"
 #include "scan/scan_service.hpp"

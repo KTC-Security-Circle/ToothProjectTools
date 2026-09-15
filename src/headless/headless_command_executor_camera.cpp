@@ -3,7 +3,6 @@
 #include "capture/capture_result.hpp"
 #include "capture/capture_service.hpp"
 #include "command_result_adapters.hpp"
-#include "command_result_adapters.hpp"
 #include "logger/logger_macros.hpp"
 #include "video/camera_service.hpp"
 

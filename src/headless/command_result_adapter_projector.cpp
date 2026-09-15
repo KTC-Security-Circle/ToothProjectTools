@@ -52,7 +52,7 @@ std::string monitorsJson(const std::vector<win::MonitorInfo>& monitors)
 } // namespace
 
 common::CommandResult projector(const ::projector::ProjectorResult& result, bool include_window_role,
-                                      bool include_size, bool include_pattern_count, bool include_pattern_index)
+                                bool include_size, bool include_pattern_count, bool include_pattern_index)
 {
     if (!result.ok)
     {
