@@ -20,7 +20,7 @@ target_link_libraries(command_result_mapper
   PUBLIC
     common
     capture
-    service
+    calibration_service
     window_service
     projector_service
     scan_service

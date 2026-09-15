@@ -22,7 +22,7 @@ target_link_libraries(headless_command_execution
   PRIVATE
     command_result_mapper
     video
-    calibration
+    calibration_service
     camera_service
     window_service
     projector_service
