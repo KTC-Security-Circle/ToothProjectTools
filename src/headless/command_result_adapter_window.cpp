@@ -1,13 +1,13 @@
-#include "command_result_mapper/window_command_result_mapper.hpp"
+#include "command_result_adapters.hpp"
 
 #include <map>
 #include <string>
 #include <utility>
 
-namespace command_result_mapper::window
+namespace headless::result_adapter
 {
 
-common::CommandResult toCommandResult(const win::WindowResult& result, bool include_size)
+common::CommandResult window(const win::WindowResult& result, bool include_size)
 {
     if (!result.ok)
     {
@@ -30,4 +30,4 @@ common::CommandResult toCommandResult(const win::WindowResult& result, bool incl
     return common::success(std::move(values));
 }
 
-} // namespace command_result_mapper::window
+} // namespace headless::result_adapter

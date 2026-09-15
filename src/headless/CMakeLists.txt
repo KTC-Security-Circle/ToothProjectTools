@@ -4,6 +4,16 @@ add_library(headless_command_execution STATIC
   headless_command_executor_projector.cpp
   headless_command_executor_scan.cpp
   headless_command_executor_calibration.cpp
+  command_result_adapter_camera.cpp
+  command_result_adapter_capture.cpp
+  command_result_adapter_window.cpp
+  command_result_adapter_projector.cpp
+  command_result_adapter_scan.cpp
+  command_result_adapter_scan_dataset.cpp
+  command_result_adapter_decode.cpp
+  command_result_adapter_calibration.cpp
+  command_result_adapter_stereo_calibration.cpp
+  command_result_adapter_reconstruction.cpp
   headless_command_mapper.cpp
 )
 
@@ -20,7 +30,6 @@ target_link_libraries(headless_command_execution
     capture
     common
   PRIVATE
-    command_result_mapper
     video
     calibration_service
     camera_service

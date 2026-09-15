@@ -82,12 +82,11 @@ Command Result は、Command Executorが返す共通結果である。
 成功か失敗かを持つ。
 対応する実装は `common::CommandResult` である。
 
-## 結果変換（Result Mapper）
+## 結果変換（Executor internal result adaptation）
 
-Result Mapper は、Service ResultをCommand Resultへ変換する。
-Result Mapperは業務処理を持たない。
-Result Mapperはfileを読まない。
-対応する実装は `src/command_result_mapper/` である。
+結果変換は、Service ResultをCommand Resultへ変換する。
+変換処理は業務処理を持たず、fileを読まない。
+変換は `HeadlessCommandExecutor` のapplication boundary内で行う。
 
 ## 成果物（Artifact）
 

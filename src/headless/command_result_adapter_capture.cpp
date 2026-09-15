@@ -1,10 +1,10 @@
-#include "command_result_mapper/capture_command_result_mapper.hpp"
+#include "command_result_adapters.hpp"
 
 #include <optional>
 #include <string>
 #include <utility>
 
-namespace command_result_mapper::capture
+namespace headless::result_adapter
 {
 namespace
 {
@@ -58,7 +58,7 @@ common::CommandResult captureFailure(const std::optional<::capture::CaptureError
 
 } // namespace
 
-common::CommandResult toCommandResult(
+common::CommandResult capture(
     const ::capture::CaptureResult& result,
     std::map<std::string, std::string> values)
 {
@@ -70,7 +70,7 @@ common::CommandResult toCommandResult(
     return captureFailure(result.error);
 }
 
-common::CommandResult toCommandResult(
+common::CommandResult capture(
     const ::capture::CaptureStereoResult& result,
     std::map<std::string, std::string> values)
 {
@@ -82,4 +82,4 @@ common::CommandResult toCommandResult(
     return captureFailure(result.error);
 }
 
-} // namespace command_result_mapper::capture
+} // namespace headless::result_adapter

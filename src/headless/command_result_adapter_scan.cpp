@@ -1,13 +1,13 @@
-#include "command_result_mapper/scan_command_result_mapper.hpp"
+#include "command_result_adapters.hpp"
 
 #include <map>
 #include <string>
 #include <utility>
 
-namespace command_result_mapper::scan
+namespace headless::result_adapter
 {
 
-common::CommandResult toCommandResult(const ::scan::ScanResult& result)
+common::CommandResult scan(const ::scan::ScanResult& result)
 {
     if (!result.ok)
     {
@@ -32,4 +32,4 @@ common::CommandResult toCommandResult(const ::scan::ScanResult& result)
     return common::success(std::move(values));
 }
 
-} // namespace command_result_mapper::scan
+} // namespace headless::result_adapter

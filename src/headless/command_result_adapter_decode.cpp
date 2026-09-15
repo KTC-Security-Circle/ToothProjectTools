@@ -1,4 +1,4 @@
-#include "command_result_mapper/decode_command_result_mapper.hpp"
+#include "command_result_adapters.hpp"
 
 #include <iomanip>
 #include <map>
@@ -6,7 +6,7 @@
 #include <string>
 #include <utility>
 
-namespace command_result_mapper::decode
+namespace headless::result_adapter
 {
 namespace
 {
@@ -20,7 +20,7 @@ std::string doubleString(double value)
 
 } // namespace
 
-common::CommandResult toCommandResult(const ::decode::DecodePatternsResult& result)
+common::CommandResult decode(const ::decode::DecodePatternsResult& result)
 {
     if (!result.ok)
     {
@@ -48,4 +48,4 @@ common::CommandResult toCommandResult(const ::decode::DecodePatternsResult& resu
     });
 }
 
-} // namespace command_result_mapper::decode
+} // namespace headless::result_adapter

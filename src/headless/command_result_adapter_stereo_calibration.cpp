@@ -1,9 +1,9 @@
-#include "command_result_mapper/stereo_calibration_command_result_mapper.hpp"
+#include "command_result_adapters.hpp"
 
 #include <iomanip>
 #include <sstream>
 
-namespace command_result_mapper::stereo_calibration
+namespace headless::result_adapter
 {
 namespace
 {
@@ -24,7 +24,7 @@ std::string formatRms(double rms)
 
 } // namespace
 
-common::CommandResult toCommandResult(
+common::CommandResult stereoCalibration(
     const std::string& left_role,
     const std::string& right_role,
     const cmd::CmdStereoCalibrate& command,
@@ -47,4 +47,4 @@ common::CommandResult toCommandResult(
     });
 }
 
-} // namespace command_result_mapper::stereo_calibration
+} // namespace headless::result_adapter
