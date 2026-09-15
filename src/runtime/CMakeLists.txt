@@ -1,19 +1,11 @@
-add_library(runtime STATIC
-  handler_context.cpp
-)
+add_library(runtime INTERFACE)
 
 target_include_directories(runtime
-  PUBLIC
+  INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(runtime
-  PUBLIC
-    cmd
-    input
-    window
+  INTERFACE
     video
-    capture
-    structured_light
-    calibration
 )

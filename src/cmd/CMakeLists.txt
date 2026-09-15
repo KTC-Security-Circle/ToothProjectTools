@@ -16,5 +16,4 @@ add_library(cmd INTERFACE)
 target_link_libraries(cmd
   INTERFACE
     cmd_commands
-    window
 )

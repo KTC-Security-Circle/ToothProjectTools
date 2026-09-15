@@ -3,7 +3,6 @@ add_library(service STATIC
     calibration_file.cpp
     calibration_service.cpp
     stereo_calibration_service.cpp
-    reconstruction_service.cpp
 )
 
 target_include_directories(service
@@ -16,7 +15,9 @@ target_include_directories(service
 target_link_libraries(service
   PUBLIC
     runtime
+    cmd_commands
     capture
+    calibration
   PRIVATE
     cv_lib
     logger
