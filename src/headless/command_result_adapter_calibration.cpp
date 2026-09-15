@@ -1,9 +1,9 @@
-#include "command_result_mapper/calibration_command_result_mapper.hpp"
+#include "command_result_adapters.hpp"
 
 #include <iomanip>
 #include <sstream>
 
-namespace command_result_mapper::calibration
+namespace headless::result_adapter
 {
 namespace
 {
@@ -24,7 +24,7 @@ std::string formatRms(double rms)
 
 } // namespace
 
-common::CommandResult toCommandResult(
+common::CommandResult calibration(
     const std::string& role,
     const cmd::CmdCalibrate& command,
     const calib::MonoCalibrationResult& result)
@@ -44,4 +44,4 @@ common::CommandResult toCommandResult(
     });
 }
 
-} // namespace command_result_mapper::calibration
+} // namespace headless::result_adapter

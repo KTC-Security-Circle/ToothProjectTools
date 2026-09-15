@@ -1,11 +1,11 @@
-#include "command_result_mapper/projector_command_result_mapper.hpp"
+#include "command_result_adapters.hpp"
 
 #include <map>
 #include <sstream>
 #include <string>
 #include <utility>
 
-namespace command_result_mapper::projector
+namespace headless::result_adapter
 {
 namespace
 {
@@ -51,7 +51,7 @@ std::string monitorsJson(const std::vector<win::MonitorInfo>& monitors)
 
 } // namespace
 
-common::CommandResult toCommandResult(const ::projector::ProjectorResult& result, bool include_window_role,
+common::CommandResult projector(const ::projector::ProjectorResult& result, bool include_window_role,
                                       bool include_size, bool include_pattern_count, bool include_pattern_index)
 {
     if (!result.ok)
@@ -114,7 +114,7 @@ common::CommandResult toCommandResult(const ::projector::ProjectorResult& result
     return common::success(std::move(values));
 }
 
-common::CommandResult toMonitorListCommandResult(const ::projector::ProjectorResult& result)
+common::CommandResult monitorList(const ::projector::ProjectorResult& result)
 {
     if (!result.ok)
     {
@@ -131,4 +131,4 @@ common::CommandResult toMonitorListCommandResult(const ::projector::ProjectorRes
     });
 }
 
-} // namespace command_result_mapper::projector
+} // namespace headless::result_adapter

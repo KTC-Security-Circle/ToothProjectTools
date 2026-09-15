@@ -1,13 +1,13 @@
-#include "command_result_mapper/camera_command_result_mapper.hpp"
+#include "command_result_adapters.hpp"
 
 #include <map>
 #include <string>
 #include <utility>
 
-namespace command_result_mapper::camera
+namespace headless::result_adapter
 {
 
-common::CommandResult toCommandResult(const video::CameraResult& result, bool include_camera_id)
+common::CommandResult camera(const video::CameraResult& result, bool include_camera_id)
 {
     if (!result.ok)
     {
@@ -26,4 +26,4 @@ common::CommandResult toCommandResult(const video::CameraResult& result, bool in
     return common::success(std::move(values));
 }
 
-} // namespace command_result_mapper::camera
+} // namespace headless::result_adapter

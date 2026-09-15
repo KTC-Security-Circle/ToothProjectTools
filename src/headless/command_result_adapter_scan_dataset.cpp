@@ -1,11 +1,11 @@
-#include "command_result_mapper/scan_dataset_command_result_mapper.hpp"
+#include "command_result_adapters.hpp"
 
 #include <map>
 #include <sstream>
 #include <string>
 #include <utility>
 
-namespace command_result_mapper::scan_dataset
+namespace headless::result_adapter
 {
 namespace
 {
@@ -67,7 +67,7 @@ std::string issuesJson(const std::vector<scan::dataset::ScanDatasetIssue>& issue
 
 } // namespace
 
-common::CommandResult toCommandResult(const ::scan::dataset::ScanDatasetValidationResult& result)
+common::CommandResult scanDataset(const ::scan::dataset::ScanDatasetValidationResult& result)
 {
     if (!result.ok)
     {
@@ -90,4 +90,4 @@ common::CommandResult toCommandResult(const ::scan::dataset::ScanDatasetValidati
     });
 }
 
-} // namespace command_result_mapper::scan_dataset
+} // namespace headless::result_adapter
