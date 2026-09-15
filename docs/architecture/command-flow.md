@@ -8,8 +8,9 @@
 3. Command Mapper がControl MessageをCommandへ変換する。
 4. Command Executor がCommand型を一度だけ判定してServiceを呼ぶ。
 5. Service が処理を行い、Service Resultを返す。
-6. Result Mapper がreturn用のJSON Lines responseを作る。
-7. serve app がstdoutへreturnを出力する。
+6. Command Executor内部のresult adaptationがService ResultをCommandResultへ変換する。
+7. ControlInputAdapterがCommandResultからJSON Lines responseを作る。
+8. serve app がstdoutへreturnを出力する。
 ```
 
 ## 現在の主な経路
@@ -22,8 +23,9 @@ stdin JSON Lines
   -> headless::HeadlessCommandMapper
   -> cmd::Command
   -> headless::HeadlessCommandExecutor
-  -> service
-  -> command_result_mapper
+  -> Domain Service
+  -> Domain Result
+  -> Executor internal result adaptation
   -> common::CommandResult
   -> control::ControlResponse
   -> stdout JSON Lines
