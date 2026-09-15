@@ -3,7 +3,7 @@
 #include "control/control_input_adapter.hpp"
 #include "control/json_line_reader.hpp"
 #include "control/json_line_writer.hpp"
-#include "service/sidecar_service.hpp"
+#include "serve/sidecar_service.hpp"
 #include "stream/mjpeg_server.hpp"
 #include "stream/stream_registry.hpp"
 

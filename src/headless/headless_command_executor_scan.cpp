@@ -3,9 +3,9 @@
 #include "command_result_mapper/decode_command_result_mapper.hpp"
 #include "command_result_mapper/scan_command_result_mapper.hpp"
 #include "command_result_mapper/scan_dataset_command_result_mapper.hpp"
-#include "service/decode_service.hpp"
-#include "service/scan_dataset_validator.hpp"
-#include "service/scan_service.hpp"
+#include "decode/decode_service.hpp"
+#include "scan/scan_dataset_validator.hpp"
+#include "scan/scan_service.hpp"
 
 #include <filesystem>
 

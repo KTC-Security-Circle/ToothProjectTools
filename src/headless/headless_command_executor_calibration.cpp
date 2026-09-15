@@ -4,8 +4,8 @@
 #include "command_result_mapper/reconstruction_command_result_mapper.hpp"
 #include "command_result_mapper/stereo_calibration_command_result_mapper.hpp"
 #include "reconstruction/reconstruction_service.hpp"
-#include "service/calibration_service.hpp"
-#include "service/stereo_calibration_service.hpp"
+#include "calibration/calibration_service.hpp"
+#include "calibration/stereo_calibration_service.hpp"
 
 namespace headless
 {

@@ -2,8 +2,8 @@
 
 #include "command_result_mapper/projector_command_result_mapper.hpp"
 #include "command_result_mapper/window_command_result_mapper.hpp"
-#include "service/projector_service.hpp"
-#include "service/window_service.hpp"
+#include "projector/projector_service.hpp"
+#include "window/window_service.hpp"
 
 namespace headless
 {

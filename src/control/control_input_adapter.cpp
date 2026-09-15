@@ -2,7 +2,7 @@
 
 #include "control/control_response_adapter.hpp"
 #include "control/json_line_writer.hpp"
-#include "service/sidecar_service.hpp"
+#include "serve/sidecar_service.hpp"
 
 #include <cstdint>
 #include <string>

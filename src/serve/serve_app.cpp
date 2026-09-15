@@ -1,7 +1,7 @@
 #include "serve/serve_app.hpp"
 
 #include "logger/logger_macros.hpp"
-#include "service/scan_event.hpp"
+#include "scan/scan_event.hpp"
 
 #include <atomic>
 #include <chrono>

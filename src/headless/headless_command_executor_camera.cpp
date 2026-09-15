@@ -5,7 +5,7 @@
 #include "command_result_mapper/camera_command_result_mapper.hpp"
 #include "command_result_mapper/capture_command_result_mapper.hpp"
 #include "logger/logger_macros.hpp"
-#include "service/camera_service.hpp"
+#include "video/camera_service.hpp"
 
 namespace headless
 {

@@ -2,7 +2,7 @@
 
 #include "cmd/commands.hpp"
 #include "common/command_result.hpp"
-#include "service/stereo_calibration_service.hpp"
+#include "calibration/stereo_calibration_service.hpp"
 
 #include <string>
 

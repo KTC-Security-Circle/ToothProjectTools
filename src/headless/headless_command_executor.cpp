@@ -1,6 +1,6 @@
 #include "headless/headless_command_executor.hpp"
 
-#include "service/scan_service.hpp"
+#include "scan/scan_service.hpp"
 
 #include <string>
 #include <type_traits>

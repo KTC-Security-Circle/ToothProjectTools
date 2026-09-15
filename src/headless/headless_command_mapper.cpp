@@ -1,7 +1,7 @@
 #include "headless/headless_command_mapper.hpp"
 
 #include "control/control_message.hpp"
-#include "service/camera_service.hpp"
+#include "video/camera_service.hpp"
 
 #include <filesystem>
 #include <optional>
