@@ -6,7 +6,7 @@
 #include <string>
 #include <string_view>
 
-namespace service::scan_dataset
+namespace scan::dataset
 {
 namespace
 {
@@ -194,4 +194,4 @@ ScanDatasetResolveResult ScanDatasetResolver::resolve(const ScanDatasetInputSpec
     return result;
 }
 
-} // namespace service::scan_dataset
+} // namespace scan::dataset

@@ -11,7 +11,7 @@
 #include <sstream>
 #include <utility>
 
-namespace service::decode
+namespace decode
 {
 namespace
 {
@@ -75,7 +75,7 @@ std::string jsonEscape(const std::string& value)
     return escaped;
 }
 
-std::string issuesSummary(const std::vector<service::scan_dataset::ScanDatasetIssue>& issues)
+std::string issuesSummary(const std::vector<scan::dataset::ScanDatasetIssue>& issues)
 {
     std::ostringstream stream;
     stream << "scan dataset is not valid";
@@ -107,7 +107,7 @@ bool writeMatYml(const std::filesystem::path& path, const std::string& key, cons
 
 } // namespace
 
-DecodeService::DecodeService(service::scan_dataset::ScanDatasetValidator& validator) : validator_(validator) {}
+DecodeService::DecodeService(scan::dataset::ScanDatasetValidator& validator) : validator_(validator) {}
 
 DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& config) const
 {
@@ -116,7 +116,7 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
     result.output_dir = config.output_dir.string();
     result.threshold = config.threshold;
 
-    service::scan_dataset::ScanDatasetResolver resolver;
+    scan::dataset::ScanDatasetResolver resolver;
     const auto resolved = resolver.resolve(config);
     if (!resolved.ok)
     {
@@ -128,7 +128,7 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
     }
     result.input_dir = resolved.dataset.root_dir.string();
 
-    service::scan_dataset::ScanDatasetValidationConfig validation_config;
+    scan::dataset::ScanDatasetValidationConfig validation_config;
     validation_config.input_dir = config.input_dir;
     validation_config.left_dir = config.left_dir;
     validation_config.right_dir = config.right_dir;
@@ -148,8 +148,8 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
         return failure;
     }
 
-    std::vector<service::scan_dataset::ScanDatasetIssue> metadata_issues;
-    std::optional<service::scan_dataset::ScanDatasetMetadata> metadata;
+    std::vector<scan::dataset::ScanDatasetIssue> metadata_issues;
+    std::optional<scan::dataset::ScanDatasetMetadata> metadata;
     if (resolved.dataset.metadata_file)
     {
         metadata = validator_.readMetadataFileForDecode(*resolved.dataset.metadata_file, metadata_issues);
@@ -163,7 +163,7 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
         }
     }
 
-    service::scan_dataset::ScanDatasetMetadata metadata_for_output;
+    scan::dataset::ScanDatasetMetadata metadata_for_output;
     if (metadata)
     {
         metadata_for_output = *metadata;
@@ -481,7 +481,7 @@ bool DecodeService::writeDecodeOutput(const std::filesystem::path& output_dir, c
 }
 
 bool DecodeService::writeMetadata(const DecodePatternsConfig& config, const DecodePatternsResult& result,
-                                  const service::scan_dataset::ScanDatasetMetadata& metadata,
+                                  const scan::dataset::ScanDatasetMetadata& metadata,
                                   std::string& error_message) const
 {
     try
@@ -534,4 +534,4 @@ bool DecodeService::writeMetadata(const DecodePatternsConfig& config, const Deco
     }
 }
 
-} // namespace service::decode
+} // namespace decode

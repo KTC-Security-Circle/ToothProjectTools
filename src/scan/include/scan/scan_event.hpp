@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace service::scan
+namespace scan
 {
 
 struct ScanEvent
@@ -40,4 +40,4 @@ class ScanEventQueue final : public ScanEventSink
     std::deque<ScanEvent> events_;
 };
 
-} // namespace service::scan
+} // namespace scan

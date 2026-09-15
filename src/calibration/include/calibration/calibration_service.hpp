@@ -9,7 +9,7 @@
 namespace calib { class Calibrator; }
 namespace video { class CameraManager; }
 
-namespace service::calibration
+namespace calib
 {
 
 struct MonoCalibrationError
@@ -48,4 +48,4 @@ struct MonoCalibrationResult
 MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator* calibrator,
                                 const cmd::CmdCalibrate& command);
 
-} // namespace service::calibration
+} // namespace calib

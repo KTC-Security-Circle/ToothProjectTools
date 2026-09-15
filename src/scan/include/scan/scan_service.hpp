@@ -15,18 +15,18 @@ namespace capture
 class CaptureService;
 }
 
-namespace service::camera
+namespace video
 {
 class CameraService;
 }
 
-namespace service::projector
+namespace projector
 {
 class ProjectorService;
 struct ProjectorSurface;
-} // namespace service::projector
+} // namespace projector
 
-namespace service::scan
+namespace scan
 {
 
 struct ScanStartConfig
@@ -66,8 +66,8 @@ struct ScanStartConfig
 class ScanService
 {
   public:
-    ScanService(service::projector::ProjectorService& projector_service, capture::CaptureService& capture_service,
-                service::camera::CameraService& camera_service, ScanEventSink& event_sink);
+    ScanService(projector::ProjectorService& projector_service, capture::CaptureService& capture_service,
+                video::CameraService& camera_service, ScanEventSink& event_sink);
     ~ScanService();
 
     ScanService(const ScanService&) = delete;
@@ -102,14 +102,14 @@ class ScanService
     ScanResult snapshotLocked() const;
     void pushEvent(std::string event, std::map<std::string, std::string> values);
     bool writeMetadata(const ScanStartConfig& config, const std::string& scan_id, int pattern_count, int code_width,
-                       int code_height, const service::projector::ProjectorSurface& surface,
+                       int code_height, const projector::ProjectorSurface& surface,
                        std::string& error_message) const;
     static std::string generateScanId();
     static std::string patternFileName(int index);
 
-    service::projector::ProjectorService& projector_service_;
+    projector::ProjectorService& projector_service_;
     capture::CaptureService& capture_service_;
-    service::camera::CameraService& camera_service_;
+    video::CameraService& camera_service_;
     ScanEventSink& event_sink_;
 
     mutable std::mutex mutex_;
@@ -128,4 +128,4 @@ class ScanService
     std::string last_error_message_;
 };
 
-} // namespace service::scan
+} // namespace scan

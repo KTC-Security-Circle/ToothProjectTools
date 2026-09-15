@@ -9,7 +9,7 @@
 namespace calib { class StereoCalibrator; struct StereoData; }
 namespace video { class CameraManager; }
 
-namespace service::stereo_calibration
+namespace calib
 {
 
 struct StereoCalibrationError
@@ -49,4 +49,4 @@ struct StereoCalibrationResult
 StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCalibrator* stereo_calibrator,
                                   calib::StereoData& stereo_data, const cmd::CmdStereoCalibrate& command);
 
-} // namespace service::stereo_calibration
+} // namespace calib

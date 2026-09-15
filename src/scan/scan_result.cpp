@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace service::scan
+namespace scan
 {
 
 std::string toString(ScanState state)
@@ -42,4 +42,4 @@ ScanResult ScanResult::failure(std::string scan_id, std::string code, std::strin
     return result;
 }
 
-} // namespace service::scan
+} // namespace scan

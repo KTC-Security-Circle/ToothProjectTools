@@ -5,7 +5,7 @@
 #include <string>
 #include <unistd.h>
 
-namespace service::calibration_file
+namespace calib::file
 {
 
 std::optional<std::filesystem::path> createTemporaryCalibrationPath(const std::filesystem::path& destination)
@@ -40,4 +40,4 @@ bool removeTemporaryCalibrationPath(const std::filesystem::path& path, std::erro
     return std::filesystem::remove(path, error) || !error;
 }
 
-} // namespace service::calibration_file
+} // namespace calib::file

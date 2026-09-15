@@ -7,7 +7,7 @@
 #include <optional>
 #include <vector>
 
-namespace service::scan_dataset
+namespace scan::dataset
 {
 
 struct ScanDatasetValidationConfig : ScanDatasetInputSpec
@@ -78,4 +78,4 @@ class ScanDatasetValidator
         ScanDatasetValidationResult& result) const;
 };
 
-} // namespace service::scan_dataset
+} // namespace scan::dataset

@@ -8,15 +8,15 @@
 #include <string>
 #include <vector>
 
-namespace service::scan_dataset
+namespace scan::dataset
 {
 class ScanDatasetValidator;
 }
 
-namespace service::decode
+namespace decode
 {
 
-struct DecodePatternsConfig : service::scan_dataset::ScanDatasetInputSpec
+struct DecodePatternsConfig : scan::dataset::ScanDatasetInputSpec
 {
     DecodePatternsConfig() = default;
     DecodePatternsConfig(std::filesystem::path input, std::filesystem::path output, int decode_threshold, bool allow)
@@ -39,8 +39,8 @@ class DecodeService
     /// @brief DecodeServiceを構築する。
     ///
     /// Args:
-    ///   validator <service::scan_dataset::ScanDatasetValidator&>: scan dataset validator。
-    explicit DecodeService(service::scan_dataset::ScanDatasetValidator& validator);
+    ///   validator <scan::dataset::ScanDatasetValidator&>: scan dataset validator。
+    explicit DecodeService(scan::dataset::ScanDatasetValidator& validator);
 
     /// @brief scan datasetからGrayCode patternをdecodeする。
     ///
@@ -77,11 +77,11 @@ class DecodeService
     bool writeMetadata(
         const DecodePatternsConfig& config,
         const DecodePatternsResult& result,
-        const service::scan_dataset::ScanDatasetMetadata& metadata,
+        const scan::dataset::ScanDatasetMetadata& metadata,
         std::string& error_message) const;
 
-    /// validator_ <service::scan_dataset::ScanDatasetValidator&>: 入力scan dataset検証service。
-    service::scan_dataset::ScanDatasetValidator& validator_;
+    /// validator_ <scan::dataset::ScanDatasetValidator&>: 入力scan dataset検証service。
+    scan::dataset::ScanDatasetValidator& validator_;
 };
 
-} // namespace service::decode
+} // namespace decode

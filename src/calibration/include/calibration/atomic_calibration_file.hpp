@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <optional>
 
-namespace service::calibration_file
+namespace calib::file
 {
 
 /**
@@ -17,4 +17,4 @@ std::optional<std::filesystem::path> createTemporaryCalibrationPath(const std::f
 /// @brief temporary Calibration fileを削除し、失敗理由をerror_codeへ返す。
 bool removeTemporaryCalibrationPath(const std::filesystem::path& path, std::error_code& error);
 
-} // namespace service::calibration_file
+} // namespace calib::file

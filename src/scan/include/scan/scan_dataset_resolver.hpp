@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-namespace service::scan_dataset
+namespace scan::dataset
 {
 
 struct ScanDatasetInputSpec
@@ -49,4 +49,4 @@ class ScanDatasetResolver
 
 int inferPatternCount(const std::filesystem::path& left_dir, const std::filesystem::path& right_dir);
 
-} // namespace service::scan_dataset
+} // namespace scan::dataset

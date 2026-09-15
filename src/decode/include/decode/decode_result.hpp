@@ -5,7 +5,7 @@
 #include <optional>
 #include <string>
 
-namespace service::decode
+namespace decode
 {
 
 struct DecodeSideResult
@@ -95,4 +95,4 @@ struct DecodePatternsResult
     static DecodePatternsResult failure(std::string code, std::string message);
 };
 
-} // namespace service::decode
+} // namespace decode

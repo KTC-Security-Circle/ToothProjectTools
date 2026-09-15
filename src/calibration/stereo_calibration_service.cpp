@@ -19,7 +19,7 @@
 
 namespace fs = std::filesystem;
 
-namespace service::stereo_calibration
+namespace calib
 {
 namespace
 {
@@ -126,13 +126,13 @@ StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCa
     LOG_INFO("step2: Stereo: mono calibration file読込");
 
     std::string calibration_error;
-    const auto left_calibration = service::calibration_file::loadMonoCalibrationFile(command.left_calibration_file, calibration_error);
+    const auto left_calibration = calib::file::loadMonoCalibrationFile(command.left_calibration_file, calibration_error);
     if (!left_calibration)
     {
         const auto code = fs::exists(command.left_calibration_file) ? "calibration_file_invalid" : "calibration_file_not_found";
         return failure(output_file, code, calibration_error);
     }
-    const auto right_calibration = service::calibration_file::loadMonoCalibrationFile(command.right_calibration_file, calibration_error);
+    const auto right_calibration = calib::file::loadMonoCalibrationFile(command.right_calibration_file, calibration_error);
     if (!right_calibration)
     {
         const auto code = fs::exists(command.right_calibration_file) ? "calibration_file_invalid" : "calibration_file_not_found";
@@ -236,7 +236,7 @@ StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCa
         {
             return failure(output_file, "file_write_failed", "failed to create stereo calibration output directory");
         }
-        const auto temporary_path = calibration_file::createTemporaryCalibrationPath(output_file);
+        const auto temporary_path = file::createTemporaryCalibrationPath(output_file);
         if (!temporary_path)
         {
             return failure(output_file, "file_write_failed", "failed to create temporary calibration file");
@@ -246,7 +246,7 @@ StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCa
         if (!fs_out.isOpened())
         {
             std::error_code cleanup_error;
-            if (!calibration_file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
+            if (!file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
             {
                 LOG_WARN("Stereo Calibration temporary file cleanup failed: {}", cleanup_error.message());
             }
@@ -262,7 +262,7 @@ StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCa
         if (temporary_file)
         {
             std::error_code cleanup_error;
-            if (!calibration_file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
+            if (!file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
             {
                 LOG_WARN("Stereo Calibration temporary file cleanup failed: {}", cleanup_error.message());
             }
@@ -280,4 +280,4 @@ StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCa
     return result;
 }
 
-} // namespace service::stereo_calibration
+} // namespace calib

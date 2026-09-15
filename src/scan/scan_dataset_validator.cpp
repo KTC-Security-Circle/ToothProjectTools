@@ -7,7 +7,7 @@
 #include <sstream>
 #include <string>
 
-namespace service::scan_dataset
+namespace scan::dataset
 {
 namespace
 {
@@ -348,4 +348,4 @@ void ScanDatasetValidator::validateExpectedImages(const std::filesystem::path& l
     }
 }
 
-} // namespace service::scan_dataset
+} // namespace scan::dataset

@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace service::scan
+namespace scan
 {
 
 void ScanEventQueue::push(ScanEvent event)
@@ -21,4 +21,4 @@ std::vector<ScanEvent> ScanEventQueue::drain()
     return {std::make_move_iterator(pending.begin()), std::make_move_iterator(pending.end())};
 }
 
-} // namespace service::scan
+} // namespace scan

@@ -15,7 +15,7 @@
 #include <thread>
 #include <utility>
 
-namespace service::scan
+namespace scan
 {
 namespace
 {
@@ -96,8 +96,8 @@ std::string captureMessage(const capture::CaptureStereoResult& result)
 
 } // namespace
 
-ScanService::ScanService(service::projector::ProjectorService& projector_service,
-                         capture::CaptureService& capture_service, service::camera::CameraService& camera_service,
+ScanService::ScanService(projector::ProjectorService& projector_service,
+                         capture::CaptureService& capture_service, video::CameraService& camera_service,
                          ScanEventSink& event_sink)
     : projector_service_(projector_service), capture_service_(capture_service), camera_service_(camera_service),
       event_sink_(event_sink)
@@ -153,7 +153,7 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     {
         return ScanResult::failure(scan_id, "pattern_not_generated", "patterns are not generated");
     }
-    if (config.sync_source == "camera_roi" && !service::projector::canPlaceSyncMarker(snapshot->surface))
+    if (config.sync_source == "camera_roi" && !projector::canPlaceSyncMarker(snapshot->surface))
     {
         return ScanResult::failure(scan_id, "sync_marker_margin_unavailable",
                                    "camera_roi synchronization requires projector margin outside the active pattern");
@@ -567,7 +567,7 @@ void ScanService::pushEvent(std::string event, std::map<std::string, std::string
 }
 
 bool ScanService::writeMetadata(const ScanStartConfig& config, const std::string& scan_id, int pattern_count,
-                                int code_width, int code_height, const service::projector::ProjectorSurface& surface,
+                                int code_width, int code_height, const projector::ProjectorSurface& surface,
                                 std::string& error_message) const
 {
     try
@@ -636,4 +636,4 @@ std::string ScanService::patternFileName(int index)
     return stream.str();
 }
 
-} // namespace service::scan
+} // namespace scan

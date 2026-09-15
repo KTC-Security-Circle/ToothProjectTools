@@ -6,7 +6,7 @@
 
 #include <opencv2/core/persistence.hpp>
 
-namespace service::calibration_file
+namespace calib::file
 {
 namespace
 {
@@ -157,4 +157,4 @@ std::optional<MonoCalibrationFile> loadMonoCalibrationFile(
     }
 }
 
-} // namespace service::calibration_file
+} // namespace calib::file

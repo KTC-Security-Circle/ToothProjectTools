@@ -3,7 +3,7 @@
 #include <optional>
 #include <string>
 
-namespace service::scan
+namespace scan
 {
 
 enum class ScanState
@@ -66,4 +66,4 @@ struct ScanResult
     static ScanResult failure(std::string scan_id, std::string code, std::string message);
 };
 
-} // namespace service::scan
+} // namespace scan

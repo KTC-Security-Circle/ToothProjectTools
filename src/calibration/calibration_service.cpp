@@ -15,7 +15,7 @@
 
 namespace fs = std::filesystem;
 
-namespace service::calibration
+namespace calib
 {
 namespace
 {
@@ -141,7 +141,7 @@ MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator
         {
             return failure(output_file, "calibration_output_write_failed", "failed to create mono calibration output directory");
         }
-        const auto temporary_path = calibration_file::createTemporaryCalibrationPath(output_file);
+        const auto temporary_path = file::createTemporaryCalibrationPath(output_file);
         if (!temporary_path)
         {
             return failure(output_file, "calibration_output_write_failed", "failed to create temporary calibration file");
@@ -151,7 +151,7 @@ MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator
         if (!fs_out.isOpened())
         {
             std::error_code cleanup_error;
-            if (!calibration_file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
+            if (!file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
             {
                 LOG_WARN("Calibration temporary file cleanup failed: {}", cleanup_error.message());
             }
@@ -167,7 +167,7 @@ MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator
         if (temporary_file)
         {
             std::error_code cleanup_error;
-            if (!calibration_file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
+            if (!file::removeTemporaryCalibrationPath(*temporary_file, cleanup_error))
             {
                 LOG_WARN("Calibration temporary file cleanup failed: {}", cleanup_error.message());
             }
@@ -195,4 +195,4 @@ MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator
     return result;
 }
 
-} // namespace service::calibration
+} // namespace calib

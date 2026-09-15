@@ -6,7 +6,7 @@
 
 #include <opencv2/core.hpp>
 
-namespace service::calibration_file
+namespace calib::file
 {
 
 struct MonoCalibrationFile
@@ -22,4 +22,4 @@ std::optional<MonoCalibrationFile> loadMonoCalibrationFile(
     const std::filesystem::path& path,
     std::string& error_message);
 
-} // namespace service::calibration_file
+} // namespace calib::file

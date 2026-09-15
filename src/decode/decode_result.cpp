@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace service::decode
+namespace decode
 {
 
 DecodePatternsResult DecodePatternsResult::success()
@@ -20,4 +20,4 @@ DecodePatternsResult DecodePatternsResult::failure(std::string code, std::string
     return result;
 }
 
-} // namespace service::decode
+} // namespace decode

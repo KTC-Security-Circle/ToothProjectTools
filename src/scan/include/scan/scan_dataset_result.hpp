@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace service::scan_dataset
+namespace scan::dataset
 {
 
 struct ScanDatasetIssue
@@ -127,4 +127,4 @@ struct ScanDatasetValidationResult
     std::vector<ScanDatasetIssue> issues;
 };
 
-} // namespace service::scan_dataset
+} // namespace scan::dataset
