@@ -51,12 +51,6 @@ bool CameraManager::remove(CameraId id) {
   return true;
 }
 
-void CameraManager::forEach(std::function<void(Camera&)> action) {
-  for (auto& c : cameras_) {
-    if (c) action(*c);
-  }
-}
-
 void CameraManager::clear() {
   LOG_INFO("CameraManager: 全カメラを解放します");
   for (auto& c : cameras_) {

@@ -39,16 +39,6 @@ Window* WindowManager::get(WindowId id) const {
   return nullptr;
 }
 
-Window* WindowManager::getByName(const std::string& name) const {
-  auto it = std::find_if(windows_.begin(), windows_.end(),
-                         [&name](const auto& w) { return w->name() == name; });
-  
-  if (it != windows_.end()) {
-    return it->get();
-  }
-  return nullptr;
-}
-
 bool WindowManager::closeWindow(WindowId id) {
   auto it = std::find_if(windows_.begin(), windows_.end(),
                          [id](const auto& w) { return w->id() == id; });
@@ -63,12 +53,6 @@ bool WindowManager::closeWindow(WindowId id) {
   windows_.erase(it);
   LOG_INFO("WindowManager: ウィンドウ破棄 id={}", id);
   return true;
-}
-
-void WindowManager::forEach(std::function<void(Window&)> action) {
-  for (auto& w : windows_) {
-    if (w) action(*w);
-  }
 }
 
 void WindowManager::pollEvents(int delay_ms) {
