@@ -1,6 +1,6 @@
 # 概要
 
-ToothProjectTools の `tooth-backend serve` は、C++ sidecarとして動作する。
+ToothProjectTools の正式な実行経路は `tooth-backend serve --control stdio` であり、C++ sidecarとして動作する。
 serve app は標準入力からJSON Linesを受け取る。
 responseとeventはstdoutへJSON Linesで出力する。
 logger、OpenCV診断、process障害情報はstderrへ出力する。
@@ -8,6 +8,9 @@ logger、OpenCV診断、process障害情報はstderrへ出力する。
 MJPEGはpreview配信用である。
 MJPEGはControl Messageとは別である。
 stdoutへJPEG bytesやMJPEG multipart bodyは出力しない。
+
+Projectorへのpattern表示に限り、`WindowService`からOpenCV HighGUI backendを使用する。
+keyboard入力やcamera previewを行う旧GUI application loopは実行経路に含まれない。
 
 ## 役割
 

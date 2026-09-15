@@ -242,8 +242,7 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
         return AdapterResult::shutdown;
     }
 
-    // TODO: headless用のDispatchCmd/Handler contextが整った段階で、
-    // このcommand mappingを既存dispatch::execute経由へ移行する。
+    // 既知commandは上記のJSONL mappingからHeadlessDispatcherへ渡す。
     writer_.writeResponse(ControlResponse::failure(id, "invalid_command", "unknown command: " + *message.cmd));
     return AdapterResult::continue_running;
 }
