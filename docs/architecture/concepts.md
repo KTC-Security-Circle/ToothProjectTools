@@ -52,6 +52,24 @@ ServiceはJSON Linesを知らない。
 ServiceはControl Messageを受け取らない。
 対応する実装は `CameraService`、`ProjectorService`、`WindowService`、`ScanService`、`CaptureService`、`DecodeService` である。
 
+Serviceの配置は技術的役割ではなく、所有するdomainに従う。
+
+```text
+src/video          Camera / CameraManager / CameraService
+src/window         Window / WindowManager / MonitorService / WindowService
+src/projector      ProjectorService / ProjectorResult
+src/capture        CaptureService
+src/calibration    Calibrator / calibration service / calibration file I/O
+src/scan           ScanService / ScanEvent / scan dataset validation
+src/decode         DecodeService / DecodeResult
+src/reconstruction ReconstructionService / CameraProjectorService
+src/stream         MJPEG / FramePublisher / StreamRegistry
+src/serve          ServeApp / SidecarService composition
+```
+
+`SidecarService`はdomain serviceではなく、serve runtimeが利用する各依存の生成、所有、lifecycleを担当する。
+namespaceは既存の`service::*`を維持しており、package ownershipとは独立している。
+
 ## 結果（Service Result）
 
 Service Result は、Serviceが返す結果である。
