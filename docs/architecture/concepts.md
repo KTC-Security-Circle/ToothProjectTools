@@ -68,7 +68,7 @@ src/serve          ServeApp / SidecarService composition
 ```
 
 `SidecarService`はdomain serviceではなく、serve runtimeが利用する各依存の生成、所有、lifecycleを担当する。
-namespaceは既存の`service::*`を維持しており、package ownershipとは独立している。
+namespaceもpackage ownershipに合わせ、`video`、`win`、`projector`、`scan`、`decode`、`calib`、`serve`を使用する。
 
 ## 結果（Service Result）
 
