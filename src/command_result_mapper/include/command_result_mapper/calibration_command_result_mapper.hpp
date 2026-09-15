@@ -17,7 +17,7 @@ namespace command_result_mapper::calibration
 ///   result <const service::calibration::MonoCalibrationResult&>: serviceから返されたmono calibration結果。
 ///
 /// Return:
-///   <common::CommandResult>: handler/dispatcherで共通利用するcommand実行結果。
+///   <common::CommandResult>: Command Executorで共通利用するcommand実行結果。
 common::CommandResult toCommandResult(
     const std::string& role,
     const cmd::CmdCalibrate& command,

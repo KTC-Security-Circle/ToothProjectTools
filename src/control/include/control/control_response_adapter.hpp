@@ -12,7 +12,7 @@ namespace control
 ///
 /// Args:
 ///   id <const std::string&>: JSON Lines responseに付与するrequest id。
-///   result <const common::CommandResult&>: handler/dispatcherが返したcommand実行結果。
+///   result <const common::CommandResult&>: Command Executorが返したcommand実行結果。
 ///
 /// Return:
 ///   <ControlResponse>: sidecar stdoutへ出力するresponse。

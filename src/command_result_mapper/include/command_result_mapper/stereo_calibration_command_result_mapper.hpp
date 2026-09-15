@@ -18,7 +18,7 @@ namespace command_result_mapper::stereo_calibration
 ///   result <const service::stereo_calibration::StereoCalibrationResult&>: serviceから返されたstereo calibration結果。
 ///
 /// Return:
-///   <common::CommandResult>: handler/dispatcherで共通利用するcommand実行結果。
+///   <common::CommandResult>: Command Executorで共通利用するcommand実行結果。
 common::CommandResult toCommandResult(
     const std::string& left_role,
     const std::string& right_role,

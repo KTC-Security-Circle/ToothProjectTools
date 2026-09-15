@@ -10,7 +10,7 @@ keyboard入力、camera preview、ユーザー操作用GUI application loopは�
 ```text
 JSONL projector command
     ↓
-HeadlessDispatcher / ProjectorService
+HeadlessCommandExecutor / ProjectorService
     ↓
 WindowService
     ↓

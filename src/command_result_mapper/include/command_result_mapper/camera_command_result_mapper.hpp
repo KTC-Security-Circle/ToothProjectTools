@@ -13,7 +13,7 @@ namespace command_result_mapper::camera
 ///   include_camera_id <bool>: success valuesへcamera_idを含めるか。
 ///
 /// Return:
-///   <common::CommandResult>: handler/dispatcherで共通利用するcommand実行結果。
+///   <common::CommandResult>: Command Executorで共通利用するcommand実行結果。
 common::CommandResult toCommandResult(const service::camera::CameraResult& result, bool include_camera_id = true);
 
 } // namespace command_result_mapper::camera
