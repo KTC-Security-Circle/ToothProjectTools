@@ -16,7 +16,7 @@ namespace command_result_mapper::capture
 ///   values <std::map<std::string, std::string>>: command成功時に返す追加値。
 ///
 /// Return:
-///   <common::CommandResult>: handler/dispatcherで共通利用するcommand実行結果。
+///   <common::CommandResult>: Command Executorで共通利用するcommand実行結果。
 common::CommandResult toCommandResult(
     const ::capture::CaptureResult& result,
     std::map<std::string, std::string> values);
@@ -28,7 +28,7 @@ common::CommandResult toCommandResult(
 ///   values <std::map<std::string, std::string>>: command成功時に返す追加値。
 ///
 /// Return:
-///   <common::CommandResult>: handler/dispatcherで共通利用するcommand実行結果。
+///   <common::CommandResult>: Command Executorで共通利用するcommand実行結果。
 common::CommandResult toCommandResult(
     const ::capture::CaptureStereoResult& result,
     std::map<std::string, std::string> values);

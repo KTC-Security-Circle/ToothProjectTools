@@ -1,13 +1,12 @@
 #include "cmd/commands.hpp"
 #include "capture/capture_service.hpp"
 #include "control/control_message.hpp"
-#include "handler/camera_command_handler.hpp"
-#include "handler/decode_command_handler.hpp"
-#include "handler/projector_command_handler.hpp"
-#include "handler/scan_dataset_command_handler.hpp"
-#include "handler/window_resource_command_handler.hpp"
+#include "headless/headless_command_executor.hpp"
 #include "headless/headless_command_mapper.hpp"
-#include "runtime/handler_context.hpp"
+#include "calibration/calibrator.hpp"
+#include "calibration/stereo_calibrator.hpp"
+#include "calibration/stereo_data.hpp"
+#include "reconstruction/reconstruction_service.hpp"
 #include "service/calibration_file.hpp"
 #include "service/camera_service.hpp"
 #include "service/decode_service.hpp"
@@ -156,6 +155,29 @@ service::monitor::MonitorService fakeLargeMonitorService()
                                                 };
                                             }};
 }
+
+struct CommandRuntime
+{
+    video::CameraManager cameras;
+    service::camera::CameraService camera_service{cameras};
+    FakeWindowBackend window_backend;
+    service::monitor::MonitorService monitor_service{fakeMonitorService()};
+    service::window::WindowService window_service{window_backend, monitor_service};
+    service::projector::ProjectorService projector_service{window_service, monitor_service};
+    capture::CaptureService capture_service{cameras};
+    service::scan::ScanEventQueue scan_events;
+    service::scan::ScanService scan_service{projector_service, capture_service, camera_service, scan_events};
+    service::scan_dataset::ScanDatasetValidator scan_dataset_validator;
+    service::decode::DecodeService decode_service{scan_dataset_validator};
+    calib::Calibrator calibrator;
+    calib::StereoCalibrator stereo_calibrator;
+    calib::StereoData stereo_data;
+    reconstruction::ReconstructionService reconstruction_service;
+    headless::HeadlessCommandExecutor executor{
+        camera_service, window_service, projector_service, scan_service, scan_dataset_validator,
+        decode_service, capture_service, cameras, &calibrator, &stereo_calibrator, stereo_data,
+        reconstruction_service};
+};
 
 control::ControlMessage messageWithId()
 {
@@ -695,47 +717,38 @@ void testScanMapper()
 
 void testWindowHandler()
 {
-    FakeWindowBackend backend;
-    service::window::WindowService service{backend};
-    runtime::WindowResourceHandlerContext context{service};
+    CommandRuntime runtime;
 
     const auto open = runWindowRequest(
-        service,
+        runtime.window_service,
         [&]
         {
-            return handler::window_resource::handle(
-                context, cmd::Command{cmd::CmdOpenWindow{"projector", "Projector", 640, 480, std::nullopt, false}});
+            return runtime.executor.execute(
+                cmd::Command{cmd::CmdOpenWindow{"projector", "Projector", 640, 480, std::nullopt, false}});
         });
     assert(open.handled && open.ok);
     assert(open.values.at("window_role") == "projector");
     assert(open.values.at("width") == "640");
 
     const auto close = runWindowRequest(
-        service,
-        [&] { return handler::window_resource::handle(context, cmd::Command{cmd::CmdCloseWindow{"projector"}}); });
+        runtime.window_service,
+        [&] { return runtime.executor.execute(cmd::Command{cmd::CmdCloseWindow{"projector"}}); });
     assert(close.handled && close.ok);
 
     const auto failed = runWindowRequest(
-        service,
-        [&] { return handler::window_resource::handle(context, cmd::Command{cmd::CmdCloseWindow{"missing"}}); });
+        runtime.window_service,
+        [&] { return runtime.executor.execute(cmd::Command{cmd::CmdCloseWindow{"missing"}}); });
     assert(failed.handled && !failed.ok && failed.error->code == "window_not_open");
-
-    const auto other = handler::window_resource::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
-    assert(!other.handled);
 }
 
 void testHandler()
 {
-    video::CameraManager cameras;
-    service::camera::CameraService service{cameras};
-    runtime::CameraHandlerContext context{service};
+    CommandRuntime runtime;
 
-    const auto open = handler::camera::handle(context, cmd::Command{cmd::CmdOpenCamera{0, ""}});
+    const auto open = runtime.executor.execute(cmd::Command{cmd::CmdOpenCamera{0, ""}});
     assert(open.handled);
-    const auto close = handler::camera::handle(context, cmd::Command{cmd::CmdCloseCamera{"left"}});
+    const auto close = runtime.executor.execute(cmd::Command{cmd::CmdCloseCamera{"left"}});
     assert(close.handled);
-    const auto other = handler::camera::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
-    assert(!other.handled);
 }
 
 void testMonitorFallbackAcrossServices()
@@ -1278,11 +1291,8 @@ void testProjectorNearestResizeProducesBinaryValues()
 
 void testProjectorHandlerReportsCodeAndDisplayResolution()
 {
-    FakeWindowBackend backend;
-    service::window::WindowService window_service{backend};
-    auto monitor_service = fakeLargeMonitorService();
-    service::projector::ProjectorService projector_service{window_service, monitor_service};
-    runtime::ProjectorHandlerContext context{projector_service};
+    CommandRuntime runtime;
+    auto& window_service = runtime.window_service;
 
     assert(runWindowRequest(window_service,
                             [&]
@@ -1295,16 +1305,14 @@ void testProjectorHandlerReportsCodeAndDisplayResolution()
         window_service,
         [&]
         {
-            return handler::projector::handle(
-                context, cmd::Command{cmd::CmdOpenProjector{"projector", "projector_window", 960, 540}});
+            return runtime.executor.execute(cmd::Command{cmd::CmdOpenProjector{"projector", "projector_window", 960, 540}});
         });
     assert(result.handled && result.ok);
     result = runWindowRequest(
         window_service,
         [&]
         {
-            return handler::projector::handle(
-                context, cmd::Command{cmd::CmdConfigureProjectorSurface{"projector", 0, 1920, 1080, {}, {}, "center"}});
+            return runtime.executor.execute(cmd::Command{cmd::CmdConfigureProjectorSurface{"projector", 0, 1920, 1080, {}, {}, "center"}});
         });
     assert(result.handled && result.ok);
     assert(result.values.at("code_width") == "960");
@@ -1314,7 +1322,7 @@ void testProjectorHandlerReportsCodeAndDisplayResolution()
     assert(result.values.at("display_x") == "160");
     assert(result.values.at("display_y") == "160");
 
-    result = handler::projector::handle(context, cmd::Command{cmd::CmdGeneratePatterns{"projector"}});
+    result = runtime.executor.execute(cmd::Command{cmd::CmdGeneratePatterns{"projector"}});
     assert(result.handled && result.ok);
     assert(result.values.at("width") == "960");
     assert(result.values.at("height") == "540");
@@ -1363,11 +1371,8 @@ void testScanMetadataDistinguishesCodeAndDisplayResolution()
 
 void testProjectorHandler()
 {
-    FakeWindowBackend backend;
-    service::window::WindowService window_service{backend};
-    auto monitor_service = fakeMonitorService();
-    service::projector::ProjectorService projector_service{window_service, monitor_service};
-    runtime::ProjectorHandlerContext context{projector_service};
+    CommandRuntime runtime;
+    auto& window_service = runtime.window_service;
 
     assert(runWindowRequest(window_service,
                             [&]
@@ -1381,31 +1386,28 @@ void testProjectorHandler()
         runWindowRequest(window_service,
                          [&]
                          {
-                             return handler::projector::handle(
-                                 context, cmd::Command{cmd::CmdOpenProjector{"projector", "projector_window", 16, 12}});
+                             return runtime.executor.execute(cmd::Command{cmd::CmdOpenProjector{"projector", "projector_window", 16, 12}});
                          });
     assert(result.handled && result.ok);
 
-    result = handler::projector::handle(context, cmd::Command{cmd::CmdGeneratePatterns{"projector"}});
+    result = runtime.executor.execute(cmd::Command{cmd::CmdGeneratePatterns{"projector"}});
     assert(result.handled && result.ok);
 
     result = runWindowRequest(
         window_service,
         [&] {
-            return handler::projector::handle(context, cmd::Command{cmd::CmdProjectorShowPattern{"projector", 0}});
+            return runtime.executor.execute(cmd::Command{cmd::CmdProjectorShowPattern{"projector", 0}});
         });
     assert(result.handled && result.ok);
 
     result = runWindowRequest(
         window_service,
-        [&] { return handler::projector::handle(context, cmd::Command{cmd::CmdProjectorNextPattern{"projector"}}); });
+        [&] { return runtime.executor.execute(cmd::Command{cmd::CmdProjectorNextPattern{"projector"}}); });
     assert(result.handled && result.ok);
 
-    result = handler::projector::handle(context, cmd::Command{cmd::CmdCloseProjector{"projector"}});
+    result = runtime.executor.execute(cmd::Command{cmd::CmdCloseProjector{"projector"}});
     assert(result.handled && result.ok);
 
-    const auto other = handler::projector::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
-    assert(!other.handled);
 }
 
 void testScanDatasetResolver()
@@ -1650,19 +1652,15 @@ void testScanDatasetValidator()
 
 void testScanDatasetHandler()
 {
-    service::scan_dataset::ScanDatasetValidator validator;
-    runtime::ScanDatasetHandlerContext context{validator};
+    CommandRuntime runtime;
     const auto dir = testTempDir("handler");
     writeValidScanDataset(dir, 1);
 
-    auto result = handler::scan_dataset::handle(
-        context, cmd::Command{cmd::CmdValidateScanDataset{dir.string(), false, {}, {}, {}}});
+    auto result = runtime.executor.execute(
+        cmd::Command{cmd::CmdValidateScanDataset{dir.string(), false, {}, {}, {}}});
     assert(result.handled && result.ok);
     assert(result.values.at("valid") == "true");
     assert(result.values.at("issues_json") == "[]");
-
-    const auto other = handler::scan_dataset::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
-    assert(!other.handled);
 }
 
 void testDecodeServiceSyntheticDataset()
@@ -1807,24 +1805,18 @@ void testDecodeServiceFailures()
 
 void testDecodeHandler()
 {
-    service::scan_dataset::ScanDatasetValidator validator;
-    service::decode::DecodeService decode_service{validator};
-    runtime::DecodeHandlerContext context{decode_service};
+    CommandRuntime runtime;
     const auto input_dir = testTempDir("decode_handler_input");
     const auto output_dir = testTempDir("decode_handler_output");
     writeSyntheticGrayCodeDataset(input_dir, 8, 4);
 
-    auto result = handler::decode::handle(
-        context,
+    auto result = runtime.executor.execute(
         cmd::Command{cmd::CmdDecodePatterns{
             input_dir.string(), output_dir.string(), 15, false, {}, {}, {}, std::nullopt, std::nullopt, std::nullopt}});
     assert(result.handled && result.ok);
     assert(result.values.at("projector_width") == "8");
     assert(result.values.at("projector_height") == "4");
     assert(result.values.at("left_valid_count") == "32");
-
-    const auto other = handler::decode::handle(context, cmd::Command{cmd::CmdCaptureFrame{}});
-    assert(!other.handled);
 }
 
 void testServiceValidation()
@@ -1836,6 +1828,33 @@ void testServiceValidation()
     assert(!invalid.ok && invalid.error->code == "invalid_command");
     const auto close = service.closeCamera("left");
     assert(!close.ok && close.error->code == "camera_not_open");
+}
+
+void testCommandExecutorDomainRouting()
+{
+    CommandRuntime runtime;
+
+    auto result = runtime.executor.execute(cmd::Command{cmd::CmdCaptureFrame{}});
+    assert(result.handled && !result.ok);
+
+    result = runtime.executor.execute(cmd::Command{cmd::CmdScanStatus{"missing"}});
+    assert(result.handled && !result.ok);
+
+    const auto missing = testTempDir("executor_missing") / "missing";
+    result = runtime.executor.execute(cmd::Command{cmd::CmdCalibrate{
+        video::kInvalidCameraId, missing.string(), (missing / "mono.yml").string(), {}, false}});
+    assert(result.handled && !result.ok);
+
+    cmd::CmdStereoCalibrate stereo;
+    stereo.left_calibration_file = (missing / "left.yml").string();
+    stereo.right_calibration_file = (missing / "right.yml").string();
+    stereo.output_file = (missing / "stereo.yml").string();
+    result = runtime.executor.execute(cmd::Command{stereo});
+    assert(result.handled && !result.ok);
+
+    result = runtime.executor.execute(cmd::Command{cmd::CmdValidateReconstruction{
+        missing, missing / "calibration.yml", {}}});
+    assert(result.handled && !result.ok);
 }
 
 } // namespace
@@ -1862,6 +1881,7 @@ int main()
     testMonoCalibrationFileLoader();
     testScanDatasetHandler();
     testDecodeHandler();
+    testCommandExecutorDomainRouting();
     testProjectorSurfaceConfiguration();
     testServiceValidation();
     testWindowServiceValidation();

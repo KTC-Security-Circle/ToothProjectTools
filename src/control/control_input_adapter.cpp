@@ -43,7 +43,7 @@ std::string valueOrEmpty(const common::CommandResult& result, const std::string&
 
 ControlInputAdapter::ControlInputAdapter(service::SidecarService& service, JsonLineWriter& writer)
     : service_(service), writer_(writer), headless_mapper_(service.cameraService()),
-      headless_dispatcher_(service.cameraService(), service.windowService(), service.projectorService(),
+      command_executor_(service.cameraService(), service.windowService(), service.projectorService(),
                            service.scanService(), service.scanDatasetValidator(), service.decodeService(),
                            service.captureService(), service.cameraManager(), service.calibrator(),
                            service.stereoCalibrator(), service.stereoData(), service.reconstructionService())
@@ -165,7 +165,7 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
             writeHeadlessFailure(id, *mapped.error);
             return AdapterResult::continue_running;
         }
-        writer_.writeResponse(toControlResponse(id, headless_dispatcher_.execute(*mapped.command)));
+        writer_.writeResponse(toControlResponse(id, command_executor_.execute(*mapped.command)));
         return AdapterResult::continue_running;
     }
 
@@ -242,7 +242,7 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
         return AdapterResult::shutdown;
     }
 
-    // 既知commandは上記のJSONL mappingからHeadlessDispatcherへ渡す。
+    // 既知commandは上記のJSONL mappingからHeadlessCommandExecutorへ渡す。
     writer_.writeResponse(ControlResponse::failure(id, "invalid_command", "unknown command: " + *message.cmd));
     return AdapterResult::continue_running;
 }
@@ -262,7 +262,7 @@ AdapterResult ControlInputAdapter::handleCameraCommand(const std::string& id, co
         service_.stopStreamIfRunning(*message.role);
     }
 
-    const auto result = headless_dispatcher_.execute(*map_result.command);
+    const auto result = command_executor_.execute(*map_result.command);
     auto response_result = result;
     response_result.values.clear();
     writer_.writeResponse(toControlResponse(id, response_result));
@@ -284,7 +284,7 @@ AdapterResult ControlInputAdapter::handleWindowCommand(const std::string& id, co
         return AdapterResult::continue_running;
     }
 
-    const auto result = headless_dispatcher_.execute(*map_result.command);
+    const auto result = command_executor_.execute(*map_result.command);
     writer_.writeResponse(toControlResponse(id, result));
     if (result.handled && result.ok)
     {
@@ -345,7 +345,7 @@ AdapterResult ControlInputAdapter::handleProjectorCommand(const std::string& id,
         return AdapterResult::continue_running;
     }
 
-    const auto result = headless_dispatcher_.execute(*map_result.command);
+    const auto result = command_executor_.execute(*map_result.command);
     writer_.writeResponse(toControlResponse(id, result));
     if (result.handled && result.ok)
     {
@@ -439,7 +439,7 @@ AdapterResult ControlInputAdapter::handleScanCommand(const std::string& id, cons
         return AdapterResult::continue_running;
     }
 
-    const auto result = headless_dispatcher_.execute(*map_result.command);
+    const auto result = command_executor_.execute(*map_result.command);
     writer_.writeResponse(toControlResponse(id, result));
     return AdapterResult::continue_running;
 }
@@ -454,7 +454,7 @@ AdapterResult ControlInputAdapter::handleScanDatasetCommand(const std::string& i
         return AdapterResult::continue_running;
     }
 
-    const auto result = headless_dispatcher_.execute(*map_result.command);
+    const auto result = command_executor_.execute(*map_result.command);
     writer_.writeResponse(toControlResponse(id, result));
     return AdapterResult::continue_running;
 }
@@ -469,7 +469,7 @@ AdapterResult ControlInputAdapter::handleDecodeCommand(const std::string& id, co
         return AdapterResult::continue_running;
     }
 
-    const auto result = headless_dispatcher_.execute(*map_result.command);
+    const auto result = command_executor_.execute(*map_result.command);
     writer_.writeResponse(toControlResponse(id, result));
     return AdapterResult::continue_running;
 }
@@ -486,7 +486,7 @@ AdapterResult ControlInputAdapter::handleCaptureFrameCommand(const std::string& 
         return AdapterResult::continue_running;
     }
 
-    auto result = headless_dispatcher_.execute(*map_result.command);
+    auto result = command_executor_.execute(*map_result.command);
     if (calibration && result.ok)
     {
         result.values.emplace("purpose", "calibration");
@@ -514,7 +514,7 @@ AdapterResult ControlInputAdapter::handleCaptureStereoCommand(const std::string&
         return AdapterResult::continue_running;
     }
 
-    auto result = headless_dispatcher_.execute(*map_result.command);
+    auto result = command_executor_.execute(*map_result.command);
     if (calibration && result.ok)
     {
         result.values.emplace("purpose", "calibration");
@@ -547,7 +547,7 @@ AdapterResult ControlInputAdapter::handleCalibrationCommand(const std::string& i
         return AdapterResult::continue_running;
     }
 
-    const auto result = headless_dispatcher_.execute(*map_result.command);
+    const auto result = command_executor_.execute(*map_result.command);
     writer_.writeResponse(toControlResponse(id, result));
 
     if (result.handled && result.ok)

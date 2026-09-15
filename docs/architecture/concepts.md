@@ -38,19 +38,12 @@ Command Mapper は、Control MessageをCommandへ変換する。
 Command MapperはServiceを直接呼ばない。
 対応する実装は `headless::HeadlessCommandMapper` である。
 
-## 振り分け（Dispatch）
+## command実行（Command Executor）
 
-Dispatch は、CommandをHandlerへ渡す。
-scan中のresource競合もここで拒否する。
-Dispatchはcamera captureやdecode計算をしない。
-対応する実装は `headless::HeadlessDispatcher` である。
-
-## 処理担当（Handler）
-
-Handler は、CommandをService呼び出しへ変換する。
-Handlerは業務処理を持たない。
-HandlerはJSON Linesを組み立てない。
-対応する実装は `src/handler/` である。
+Command Executorは、Command variantを一度だけ型判定し、対応するServiceを直接呼ぶ。
+scan中のresource競合もService呼び出し前にここで拒否する。
+Command Executorはcamera captureやdecode algorithmを実装せず、JSON Linesも組み立てない。
+対応する実装は `headless::HeadlessCommandExecutor` である。
 
 ## 実処理（Service）
 
@@ -67,7 +60,7 @@ Service固有のfieldを持つ。
 
 ## command結果（Command Result）
 
-Command Result は、HandlerやDispatchが返す共通結果である。
+Command Result は、Command Executorが返す共通結果である。
 成功か失敗かを持つ。
 対応する実装は `common::CommandResult` である。
 

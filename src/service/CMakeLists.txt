@@ -14,10 +14,10 @@ target_include_directories(service
 
 target_link_libraries(service
   PUBLIC
-    runtime
     cmd_commands
     capture
     calibration
+    video
   PRIVATE
     cv_lib
     logger

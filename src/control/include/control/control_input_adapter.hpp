@@ -2,7 +2,7 @@
 
 #include "control/control_message.hpp"
 #include "headless/headless_command_mapper.hpp"
-#include "headless/headless_dispatcher.hpp"
+#include "headless/headless_command_executor.hpp"
 
 namespace service {
 class SidecarService;
@@ -195,8 +195,8 @@ private:
   /// headless_mapper_ <headless::HeadlessCommandMapper>: ControlMessageをdomain commandへ変換するmapper。
   headless::HeadlessCommandMapper headless_mapper_;
 
-  /// headless_dispatcher_ <headless::HeadlessDispatcher>: GUI非依存domain commandを実行するdispatcher。
-  headless::HeadlessDispatcher headless_dispatcher_;
+  /// command_executor_ <headless::HeadlessCommandExecutor>: 型付きdomain commandを実行するexecutor。
+  headless::HeadlessCommandExecutor command_executor_;
 };
 
 } // namespace control

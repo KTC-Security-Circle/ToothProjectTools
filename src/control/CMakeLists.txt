@@ -13,7 +13,7 @@ target_include_directories(sidecar_control
 
 target_link_libraries(sidecar_control
   PUBLIC
-    headless_dispatch
+    headless_command_execution
     sidecar_service
     common
   PRIVATE

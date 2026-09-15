@@ -6,11 +6,10 @@
 1. serve app が標準入力からJSON Linesを読む。
 2. ControlInputAdapter がJSONをparseする。
 3. Command Mapper がControl MessageをCommandへ変換する。
-4. Dispatch がCommandをHandlerへ渡す。
-5. Handler がServiceを呼ぶ。
-6. Service が処理を行い、Service Resultを返す。
-7. Result Mapper がreturn用のJSON Lines responseを作る。
-8. serve app がstdoutへreturnを出力する。
+4. Command Executor がCommand型を一度だけ判定してServiceを呼ぶ。
+5. Service が処理を行い、Service Resultを返す。
+6. Result Mapper がreturn用のJSON Lines responseを作る。
+7. serve app がstdoutへreturnを出力する。
 ```
 
 ## 現在の主な経路
@@ -22,8 +21,7 @@ stdin JSON Lines
   -> control::ControlInputAdapter
   -> headless::HeadlessCommandMapper
   -> cmd::Command
-  -> headless::HeadlessDispatcher
-  -> handler
+  -> headless::HeadlessCommandExecutor
   -> service
   -> command_result_mapper
   -> common::CommandResult
