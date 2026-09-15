@@ -50,37 +50,41 @@ HeadlessCommandExecutor::HeadlessCommandExecutor(
 
 common::CommandResult HeadlessCommandExecutor::execute(const cmd::Command& command)
 {
-    if (const auto busy = rejectIfScanResourceBusy(command)) return *busy;
-    return std::visit([this](const auto& typed) { return executeTyped(typed); }, command);
+    return std::visit(
+        [this](const auto& typed)
+        {
+            if (const auto rejection = validateResourceAccess(typed)) return *rejection;
+            return executeTyped(typed);
+        },
+        command);
 }
 
-std::optional<common::CommandResult>
-HeadlessCommandExecutor::rejectIfScanResourceBusy(const cmd::Command& command) const
+template <typename CommandType>
+std::optional<common::CommandResult> HeadlessCommandExecutor::validateResourceAccess(
+    const CommandType& command) const
 {
-    return std::visit([this](const auto& typed) -> std::optional<common::CommandResult> {
-        using T = std::decay_t<decltype(typed)>;
-        if constexpr (std::is_same_v<T, cmd::CmdOpenProjector>) {
-            if (const auto busy = busyProjectorResult(scan_service_, typed.projector_role)) return busy;
-            return busyWindowResult(scan_service_, typed.window_role);
-        } else if constexpr (std::is_same_v<T, cmd::CmdCloseProjector> ||
-                             std::is_same_v<T, cmd::CmdConfigureProjectorSurface> ||
-                             std::is_same_v<T, cmd::CmdGeneratePatterns> ||
-                             std::is_same_v<T, cmd::CmdProjectorShowPattern> ||
-                             std::is_same_v<T, cmd::CmdProjectorNextPattern> ||
-                             std::is_same_v<T, cmd::CmdProjectorPrevPattern>) {
-            return busyProjectorResult(scan_service_, typed.projector_role);
-        } else if constexpr (std::is_same_v<T, cmd::CmdOpenWindow> || std::is_same_v<T, cmd::CmdCloseWindow>) {
-            return busyWindowResult(scan_service_, typed.window_role);
-        } else if constexpr (std::is_same_v<T, cmd::CmdOpenCamera> || std::is_same_v<T, cmd::CmdCloseCamera>) {
-            return busyCameraResult(scan_service_, typed.role);
-        } else if constexpr (std::is_same_v<T, cmd::CmdCaptureFrame> ||
-                             std::is_same_v<T, cmd::CmdCaptureStereo> ||
-                             std::is_same_v<T, cmd::CmdCalibCapture>) {
-            if (scan_service_.isScanActive())
-                return common::failure("scan_resource_busy", "capture command conflicts with active scan");
-        }
-        return std::nullopt;
-    }, command);
+    using T = std::decay_t<CommandType>;
+    if constexpr (std::is_same_v<T, cmd::CmdOpenProjector>) {
+        if (const auto busy = busyProjectorResult(scan_service_, command.projector_role)) return busy;
+        return busyWindowResult(scan_service_, command.window_role);
+    } else if constexpr (std::is_same_v<T, cmd::CmdCloseProjector> ||
+                         std::is_same_v<T, cmd::CmdConfigureProjectorSurface> ||
+                         std::is_same_v<T, cmd::CmdGeneratePatterns> ||
+                         std::is_same_v<T, cmd::CmdProjectorShowPattern> ||
+                         std::is_same_v<T, cmd::CmdProjectorNextPattern> ||
+                         std::is_same_v<T, cmd::CmdProjectorPrevPattern>) {
+        return busyProjectorResult(scan_service_, command.projector_role);
+    } else if constexpr (std::is_same_v<T, cmd::CmdOpenWindow> || std::is_same_v<T, cmd::CmdCloseWindow>) {
+        return busyWindowResult(scan_service_, command.window_role);
+    } else if constexpr (std::is_same_v<T, cmd::CmdOpenCamera> || std::is_same_v<T, cmd::CmdCloseCamera>) {
+        return busyCameraResult(scan_service_, command.role);
+    } else if constexpr (std::is_same_v<T, cmd::CmdCaptureFrame> ||
+                         std::is_same_v<T, cmd::CmdCaptureStereo> ||
+                         std::is_same_v<T, cmd::CmdCalibCapture>) {
+        if (scan_service_.isScanActive())
+            return common::failure("scan_resource_busy", "capture command conflicts with active scan");
+    }
+    return std::nullopt;
 }
 
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdCalibCapture&)

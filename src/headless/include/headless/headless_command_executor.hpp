@@ -43,7 +43,8 @@ class HeadlessCommandExecutor
     common::CommandResult execute(const cmd::Command& command);
 
   private:
-    std::optional<common::CommandResult> rejectIfScanResourceBusy(const cmd::Command& command) const;
+    template <typename CommandType>
+    std::optional<common::CommandResult> validateResourceAccess(const CommandType& command) const;
 
     common::CommandResult executeTyped(const cmd::CmdOpenCamera& command);
     common::CommandResult executeTyped(const cmd::CmdCloseCamera& command);
