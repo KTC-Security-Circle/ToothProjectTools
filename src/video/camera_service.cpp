@@ -5,7 +5,7 @@
 #include <sstream>
 #include <utility>
 
-namespace service::camera
+namespace video
 {
 
 CameraResult CameraResult::success(video::CameraId camera_id, std::string role)
@@ -88,4 +88,4 @@ bool CameraService::validRole(const std::string& role)
                        [](unsigned char c) { return std::isalnum(c) || c == (char)95 || c == (char)45; });
 }
 
-} // namespace service::camera
+} // namespace video

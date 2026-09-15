@@ -5,7 +5,7 @@
 #include <optional>
 #include <string>
 
-namespace service::window
+namespace win
 {
 
 struct WindowError
@@ -61,4 +61,4 @@ struct WindowResult
     static WindowResult failure(std::string role, std::string code, std::string message);
 };
 
-} // namespace service::window
+} // namespace win

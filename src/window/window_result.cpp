@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace service::window
+namespace win
 {
 
 WindowResult WindowResult::success(std::string role, win::WindowId window_id, int width, int height)
@@ -24,4 +24,4 @@ WindowResult WindowResult::failure(std::string role, std::string code, std::stri
     return result;
 }
 
-} // namespace service::window
+} // namespace win

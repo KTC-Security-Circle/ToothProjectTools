@@ -9,7 +9,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace service::camera
+namespace video
 {
 
 /// @brief CameraManagerを使ったcamera resource操作とrole bindingを提供するdomain service。
@@ -70,4 +70,4 @@ class CameraService
     std::unordered_map<std::string, video::CameraId> role_to_device_index_;
 };
 
-} // namespace service::camera
+} // namespace video

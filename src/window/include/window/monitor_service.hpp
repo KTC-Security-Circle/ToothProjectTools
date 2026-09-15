@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace service::monitor
+namespace win
 {
 
 struct MonitorInfo
@@ -67,4 +67,4 @@ class MonitorService
     MonitorProvider provider_;
 };
 
-} // namespace service::monitor
+} // namespace win

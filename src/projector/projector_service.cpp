@@ -12,7 +12,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace service::projector
+namespace projector
 {
 namespace
 {
@@ -44,15 +44,15 @@ bool canPlaceSyncMarker(const ProjectorSurface& surface)
 namespace
 {
 
-std::string windowErrorMessage(const service::window::WindowResult& result, const std::string& fallback)
+std::string windowErrorMessage(const win::WindowResult& result, const std::string& fallback)
 {
     return result.error ? result.error->message : fallback;
 }
 
 } // namespace
 
-ProjectorService::ProjectorService(service::window::WindowService& window_service,
-                                   service::monitor::MonitorService& monitor_service)
+ProjectorService::ProjectorService(win::WindowService& window_service,
+                                   win::MonitorService& monitor_service)
     : window_service_(window_service), monitor_service_(monitor_service)
 {
 }
@@ -154,7 +154,7 @@ ProjectorResult ProjectorService::configureSurface(const ProjectorSurfaceRequest
         session->surface.surface_height != surface.surface_height;
     if (must_configure_window)
     {
-        const auto window_result = window_service_.configureWindowSurface(service::window::WindowSurfaceConfig{
+        const auto window_result = window_service_.configureWindowSurface(win::WindowSurfaceConfig{
             session->window_role,
             surface.monitor_index,
             surface.monitor_x,
@@ -407,7 +407,7 @@ ProjectorSurface ProjectorService::makeDefaultSurface(int width, int height) con
     return surface;
 }
 
-ProjectorSurface ProjectorService::computeSurface(const service::monitor::MonitorInfo& monitor, int requested_width,
+ProjectorSurface ProjectorService::computeSurface(const win::MonitorInfo& monitor, int requested_width,
                                                   int requested_height, std::optional<int> requested_x,
                                                   std::optional<int> requested_y, ProjectorPlacement placement)
 {
@@ -481,4 +481,4 @@ cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const Pro
     return canvas;
 }
 
-} // namespace service::projector
+} // namespace projector

@@ -15,12 +15,12 @@ namespace sl
 class StructuredLight;
 }
 
-namespace service::window
+namespace win
 {
 class WindowService;
 }
 
-namespace service::projector
+namespace projector
 {
 
 enum class ProjectorPlacement
@@ -104,11 +104,11 @@ class ProjectorService
     /// @brief WindowServiceを出力先としてProjectorServiceを構築する。
     ///
     /// Args:
-    ///   window_service <service::window::WindowService&>: pattern表示先window service。
+    ///   window_service <win::WindowService&>: pattern表示先window service。
     ///
     /// Return:
     ///   <ProjectorService>: WindowService backendを持つprojector service。
-    ProjectorService(service::window::WindowService& window_service, service::monitor::MonitorService& monitor_service);
+    ProjectorService(win::WindowService& window_service, win::MonitorService& monitor_service);
 
     /// @brief ProjectorServiceを破棄する。
     ///
@@ -250,17 +250,17 @@ class ProjectorService
     static ProjectorResult successFromSession(const ProjectorSession& session);
 
     ProjectorSurface makeDefaultSurface(int width, int height) const;
-    static ProjectorSurface computeSurface(const service::monitor::MonitorInfo& monitor, int requested_width,
+    static ProjectorSurface computeSurface(const win::MonitorInfo& monitor, int requested_width,
                                            int requested_height, std::optional<int> requested_x,
                                            std::optional<int> requested_y, ProjectorPlacement placement);
     ProjectorResult showPatternLocked(const std::string& projector_role, int index);
     static cv::Mat composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface, int pattern_index);
 
-    /// window_service_ <service::window::WindowService&>: pattern表示先window service。
-    service::window::WindowService& window_service_;
+    /// window_service_ <win::WindowService&>: pattern表示先window service。
+    win::WindowService& window_service_;
 
-    /// monitor_service_ <service::monitor::MonitorService&>: monitor情報取得service。
-    service::monitor::MonitorService& monitor_service_;
+    /// monitor_service_ <win::MonitorService&>: monitor情報取得service。
+    win::MonitorService& monitor_service_;
 
     /// mutex_ <std::mutex>: projector session mapとsession状態を保護するmutex。
     mutable std::mutex mutex_;
@@ -269,4 +269,4 @@ class ProjectorService
     std::unordered_map<std::string, ProjectorSession> sessions_;
 };
 
-} // namespace service::projector
+} // namespace projector

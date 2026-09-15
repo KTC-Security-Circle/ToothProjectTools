@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-namespace service::window
+namespace win
 {
 namespace
 {
@@ -325,7 +325,7 @@ class WindowService::WindowManagerBackend final : public WindowBackend
 
 WindowService::WindowService(win::WindowManager& windows)
     : backend_(*(owned_backend_ = std::make_unique<WindowManagerBackend>(windows))),
-      monitor_service_(*(owned_monitor_service_ = std::make_unique<service::monitor::MonitorService>())),
+      monitor_service_(*(owned_monitor_service_ = std::make_unique<win::MonitorService>())),
       gui_thread_id_(std::this_thread::get_id())
 {
     LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
@@ -335,9 +335,9 @@ WindowService::WindowService(win::WindowManager& windows)
 WindowService::WindowService(WindowBackend& backend)
     : backend_(backend),
       monitor_service_(*(
-          owned_monitor_service_ = std::make_unique<service::monitor::MonitorService>(
+          owned_monitor_service_ = std::make_unique<win::MonitorService>(
               [] {
-                  return std::vector<service::monitor::MonitorInfo>{{0, 0, 0, 1920, 1080, true, "test-monitor", false}};
+                  return std::vector<win::MonitorInfo>{{0, 0, 0, 1920, 1080, true, "test-monitor", false}};
               }))),
       gui_thread_id_(std::this_thread::get_id())
 {
@@ -345,7 +345,7 @@ WindowService::WindowService(WindowBackend& backend)
     LOG_INFO("WindowService GUI thread={}", threadIdToString(gui_thread_id_));
 }
 
-WindowService::WindowService(win::WindowManager& windows, service::monitor::MonitorService& monitor_service)
+WindowService::WindowService(win::WindowManager& windows, win::MonitorService& monitor_service)
     : backend_(*(owned_backend_ = std::make_unique<WindowManagerBackend>(windows))), monitor_service_(monitor_service),
       gui_thread_id_(std::this_thread::get_id())
 {
@@ -353,7 +353,7 @@ WindowService::WindowService(win::WindowManager& windows, service::monitor::Moni
     LOG_INFO("WindowService GUI thread={}", threadIdToString(gui_thread_id_));
 }
 
-WindowService::WindowService(WindowBackend& backend, service::monitor::MonitorService& monitor_service)
+WindowService::WindowService(WindowBackend& backend, win::MonitorService& monitor_service)
     : backend_(backend), monitor_service_(monitor_service), gui_thread_id_(std::this_thread::get_id())
 {
     LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
@@ -741,4 +741,4 @@ WindowResult WindowService::executeCloseAllWindows(CloseAllWindowsRequest& reque
     return WindowResult::success({}, win::kInvalidWindowId, 0, 0);
 }
 
-} // namespace service::window
+} // namespace win

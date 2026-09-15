@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <utility>
 
-namespace service::monitor
+namespace win
 {
 namespace
 {
@@ -102,4 +102,4 @@ std::optional<ResolvedMonitor> MonitorService::resolveMonitor(std::optional<int>
     return ResolvedMonitor{*fallback_monitor, true, monitors.size()};
 }
 
-} // namespace service::monitor
+} // namespace win

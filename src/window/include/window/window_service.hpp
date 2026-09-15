@@ -19,7 +19,7 @@ namespace win
 class WindowManager;
 }
 
-namespace service::window
+namespace win
 {
 
 struct WindowOpenConfig
@@ -137,7 +137,7 @@ class WindowService
     /// Return:
     ///   <WindowService>: WindowManagerを参照するwindow service。
     explicit WindowService(win::WindowManager& windows);
-    WindowService(win::WindowManager& windows, service::monitor::MonitorService& monitor_service);
+    WindowService(win::WindowManager& windows, win::MonitorService& monitor_service);
 
     /// @brief test用backendを利用するWindowServiceを構築する。
     ///
@@ -147,7 +147,7 @@ class WindowService
     /// Return:
     ///   <WindowService>: backend参照を保持するwindow service。
     explicit WindowService(WindowBackend& backend);
-    WindowService(WindowBackend& backend, service::monitor::MonitorService& monitor_service);
+    WindowService(WindowBackend& backend, win::MonitorService& monitor_service);
 
     /// @brief WindowServiceを破棄する。
     ///
@@ -337,8 +337,8 @@ class WindowService
     /// backend_ <WindowBackend&>: window resourceを管理するbackend。
     WindowBackend& backend_;
 
-    std::unique_ptr<service::monitor::MonitorService> owned_monitor_service_;
-    service::monitor::MonitorService& monitor_service_;
+    std::unique_ptr<win::MonitorService> owned_monitor_service_;
+    win::MonitorService& monitor_service_;
 
     /// gui_thread_id_ <std::thread::id>: HighGUI操作を実行するprocess main thread id。
     std::thread::id gui_thread_id_;
@@ -359,4 +359,4 @@ class WindowService
     std::deque<std::shared_ptr<WindowRequest>> requests_;
 };
 
-} // namespace service::window
+} // namespace win

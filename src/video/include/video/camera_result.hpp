@@ -5,7 +5,7 @@
 #include <optional>
 #include <string>
 
-namespace service::camera
+namespace video
 {
 
 /// @brief camera commandのerror情報。
@@ -56,4 +56,4 @@ struct CameraResult
     static CameraResult failure(video::CameraId camera_id, std::string role, std::string code, std::string message);
 };
 
-} // namespace service::camera
+} // namespace video

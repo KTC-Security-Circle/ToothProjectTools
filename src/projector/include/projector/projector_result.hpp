@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace service::projector
+namespace projector
 {
 
 struct ProjectorError
@@ -95,8 +95,8 @@ struct ProjectorResult
     /// clamped <bool>: requested値からclampされた場合true。
     bool clamped{false};
 
-    /// monitors <std::vector<service::monitor::MonitorInfo>>: list_monitors結果。
-    std::vector<service::monitor::MonitorInfo> monitors;
+    /// monitors <std::vector<win::MonitorInfo>>: list_monitors結果。
+    std::vector<win::MonitorInfo> monitors;
 
     /// error <std::optional<ProjectorError>>: 失敗時のerror情報。
     std::optional<ProjectorError> error;
@@ -128,4 +128,4 @@ struct ProjectorResult
     static ProjectorResult failure(std::string projector_role, std::string code, std::string message);
 };
 
-} // namespace service::projector
+} // namespace projector

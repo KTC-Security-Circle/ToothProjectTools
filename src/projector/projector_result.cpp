@@ -2,7 +2,7 @@
 
 #include <utility>
 
-namespace service::projector
+namespace projector
 {
 
 ProjectorResult ProjectorResult::success(std::string projector_role, std::string window_role, int width, int height,
@@ -29,4 +29,4 @@ ProjectorResult ProjectorResult::failure(std::string projector_role, std::string
     return result;
 }
 
-} // namespace service::projector
+} // namespace projector
