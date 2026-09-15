@@ -3,7 +3,6 @@
 
 #include "calibration/calibrator.hpp"
 #include "logger/logger_macros.hpp"
-#include "runtime/handler_context.hpp"
 #include "video/camera.hpp"
 #include "video/camera_manager.hpp"
 
@@ -97,10 +96,11 @@ bool validMonoResult(const cv::Mat& camera_matrix, const cv::Mat& dist_coeffs, d
 
 } // namespace
 
-MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const cmd::CmdCalibrate& command)
+MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator* calibrator,
+                                const cmd::CmdCalibrate& command)
 {
     const fs::path output_file{command.output_file};
-    if (!ctx.calibrator)
+    if (!calibrator)
     {
         return failure(output_file, "calibration_failed", "mono calibrator is not available");
     }
@@ -118,7 +118,7 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
     }
 
     cv::Mat K, D;
-    const double rms = ctx.calibrator->runCalibration(files, K, D);
+    const double rms = calibrator->runCalibration(files, K, D);
     cv::Size image_size;
     for (const auto& file : files)
     {
@@ -178,7 +178,7 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
 
     if (command.apply_to_camera)
     {
-        auto* cam = ctx.cameras.get(command.target_camera_id);
+        auto* cam = cameras.get(command.target_camera_id);
         if (!cam || !cam->isOpened())
         {
             return failure(output_file, "camera_not_open", "camera is not open");

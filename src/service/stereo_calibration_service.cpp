@@ -6,7 +6,6 @@
 #include "calibration/stereo_calibrator.hpp"
 #include "calibration/stereo_data.hpp"
 #include "logger/logger_macros.hpp"
-#include "runtime/handler_context.hpp"
 #include "video/camera.hpp"
 #include "video/camera_manager.hpp"
 
@@ -114,12 +113,13 @@ std::optional<cv::Size> firstImageSize(const std::vector<std::string>& files)
 
 } // namespace
 
-StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, const cmd::CmdStereoCalibrate& command)
+StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCalibrator* stereo_calibrator,
+                                  calib::StereoData& stereo_data, const cmd::CmdStereoCalibrate& command)
 {
     LOG_INFO("step1: Stereo: 計算要求 left={} right={} left_dir={} right_dir={} output_file={}",
              command.left_cam_id, command.right_cam_id, command.left_dir, command.right_dir, command.output_file);
     const fs::path output_file{command.output_file};
-    if (!ctx.stereo_calibrator)
+    if (!stereo_calibrator)
     {
         return failure(output_file, "stereo_calibration_failed", "stereo calibrator is not available");
     }
@@ -146,8 +146,8 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
 
     if (command.apply_to_camera)
     {
-        auto* cL = ctx.cameras.get(command.left_cam_id);
-        auto* cR = ctx.cameras.get(command.right_cam_id);
+        auto* cL = cameras.get(command.left_cam_id);
+        auto* cR = cameras.get(command.right_cam_id);
         if (!cL || !cL->isOpened())
         {
             return failure(output_file, "camera_not_open", "left camera is not open");
@@ -213,7 +213,7 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     double rms = 0.0;
     try
     {
-        rms = ctx.stereo_calibrator->run(fL, fR, K1, D1, K2, D2, res);
+        rms = stereo_calibrator->run(fL, fR, K1, D1, K2, D2, res);
     }
     catch (const cv::Exception& error)
     {
@@ -271,7 +271,7 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     }
 
     LOG_INFO("Stereo: 成功! RMS={}", rms);
-    ctx.stereo_data = res;
+    stereo_data = res;
 
     StereoCalibrationResult result;
     result.ok = true;

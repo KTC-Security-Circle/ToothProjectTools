@@ -6,10 +6,8 @@
 #include <optional>
 #include <string>
 
-namespace runtime
-{
-struct StereoCalibrationCalcContext;
-}
+namespace calib { class StereoCalibrator; struct StereoData; }
+namespace video { class CameraManager; }
 
 namespace service::stereo_calibration
 {
@@ -41,11 +39,14 @@ struct StereoCalibrationResult
 /// @brief 保存済み左右画像pairからstereo calibrationを実行する。
 ///
 /// Args:
-///   ctx <runtime::StereoCalibrationCalcContext&>: camera manager、stereo calibrator、結果保存先を持つcontext。
+///   cameras <video::CameraManager&>: calibration対象cameraを管理するmanager。
+///   stereo_calibrator <calib::StereoCalibrator*>: stereo calibration計算器。nullの場合は失敗を返す。
+///   stereo_data <calib::StereoData&>: 成功したcalibration結果の保存先。
 ///   command <const cmd::CmdStereoCalibrate&>: stereo calibration command。
 ///
 /// Return:
 ///   <StereoCalibrationResult>: calibration成否、RMS、出力file、失敗時error。
-StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, const cmd::CmdStereoCalibrate& command);
+StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCalibrator* stereo_calibrator,
+                                  calib::StereoData& stereo_data, const cmd::CmdStereoCalibrate& command);
 
 } // namespace service::stereo_calibration

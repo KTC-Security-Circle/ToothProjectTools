@@ -6,10 +6,8 @@
 #include <optional>
 #include <string>
 
-namespace runtime
-{
-struct MonoCalibrationCalcContext;
-}
+namespace calib { class Calibrator; }
+namespace video { class CameraManager; }
 
 namespace service::calibration
 {
@@ -41,11 +39,13 @@ struct MonoCalibrationResult
 /// @brief 保存済み単眼画像からmono calibrationを実行する。
 ///
 /// Args:
-///   ctx <runtime::MonoCalibrationCalcContext&>: camera managerとcalibratorを持つ計算用context。
+///   cameras <video::CameraManager&>: calibration結果の適用先cameraを管理するmanager。
+///   calibrator <calib::Calibrator*>: mono calibration計算器。nullの場合は失敗を返す。
 ///   command <const cmd::CmdCalibrate&>: mono calibration command。
 ///
 /// Return:
 ///   <MonoCalibrationResult>: calibration成否、RMS、出力file、失敗時error。
-MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const cmd::CmdCalibrate& command);
+MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator* calibrator,
+                                const cmd::CmdCalibrate& command);
 
 } // namespace service::calibration
