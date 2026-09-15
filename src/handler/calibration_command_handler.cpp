@@ -9,36 +9,6 @@
 namespace handler::calibration
 {
 
-common::CommandResult handle(runtime::CalibrationHandlerContext& ctx, win::Window& target_window, const cmd::Command& command)
-{
-    return std::visit(
-        [&](auto&& c) -> common::CommandResult
-        {
-            using T = std::decay_t<decltype(c)>;
-
-            if constexpr (std::is_same_v<T, cmd::CmdCalibClear>)
-            {
-                service::calibration::clear(ctx, target_window, c);
-                return common::success();
-            }
-            else if constexpr (std::is_same_v<T, cmd::CmdCalibCapture>)
-            {
-                service::calibration::capture(ctx, target_window, c);
-                return common::success();
-            }
-            else if constexpr (std::is_same_v<T, cmd::CmdCalibrate>)
-            {
-                const auto result = service::calibration::calibrate(ctx, c);
-                return command_result_mapper::calibration::toCommandResult(c.role, c, result);
-            }
-            else
-            {
-                return common::notHandled();
-            }
-        },
-        command);
-}
-
 common::CommandResult handle(runtime::MonoCalibrationCalcContext& ctx, const cmd::Command& command)
 {
     return std::visit(

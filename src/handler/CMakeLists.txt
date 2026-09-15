@@ -1,18 +1,13 @@
 add_library(handler STATIC
     camera_command_handler.cpp
-    global_command_handler.cpp
-    gui_scan_command_handler.cpp
-    window_command_handler.cpp
     window_resource_command_handler.cpp
     projector_command_handler.cpp
-    pattern_command_handler.cpp
     scan_command_handler.cpp
     scan_dataset_command_handler.cpp
     decode_command_handler.cpp
     calibration_command_handler.cpp
     capture_command_handler.cpp
     stereo_calibration_command_handler.cpp
-    reconstruction_command_handler.cpp
     reconstruction_point_cloud_command_handler.cpp
 )
 
@@ -30,9 +25,7 @@ target_link_libraries(handler
     command_result_mapper
   PRIVATE
     runtime
-    window
     video
-    structured_light
     calibration
     service
     capture

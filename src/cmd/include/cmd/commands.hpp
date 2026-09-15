@@ -8,24 +8,6 @@
 
 namespace cmd {
 
-struct CmdToggleFullscreen { };
-struct CmdMoveToMonitor   { int index; };
-struct CmdQuit            { };
-struct CmdFocusNext       { };
-
-// プッシュ撮影のスコープ種別
-enum class CaptureScope {
-  FocusedOnly,  // フォーカス中の window_id のみ撮影
-  CameraGroup   // 同じ camera_id に紐づく全 window_id を撮影
-};
-
-// プッシュ撮影コマンド
-struct CmdCapturePush {
-  CaptureScope           scope{CaptureScope::FocusedOnly};
-  std::optional<int>     camera_id{};  // 省略時はフォーカス中ウィンドウの camera_id を使用
-  std::string            tag{};        // 任意ラベル（保存名等に使う想定）
-};
-
 /// @brief camera deviceをopenし、runtime上のcamera roleへbindするcommand。
 struct CmdOpenCamera {
   /// camera_id <video::CameraId>: OpenCVへ渡すcamera device index。
@@ -177,13 +159,6 @@ struct CmdCaptureStereo {
   std::filesystem::path right_output_path;
 };
 
-struct CmdShowPattern { 
-  int index; 
-};
-
-struct CmdNextPattern {}; 
-struct CmdPrevPattern {};
-
 struct CmdStartScan
 {
     /// scan_id <std::optional<std::string>>: scan session識別子。
@@ -295,11 +270,6 @@ struct CmdCalibrate {
   bool apply_to_camera{false};
 };
 
-// キャリブレーション用フォルダのクリア
-struct CmdCalibClear {
-    std::string target_directory;
-};
-
 // キャリブレーション画像の撮影と保存
 struct CmdCalibCapture {
     video::CameraId camera_id;
@@ -343,19 +313,7 @@ struct ReconstructionGeometryConfig { double max_epipolar_error_px{2.0}; std::op
 struct CmdValidateReconstruction { std::filesystem::path decode_dir; std::filesystem::path calibration_file; ReconstructionGeometryConfig config; };
 struct CmdReconstructPointCloud { std::filesystem::path decode_dir; std::filesystem::path calibration_file; std::filesystem::path output_file; ReconstructionGeometryConfig config; bool overwrite{false}; };
 
-struct CmdReconstruct {
-    std::string calib_file = "calibration_stereo.yml";
-    std::string scan_dir_L = "scans/L";
-    std::string scan_dir_R = "scans/R";
-    std::string output_ply = "reconstruction.ply";
-};
-
 using Command = std::variant<
-  CmdToggleFullscreen,
-  CmdMoveToMonitor,
-  CmdQuit,
-  CmdFocusNext,
-  CmdCapturePush,
   CmdOpenCamera,
   CmdCloseCamera,
   CmdOpenWindow,
@@ -370,19 +328,14 @@ using Command = std::variant<
   CmdProjectorPrevPattern,
   CmdCaptureFrame,
   CmdCaptureStereo,
-  CmdShowPattern,
-  CmdNextPattern,
-  CmdPrevPattern,
   CmdStartScan,
   CmdScanStatus,
   CmdStopScan,
   CmdValidateScanDataset,
   CmdDecodePatterns,
   CmdCalibrate,
-  CmdCalibClear,
   CmdCalibCapture,
   CmdStereoCalibrate,
-  CmdReconstruct,
   CmdValidateReconstruction,
   CmdReconstructPointCloud
 >;

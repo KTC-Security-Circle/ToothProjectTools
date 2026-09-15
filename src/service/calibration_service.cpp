@@ -2,22 +2,16 @@
 #include "service/atomic_calibration_file.hpp"
 
 #include "calibration/calibrator.hpp"
-#include "capture/capture_result.hpp"
-#include "capture/capture_service.hpp"
 #include "logger/logger_macros.hpp"
 #include "runtime/handler_context.hpp"
 #include "video/camera.hpp"
 #include "video/camera_manager.hpp"
-#include "window/window.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
-#include <iomanip>
-#include <iterator>
 #include <opencv2/core.hpp>
 #include <opencv2/imgcodecs.hpp>
-#include <sstream>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -102,54 +96,6 @@ bool validMonoResult(const cv::Mat& camera_matrix, const cv::Mat& dist_coeffs, d
 }
 
 } // namespace
-
-void clear(runtime::CalibrationHandlerContext& ctx, win::Window& target_window, const cmd::CmdCalibClear& command)
-{
-    if (target_window.id() == ctx.preview_window_id && !command.target_directory.empty())
-    {
-        fs::remove_all(command.target_directory);
-        fs::create_directories(command.target_directory);
-        LOG_INFO("Calib: フォルダクリア {}", command.target_directory);
-    }
-}
-
-void capture(runtime::CalibrationHandlerContext& ctx, win::Window& target_window,
-             const cmd::CmdCalibCapture& command)
-{
-    if (command.camera_id == video::kInvalidCameraId)
-    {
-        return;
-    }
-
-    auto it = ctx.camera_windows.find(command.camera_id);
-    if (it != ctx.camera_windows.end() && it->second != target_window.id())
-    {
-        return;
-    }
-
-    if (!fs::exists(command.target_directory))
-    {
-        fs::create_directories(command.target_directory);
-    }
-
-    auto cnt = std::distance(fs::directory_iterator(command.target_directory), fs::directory_iterator{});
-    std::stringstream ss;
-    ss << command.target_directory << "/" << command.prefix << std::setfill('0') << std::setw(3) << cnt << ".png";
-
-    const auto result = ctx.capture_service.captureFrame(command.camera_id, ss.str());
-    if (!result.ok && result.error)
-    {
-        LOG_ERROR("Calib Capture: failed code={} message={}",
-                  capture::toString(result.error->code),
-                  result.error->message);
-        return;
-    }
-
-    if (auto* cam = ctx.cameras.get(command.camera_id))
-    {
-        LOG_INFO("Saved[{}]: {}", cam->name(), result.output_path.string());
-    }
-}
 
 MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const cmd::CmdCalibrate& command)
 {
@@ -247,12 +193,6 @@ MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const 
     result.rms = rms;
     result.output_file = output_file;
     return result;
-}
-
-MonoCalibrationResult calibrate(runtime::CalibrationHandlerContext& ctx, const cmd::CmdCalibrate& command)
-{
-    runtime::MonoCalibrationCalcContext calc_ctx{ctx.cameras, ctx.calibrator};
-    return calibrate(calc_ctx, command);
 }
 
 } // namespace service::calibration

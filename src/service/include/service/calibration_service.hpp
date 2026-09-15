@@ -8,13 +8,7 @@
 
 namespace runtime
 {
-struct CalibrationHandlerContext;
 struct MonoCalibrationCalcContext;
-}
-
-namespace win
-{
-class Window;
 }
 
 namespace service::calibration
@@ -44,9 +38,6 @@ struct MonoCalibrationResult
     std::optional<MonoCalibrationError> error;
 };
 
-void clear(runtime::CalibrationHandlerContext& ctx, win::Window& target_window, const cmd::CmdCalibClear& command);
-void capture(runtime::CalibrationHandlerContext& ctx, win::Window& target_window, const cmd::CmdCalibCapture& command);
-
 /// @brief 保存済み単眼画像からmono calibrationを実行する。
 ///
 /// Args:
@@ -56,15 +47,5 @@ void capture(runtime::CalibrationHandlerContext& ctx, win::Window& target_window
 /// Return:
 ///   <MonoCalibrationResult>: calibration成否、RMS、出力file、失敗時error。
 MonoCalibrationResult calibrate(runtime::MonoCalibrationCalcContext& ctx, const cmd::CmdCalibrate& command);
-
-/// @brief GUI用contextから保存済み単眼画像のmono calibrationを実行する。
-///
-/// Args:
-///   ctx <runtime::CalibrationHandlerContext&>: GUI handler用context。
-///   command <const cmd::CmdCalibrate&>: mono calibration command。
-///
-/// Return:
-///   <MonoCalibrationResult>: calibration成否、RMS、出力file、失敗時error。
-MonoCalibrationResult calibrate(runtime::CalibrationHandlerContext& ctx, const cmd::CmdCalibrate& command);
 
 } // namespace service::calibration

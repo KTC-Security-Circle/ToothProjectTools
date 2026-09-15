@@ -280,12 +280,4 @@ StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, co
     return result;
 }
 
-StereoCalibrationResult calibrate(runtime::StereoCalibrationHandlerContext& ctx, const cmd::CmdStereoCalibrate& command)
-{
-    LOG_INFO("step0: Stereo: 計算要求 left={} right={} left_dir={} right_dir={} output_file={}",
-             command.left_cam_id, command.right_cam_id, command.left_dir, command.right_dir, command.output_file);
-    runtime::StereoCalibrationCalcContext calc_ctx{ctx.cameras, ctx.stereo_calibrator, ctx.stereo_data};
-    return calibrate(calc_ctx, command);
-}
-
 } // namespace service::stereo_calibration

@@ -1,9 +1,6 @@
 #pragma once
 
 #include "video/video_types.hpp"
-#include "window/window_types.hpp"
-
-#include <map>
 
 namespace calib
 {
@@ -11,11 +8,6 @@ class Calibrator;
 class StereoCalibrator;
 struct StereoData;
 } // namespace calib
-
-namespace sl
-{
-class StructuredLight;
-}
 
 namespace video
 {
@@ -55,33 +47,10 @@ class DecodeService;
 }
 } // namespace service
 
-namespace win
-{
-class WindowManager;
-}
-
 namespace reconstruction { class ReconstructionService; }
 
 namespace runtime
 {
-
-struct AppContext;
-
-struct GlobalHandlerContext
-{
-    win::WindowManager& windows;
-    bool& running;
-    win::WindowId& focused_id;
-};
-
-struct WindowHandlerContext
-{
-};
-
-struct PatternHandlerContext
-{
-    sl::StructuredLight* structured_light;
-};
 
 struct ScanHandlerContext
 {
@@ -99,16 +68,6 @@ struct DecodeHandlerContext
 {
     /// decode_service <service::decode::DecodeService&>: pattern decode service。
     service::decode::DecodeService& decode_service;
-};
-
-struct CalibrationHandlerContext
-{
-    video::CameraManager& cameras;
-    /// capture_service <capture::CaptureService&>: calibration画像保存を実行するCapture用domain service。
-    capture::CaptureService& capture_service;
-    calib::Calibrator* calibrator;
-    const std::map<video::CameraId, win::WindowId>& camera_windows;
-    win::WindowId preview_window_id;
 };
 
 struct MonoCalibrationCalcContext
@@ -145,13 +104,6 @@ struct ProjectorHandlerContext
     service::projector::ProjectorService& projector_service;
 };
 
-struct StereoCalibrationHandlerContext
-{
-    video::CameraManager& cameras;
-    calib::StereoCalibrator* stereo_calibrator;
-    calib::StereoData& stereo_data;
-};
-
 struct StereoCalibrationCalcContext
 {
     /// cameras <video::CameraManager&>: stereo calibration対象cameraを取得するmanager。
@@ -165,26 +117,5 @@ struct StereoCalibrationCalcContext
 };
 
 struct ReconstructionPointCloudHandlerContext { reconstruction::ReconstructionService& reconstruction_service; };
-
-struct ReconstructionHandlerContext
-{
-    win::WindowId preview_window_id;
-};
-
-GlobalHandlerContext make_global_handler_context(AppContext& ctx);
-WindowHandlerContext make_window_handler_context(AppContext& ctx);
-PatternHandlerContext make_pattern_handler_context(AppContext& ctx);
-CalibrationHandlerContext make_calibration_handler_context(AppContext& ctx);
-StereoCalibrationHandlerContext make_stereo_calibration_handler_context(AppContext& ctx);
-ReconstructionHandlerContext make_reconstruction_handler_context(AppContext& ctx);
-
-/// @brief AppContextからCaptureHandlerContextを作成する。
-///
-/// Args:
-///   ctx <AppContext&>: CaptureServiceを所有するapplication context。
-///
-/// Return:
-///   <CaptureHandlerContext>: CaptureHandlerへ渡すcontext。
-CaptureHandlerContext make_capture_handler_context(AppContext& ctx);
 
 } // namespace runtime

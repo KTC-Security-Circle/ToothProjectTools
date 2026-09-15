@@ -8,7 +8,6 @@
 
 namespace runtime
 {
-struct StereoCalibrationHandlerContext;
 struct StereoCalibrationCalcContext;
 }
 
@@ -48,15 +47,5 @@ struct StereoCalibrationResult
 /// Return:
 ///   <StereoCalibrationResult>: calibration成否、RMS、出力file、失敗時error。
 StereoCalibrationResult calibrate(runtime::StereoCalibrationCalcContext& ctx, const cmd::CmdStereoCalibrate& command);
-
-/// @brief GUI用contextから保存済み左右画像pairのstereo calibrationを実行する。
-///
-/// Args:
-///   ctx <runtime::StereoCalibrationHandlerContext&>: GUI handler用context。
-///   command <const cmd::CmdStereoCalibrate&>: stereo calibration command。
-///
-/// Return:
-///   <StereoCalibrationResult>: calibration成否、RMS、出力file、失敗時error。
-StereoCalibrationResult calibrate(runtime::StereoCalibrationHandlerContext& ctx, const cmd::CmdStereoCalibrate& command);
 
 } // namespace service::stereo_calibration
