@@ -34,6 +34,7 @@
 #include <optional>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <variant>
@@ -262,6 +263,46 @@ void writeSyntheticGrayCodeDataset(const std::filesystem::path& dir, int project
         (void)left_written;
         (void)right_written;
     }
+}
+
+void testStructuredLightPatternGeneration()
+{
+    constexpr int width = 32;
+    constexpr int height = 24;
+    const auto require = [](bool condition, const char* message) {
+        if (!condition)
+        {
+            throw std::runtime_error(message);
+        }
+    };
+    sl::StructuredLight structured_light{width, height};
+
+    structured_light.generatePatterns();
+
+    const auto pattern_count = structured_light.getPatternCount();
+    require(pattern_count > 2, "StructuredLight did not generate Gray Code and reference patterns");
+    for (std::size_t index = 0; index < pattern_count; ++index)
+    {
+        const auto& pattern = structured_light.getPattern(index);
+        require(pattern.cols == width, "StructuredLight pattern width does not match logical resolution");
+        require(pattern.rows == height, "StructuredLight pattern height does not match logical resolution");
+    }
+
+    const auto& white = structured_light.getPattern(pattern_count - 2);
+    const auto& black = structured_light.getPattern(pattern_count - 1);
+    require(cv::countNonZero(white != 255) == 0, "StructuredLight penultimate pattern is not white");
+    require(cv::countNonZero(black) == 0, "StructuredLight final pattern is not black");
+
+    bool out_of_range_thrown = false;
+    try
+    {
+        (void)structured_light.getPattern(pattern_count);
+    }
+    catch (const std::out_of_range&)
+    {
+        out_of_range_thrown = true;
+    }
+    require(out_of_range_thrown, "StructuredLight out-of-range access did not throw");
 }
 
 void enableCameraRoiSync(const std::filesystem::path& dir, int roi_x, int roi_y, int roi_width, int roi_height,
@@ -1861,6 +1902,7 @@ void testCommandExecutorDomainRouting()
 
 int main()
 {
+    testStructuredLightPatternGeneration();
     testMapper();
     testWindowMapper();
     testProjectorMapper();
