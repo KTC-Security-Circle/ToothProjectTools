@@ -1,4 +1,5 @@
 #include "scan/scan_service.hpp"
+#include "scan/camera_roi_sync_tracker.hpp"
 
 #include "capture/capture_result.hpp"
 #include "capture/capture_service.hpp"
@@ -340,8 +341,11 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         return;
     }
 
-    auto previous_stable_state = structured_light::sync::MarkerState::undecided;
-    std::uint64_t last_evaluated_sequence = 0;
+    const structured_light::sync::RoiSyncConfig roi_config{
+        cv::Rect(config.roi_x, config.roi_y, config.roi_width, config.roi_height),
+        static_cast<double>(config.roi_black_threshold), static_cast<double>(config.roi_white_threshold),
+        config.sync_stable_frames};
+    CameraRoiSyncTracker roi_sync_tracker(roi_config, std::chrono::milliseconds(config.sync_guard_ms));
     for (int index = 0; index < pattern_count; ++index)
     {
         if (stop_token.stop_requested())
@@ -395,52 +399,27 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         auto selected_at = show_timestamp + std::chrono::milliseconds(config.settle_ms);
         if (config.sync_source == "camera_roi")
         {
-            const structured_light::sync::RoiSyncConfig roi_config{
-                cv::Rect(config.roi_x, config.roi_y, config.roi_width, config.roi_height),
-                static_cast<double>(config.roi_black_threshold), static_cast<double>(config.roi_white_threshold),
-                config.sync_stable_frames};
             const auto expected = (index % 2 == 0) ? structured_light::sync::MarkerState::black
                                                     : structured_light::sync::MarkerState::white;
-            int stable = 0;
-            bool saw_transition_candidate = previous_stable_state == structured_light::sync::MarkerState::undecided;
-            const auto deadline = show_timestamp + std::chrono::milliseconds(config.sync_timeout_ms);
-            while (!stop_token.stop_requested() && std::chrono::steady_clock::now() < deadline)
+            roi_sync_tracker.beginPattern(expected, show_timestamp,
+                                          std::chrono::milliseconds(config.sync_timeout_ms));
+            while (!stop_token.stop_requested() && !roi_sync_tracker.timedOut(std::chrono::steady_clock::now()))
             {
                 const auto sample = camera_service_.latestFrame(*left_id);
-                if (!sample || sample->timestamp < show_timestamp)
+                if (!sample)
                 {
                     std::this_thread::sleep_for(std::chrono::milliseconds(2));
                     continue;
                 }
-                if (sample->sequence == last_evaluated_sequence)
+                const auto decision = roi_sync_tracker.observe(*sample);
+                if (decision.status == CameraRoiSyncStatus::transition_confirmed)
                 {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                    continue;
-                }
-                last_evaluated_sequence = sample->sequence;
-                const auto observation = structured_light::sync::observeRoi(sample->image, roi_config,
-                                                                            previous_stable_state);
-                if (previous_stable_state != structured_light::sync::MarkerState::undecided &&
-                    observation.state != previous_stable_state)
-                    saw_transition_candidate = true;
-                if (observation.state != expected && observation.state != structured_light::sync::MarkerState::undecided)
-                {
-                    saw_transition_candidate = true;
-                    stable = 0;
-                }
-                else if (observation.state == expected && saw_transition_candidate)
-                    stable++;
-                else
-                    stable = 0;
-                if (saw_transition_candidate && stable >= config.sync_stable_frames)
-                {
-                    previous_stable_state = expected;
-                    selected_at = sample->timestamp + std::chrono::milliseconds(config.sync_guard_ms);
+                    selected_at = *decision.selected_at;
                     break;
                 }
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
             }
-            if (stable < config.sync_stable_frames)
+            if (!roi_sync_tracker.confirmed())
             {
                 std::lock_guard lock(mutex_);
                 state_ = ScanState::failed;
