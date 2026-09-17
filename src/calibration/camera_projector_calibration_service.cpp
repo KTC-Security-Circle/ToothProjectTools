@@ -35,6 +35,11 @@ bool supportedMap(const cv::Mat& value)
     return value.channels() == 1 && (value.type() == CV_32S || value.type() == CV_32F);
 }
 
+bool supportedReference(const cv::Mat& value)
+{
+    return value.type() == CV_8UC1 || value.type() == CV_8UC3;
+}
+
 bool validDecodedCoordinates(const cv::Mat& projector_x, const cv::Mat& projector_y,
                              const cv::Mat& mask, cv::Size projector_size)
 {
@@ -118,6 +123,7 @@ ServiceResult CameraProjectorCalibrationService::calibrate(const CalibrationConf
         const auto decode_left = pose_dir / "decode" / "left";
         const auto mask = cv::imread((decode_left / "valid_mask.png").string(), cv::IMREAD_UNCHANGED);
         if (before.empty() || after.empty() || before.size() != after.size() ||
+            !supportedReference(before) || !supportedReference(after) ||
             !loadMap(decode_left / "projector_x.yml", "projector_x", projector_x) ||
             !loadMap(decode_left / "projector_y.yml", "projector_y", projector_y) ||
             !supportedMap(projector_x) || !supportedMap(projector_y) || mask.empty() ||
@@ -134,9 +140,18 @@ ServiceResult CameraProjectorCalibrationService::calibrate(const CalibrationConf
             camera_size != cv::Size{mono->image_width, mono->image_height}))
             return failure(config, "camera_projector_artifact_load_failed", "camera image sizes are inconsistent");
 
-        const auto observation = makeObservation(before, after, projector_x, projector_y, mask, config.board_size,
-                                                 config.square_size_mm, config.max_mean_displacement_px,
-                                                 config.max_corner_displacement_px);
+        ObservationResult observation;
+        try
+        {
+            observation = makeObservation(before, after, projector_x, projector_y, mask, config.board_size,
+                                          config.square_size_mm, config.max_mean_displacement_px,
+                                          config.max_corner_displacement_px);
+        }
+        catch (const cv::Exception& exception)
+        {
+            diagnostic.reason = "observation processing failed: " + std::string{exception.what()};
+            artifact_failure = true; result.poses.push_back(std::move(diagnostic)); continue;
+        }
         diagnostic.accepted = observation.valid;
         diagnostic.reason = observation.error;
         diagnostic.mean_corner_displacement_px = observation.mean_corner_displacement;
@@ -180,7 +195,14 @@ ServiceResult CameraProjectorCalibrationService::calibrate(const CalibrationConf
         std::filesystem::create_hard_link(*temporary, config.output_file, ec);
         if (!ec) { std::error_code cleanup_error; std::filesystem::remove(*temporary, cleanup_error); }
     }
-    if (ec) { std::filesystem::remove(*temporary, ec); return failure(config, "camera_projector_output_write_failed", "failed to replace output file"); }
+    if (ec)
+    {
+        const auto publish_error = ec;
+        std::error_code cleanup_error; std::filesystem::remove(*temporary, cleanup_error);
+        if (!config.overwrite && publish_error == std::errc::file_exists)
+            return failure(config, "camera_projector_output_exists", "output_file already exists");
+        return failure(config, "camera_projector_output_write_failed", "failed to replace output file: " + publish_error.message());
+    }
     result.ok = true; result.projector_rms = solved.projector_rms; result.stereo_rms = solved.stereo_rms;
     return result;
 }

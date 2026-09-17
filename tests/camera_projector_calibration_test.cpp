@@ -161,6 +161,12 @@ void testOfflineDatasetService()
     assert(std::filesystem::exists(config.output_file));
     auto exists=service.calibrate(config); assert(!exists.ok && exists.error_code=="camera_projector_output_exists");
     config.overwrite=true; result=service.calibrate(config); assert(result.ok);
+    cv::Mat reference=cv::imread((root/"observations"/"pose_004"/"reference_before.png").string(),cv::IMREAD_GRAYSCALE);
+    cv::Mat reference16; reference.convertTo(reference16,CV_16U,257.0);
+    cv::imwrite((root/"observations"/"pose_004"/"reference_before.png").string(),reference16);
+    config.output_file=root/"unsupported-reference-rejected.yml"; config.overwrite=false; result=service.calibrate(config);
+    assert(result.ok && result.accepted_pose_count==4 && result.rejected_pose_count==1);
+    writePose(root/"observations"/"pose_004",4,camera_k,projector_k);
     cv::Mat malformed;
     { cv::FileStorage s((root/"observations"/"pose_004"/"decode"/"left"/"projector_x.yml").string(),cv::FileStorage::READ); s["projector_x"]>>malformed; }
     malformed.at<float>(240,320)=std::numeric_limits<float>::quiet_NaN();
