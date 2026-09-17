@@ -42,6 +42,10 @@
 
 namespace
 {
+void requireCameraProjector(bool condition, const char* message)
+{
+    if (!condition) throw std::runtime_error(message);
+}
 
 class FakeWindowBackend final : public win::WindowBackend
 {
@@ -1901,7 +1905,7 @@ void testCommandExecutorDomainRouting()
 
     result = runtime.executor.execute(cmd::Command{cmd::CmdCameraProjectorCalibrate{
         missing, missing / "mono.yml", missing / "camera-projector.yml", 10, 7, 12.5, 1.0, 2.0, false}});
-    assert(result.handled && !result.ok);
+    requireCameraProjector(result.handled && !result.ok, "Camera-Projector Executor path did not return failure");
 }
 
 void testCameraProjectorMapper()
@@ -1911,14 +1915,17 @@ void testCameraProjectorMapper()
     auto message=messageWithId(); message.observations_dir="observations"; message.camera_calibration_file="mono.yml";
     message.output_file="camera-projector.yml"; message.board_corners_x=10; message.board_corners_y=7;
     message.square_size_mm=12.5; message.max_mean_displacement_px=1.0; message.max_corner_displacement_px=2.0;
-    auto mapped=mapper.mapCameraProjectorCalibrate(message); assert(mapped.ok);
+    auto mapped=mapper.mapCameraProjectorCalibrate(message);
+    requireCameraProjector(mapped.ok, "valid Camera-Projector command did not map");
     const auto command=std::get<cmd::CmdCameraProjectorCalibrate>(*mapped.command);
-    assert(!command.overwrite && command.square_size_mm==12.5);
+    requireCameraProjector(!command.overwrite && command.square_size_mm==12.5, "mapped values differ");
     message.overwrite=true; mapped=mapper.mapCameraProjectorCalibrate(message);
-    assert(std::get<cmd::CmdCameraProjectorCalibrate>(*mapped.command).overwrite);
-    message.square_size_mm=0.0; assert(!mapper.mapCameraProjectorCalibrate(message).ok);
+    requireCameraProjector(std::get<cmd::CmdCameraProjectorCalibrate>(*mapped.command).overwrite,
+                           "overwrite was not mapped");
+    message.square_size_mm=0.0;
+    requireCameraProjector(!mapper.mapCameraProjectorCalibrate(message).ok, "zero square size was accepted");
     message.square_size_mm=12.5; message.board_corners_x.reset();
-    assert(!mapper.mapCameraProjectorCalibrate(message).ok);
+    requireCameraProjector(!mapper.mapCameraProjectorCalibrate(message).ok, "missing board size was accepted");
 }
 
 } // namespace
