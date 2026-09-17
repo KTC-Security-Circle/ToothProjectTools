@@ -51,8 +51,6 @@ public:
   Id id() const noexcept { return id_; }
   int index() const noexcept { return options_.device_index; }
   const std::string& name() const noexcept { return name_; }
-  int monitorIndex() const noexcept { return monitor_index_; }
-  void setMonitorIndex(int monitor_index_value) { monitor_index_ = monitor_index_value; }
 
   // キャリブレーション
   void setIntrinsics(const cv::Mat& camera_matrix);
@@ -70,7 +68,6 @@ private:
   CameraOptions options_;
   Id id_{0};
   std::string name_;
-  int monitor_index_{1};
 
   bool is_opened_{false};
   cv::VideoCapture* capture_ptr_{nullptr};

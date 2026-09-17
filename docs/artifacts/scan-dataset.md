@@ -16,7 +16,6 @@ scan_dataset/
 ## 生成するcommand
 
 - `scan_start`
-- GUI scan
 
 ## 読むcommand
 

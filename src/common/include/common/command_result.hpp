@@ -18,7 +18,7 @@ struct CommandError
     std::string message;
 };
 
-/// @brief handler/dispatcherで共通利用するcommand実行結果。
+/// @brief Command Executorで共通利用するcommand実行結果。
 struct CommandResult
 {
     /// handled <bool>: commandがhandlerまたはdispatcherで処理対象だったか。

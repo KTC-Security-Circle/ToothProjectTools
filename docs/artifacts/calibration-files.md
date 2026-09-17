@@ -11,7 +11,6 @@ mono calibration file は単眼cameraの内部parameterを保存するfileであ
 ### 読むcommand
 
 - `stereo_calibrate`
-- GUI calibration
 
 ### 必須field
 
@@ -47,7 +46,6 @@ stereo calibration file はleft/right camera間の外部parameterを保存する
 ### 読むcommand
 
 - `reconstruct_point_cloud`
-- GUI 3D復元
 
 ### 必須field
 

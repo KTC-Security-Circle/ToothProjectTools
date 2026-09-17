@@ -3,7 +3,7 @@
 #include "control/control_input_adapter.hpp"
 #include "control/json_line_reader.hpp"
 #include "control/json_line_writer.hpp"
-#include "service/sidecar_service.hpp"
+#include "serve/sidecar_service.hpp"
 #include "stream/mjpeg_server.hpp"
 #include "stream/stream_registry.hpp"
 
@@ -42,7 +42,7 @@ private:
 
   ServeOptions options_;
   stream::StreamRegistry streams_;
-  service::SidecarService service_;
+  SidecarService service_;
   stream::MjpegServer mjpeg_server_;
   control::JsonLineReader reader_;
   control::JsonLineWriter writer_;

@@ -306,12 +306,10 @@ backendはstdinから1行1JSON形式のcommandを受け取り、stdoutへrespons
 │   ├── check_camera_stream_scan.sh
 │   └── run_structured_light_scan_test.sh
 ├── src/
-│   ├── app/
 │   ├── calib/
 │   ├── cmd/
 │   ├── common/
 │   ├── control/
-│   ├── input/
 │   ├── logger/
 │   ├── runtime/
 │   ├── service/

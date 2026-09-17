@@ -127,19 +127,15 @@ add_subdirectory(src/video)
 add_subdirectory(src/capture)
 add_subdirectory(src/stream)
 add_subdirectory(src/structured_light)
-add_subdirectory(src/calibration)
 add_subdirectory(src/reconstruction)
 add_subdirectory(src/cmd)
-add_subdirectory(src/input)
-add_subdirectory(src/runtime)  # INTERFACE ターゲット（依存の伝播先）
-add_subdirectory(src/service)
-add_subdirectory(src/command_result_mapper)
-add_subdirectory(src/handler)
+add_subdirectory(src/calibration)
+add_subdirectory(src/projector)
+add_subdirectory(src/scan)
+add_subdirectory(src/decode)
 add_subdirectory(src/headless)
 add_subdirectory(src/control)
 add_subdirectory(src/serve)
-add_subdirectory(src/dispatch)  # INTERFACE ターゲット（依存の伝播先）
-add_subdirectory(src/app)     # 実行ファイル（logger + project_wiring に依存）
 
 enable_testing()
 add_subdirectory(tests)

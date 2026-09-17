@@ -31,3 +31,13 @@ endif()
 target_link_libraries(window PRIVATE X11::X11 ${XRANDR_LIB})
 
 target_compile_features(window PUBLIC cxx_std_20)
+
+add_library(monitor_service STATIC monitor_service.cpp)
+target_include_directories(monitor_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(monitor_service PUBLIC window PRIVATE logger)
+target_compile_features(monitor_service PUBLIC cxx_std_20)
+
+add_library(window_service STATIC window_result.cpp window_service.cpp)
+target_include_directories(window_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(window_service PUBLIC window monitor_service PRIVATE logger)
+target_compile_features(window_service PUBLIC cxx_std_20)

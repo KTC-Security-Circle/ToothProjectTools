@@ -10,13 +10,10 @@ namespace control
 struct ControlMessage;
 }
 
-namespace service
-{
-namespace camera
+namespace video
 {
 class CameraService;
-}
-} // namespace service
+} // namespace video
 
 namespace headless
 {
@@ -39,11 +36,11 @@ class HeadlessCommandMapper
     /// @brief CameraServiceのrole bindingを参照してHeadlessCommandMapperを構築する。
     ///
     /// Args:
-    ///   camera_service <service::camera::CameraService&>: roleからcamera_idを解決するdomain service。
+    ///   camera_service <video::CameraService&>: roleからcamera_idを解決するdomain service。
     ///
     /// Return:
     ///   <HeadlessCommandMapper>: CameraService参照を保持するmapper。
-    explicit HeadlessCommandMapper(service::camera::CameraService& camera_service);
+    explicit HeadlessCommandMapper(video::CameraService& camera_service);
 
     /// @brief open_camera用ControlMessageをCmdOpenCameraへ変換する。
     ///
@@ -225,8 +222,8 @@ class HeadlessCommandMapper
     CommandMapResult mapReconstructPointCloud(const control::ControlMessage& message);
 
   private:
-    /// camera_service_ <service::camera::CameraService&>: role bindingを保持するdomain service。
-    service::camera::CameraService& camera_service_;
+    /// camera_service_ <video::CameraService&>: role bindingを保持するdomain service。
+    video::CameraService& camera_service_;
 };
 
 } // namespace headless

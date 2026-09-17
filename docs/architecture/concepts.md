@@ -38,19 +38,12 @@ Command Mapper は、Control MessageをCommandへ変換する。
 Command MapperはServiceを直接呼ばない。
 対応する実装は `headless::HeadlessCommandMapper` である。
 
-## 振り分け（Dispatch）
+## command実行（Command Executor）
 
-Dispatch は、CommandをHandlerへ渡す。
-scan中のresource競合もここで拒否する。
-Dispatchはcamera captureやdecode計算をしない。
-対応する実装は `headless::HeadlessDispatcher` である。
-
-## 処理担当（Handler）
-
-Handler は、CommandをService呼び出しへ変換する。
-Handlerは業務処理を持たない。
-HandlerはJSON Linesを組み立てない。
-対応する実装は `src/handler/` である。
+Command Executorは、Command variantを一度だけ型判定し、対応するServiceを直接呼ぶ。
+scan中のresource競合もService呼び出し前にここで拒否する。
+Command Executorはcamera captureやdecode algorithmを実装せず、JSON Linesも組み立てない。
+対応する実装は `headless::HeadlessCommandExecutor` である。
 
 ## 実処理（Service）
 
@@ -58,6 +51,24 @@ Service は実処理を行う。
 ServiceはJSON Linesを知らない。
 ServiceはControl Messageを受け取らない。
 対応する実装は `CameraService`、`ProjectorService`、`WindowService`、`ScanService`、`CaptureService`、`DecodeService` である。
+
+Serviceの配置は技術的役割ではなく、所有するdomainに従う。
+
+```text
+src/video          Camera / CameraManager / CameraService
+src/window         Window / WindowManager / MonitorService / WindowService
+src/projector      ProjectorService / ProjectorResult
+src/capture        CaptureService
+src/calibration    Calibrator / calibration service / calibration file I/O
+src/scan           ScanService / ScanEvent / scan dataset validation
+src/decode         DecodeService / DecodeResult
+src/reconstruction ReconstructionService / CameraProjectorService
+src/stream         MJPEG / FramePublisher / StreamRegistry
+src/serve          ServeApp / SidecarService composition
+```
+
+`SidecarService`はdomain serviceではなく、serve runtimeが利用する各依存の生成、所有、lifecycleを担当する。
+namespaceもpackage ownershipに合わせ、`video`、`win`、`projector`、`scan`、`decode`、`calib`、`serve`を使用する。
 
 ## 結果（Service Result）
 
@@ -67,16 +78,15 @@ Service固有のfieldを持つ。
 
 ## command結果（Command Result）
 
-Command Result は、HandlerやDispatchが返す共通結果である。
+Command Result は、Command Executorが返す共通結果である。
 成功か失敗かを持つ。
 対応する実装は `common::CommandResult` である。
 
-## 結果変換（Result Mapper）
+## 結果変換（Executor internal result adaptation）
 
-Result Mapper は、Service ResultをCommand Resultへ変換する。
-Result Mapperは業務処理を持たない。
-Result Mapperはfileを読まない。
-対応する実装は `src/command_result_mapper/` である。
+結果変換は、Service ResultをCommand Resultへ変換する。
+変換処理は業務処理を持たず、fileを読まない。
+変換は `HeadlessCommandExecutor` のapplication boundary内で行う。
 
 ## 成果物（Artifact）
 

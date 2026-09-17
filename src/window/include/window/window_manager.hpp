@@ -3,7 +3,6 @@
 #include "window_types.hpp"
 #include <vector>
 #include <memory>
-#include <functional>
 
 namespace win {
 
@@ -29,20 +28,10 @@ public:
   Window* get(WindowId id) const;
 
   /**
-   * @brief 名前からウィンドウを取得する（デバッグ用など）
-   */
-  Window* getByName(const std::string& name) const;
-
-  /**
    * @brief IDに紐づくウィンドウを破棄し、管理対象から外す
    * @return close対象が存在した場合は true
    */
   bool closeWindow(WindowId id);
-
-  /**
-   * @brief 全ウィンドウに対して処理を行う（描画ループなどで使用）
-   */
-  void forEach(std::function<void(Window&)> action);
 
   /**
    * @brief HighGUI のイベント処理を進める
