@@ -6,6 +6,7 @@
 #include <optional>
 
 namespace calib { class Calibrator; class StereoCalibrator; struct StereoData; }
+namespace calib::projector { class CameraProjectorCalibrationService; }
 namespace capture { class CaptureService; }
 namespace video { class CameraManager; }
 namespace reconstruction { class ReconstructionService; }
@@ -37,7 +38,8 @@ class HeadlessCommandExecutor
                             capture::CaptureService& capture_service, video::CameraManager& cameras,
                             calib::Calibrator* calibrator, calib::StereoCalibrator* stereo_calibrator,
                             calib::StereoData& stereo_data,
-                            reconstruction::ReconstructionService& reconstruction_service);
+                            reconstruction::ReconstructionService& reconstruction_service,
+                            calib::projector::CameraProjectorCalibrationService& camera_projector_calibration_service);
 
     /// @return service結果を外部応答形式へ写像したcommand result。
     common::CommandResult execute(const cmd::Command& command);
@@ -66,10 +68,12 @@ class HeadlessCommandExecutor
     common::CommandResult executeTyped(const cmd::CmdValidateScanDataset& command);
     common::CommandResult executeTyped(const cmd::CmdDecodePatterns& command);
     common::CommandResult executeTyped(const cmd::CmdCalibrate& command);
+    common::CommandResult executeTyped(const cmd::CmdDetectCalibrationCorners& command);
     common::CommandResult executeTyped(const cmd::CmdCalibCapture& command);
     common::CommandResult executeTyped(const cmd::CmdStereoCalibrate& command);
     common::CommandResult executeTyped(const cmd::CmdValidateReconstruction& command);
     common::CommandResult executeTyped(const cmd::CmdReconstructPointCloud& command);
+    common::CommandResult executeTyped(const cmd::CmdCameraProjectorCalibrate& command);
 
     video::CameraService& camera_service_;
     win::WindowService& window_service_;
@@ -83,6 +87,7 @@ class HeadlessCommandExecutor
     calib::StereoCalibrator* stereo_calibrator_;
     calib::StereoData& stereo_data_;
     reconstruction::ReconstructionService& reconstruction_service_;
+    calib::projector::CameraProjectorCalibrationService& camera_projector_calibration_service_;
 };
 
 } // namespace headless

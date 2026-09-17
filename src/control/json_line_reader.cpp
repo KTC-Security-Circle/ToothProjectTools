@@ -157,6 +157,13 @@ ReadResult JsonLineReader::read() {
         !readNumber(root, "max_epipolar_error_px", message.max_epipolar_error_px, error_message) ||
         !readNumber(root, "min_depth_mm", message.min_depth_mm, error_message) ||
         !readNumber(root, "max_depth_mm", message.max_depth_mm, error_message) ||
+        !readString(root, "observations_dir", message.observations_dir, error_message) ||
+        !readString(root, "camera_calibration_file", message.camera_calibration_file, error_message) ||
+        !readInteger(root, "board_corners_x", message.board_corners_x, error_message) ||
+        !readInteger(root, "board_corners_y", message.board_corners_y, error_message) ||
+        !readNumber(root, "square_size_mm", message.square_size_mm, error_message) ||
+        !readNumber(root, "max_mean_displacement_px", message.max_mean_displacement_px, error_message) ||
+        !readNumber(root, "max_corner_displacement_px", message.max_corner_displacement_px, error_message) ||
         !readBool(root, "overwrite", message.overwrite, error_message)) {
       return ReadResult{
           ReadStatus::invalid,

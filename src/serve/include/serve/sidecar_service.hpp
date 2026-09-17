@@ -3,6 +3,7 @@
 #include "calibration/calibrator.hpp"
 #include "calibration/stereo_calibrator.hpp"
 #include "calibration/stereo_data.hpp"
+#include "calibration/camera_projector_calibration_service.hpp"
 #include "capture/capture_service.hpp"
 #include "reconstruction/reconstruction_service.hpp"
 #include "video/camera_service.hpp"
@@ -238,6 +239,7 @@ class SidecarService
     ///   <calib::StereoData&>: stereo calibration結果の保存先。
     calib::StereoData& stereoData();
     reconstruction::ReconstructionService& reconstructionService();
+    calib::projector::CameraProjectorCalibrationService& cameraProjectorCalibrationService();
 
     /// @brief sidecar serviceを停止し、cameraとstreamを解放する。
     ///
@@ -307,6 +309,7 @@ class SidecarService
     /// stereo_data_ <calib::StereoData>: sidecar用stereo calibration結果。
     calib::StereoData stereo_data_;
     reconstruction::ReconstructionService reconstruction_service_;
+    calib::projector::CameraProjectorCalibrationService camera_projector_calibration_service_{scan_dataset_validator_};
 
     /// bindings_ <std::map<std::string, CameraBinding>>: roleごとのMJPEG publisherを保持するsidecar binding。
     std::map<std::string, CameraBinding> bindings_;
