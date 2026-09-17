@@ -1,9 +1,9 @@
-#include "reconstruction/camera_projector_service.hpp"
+#include "calibration/camera_projector_calibration.hpp"
 
-#include <opencv2/calib3d.hpp>
 #include <cmath>
+#include <opencv2/calib3d.hpp>
 
-namespace reconstruction::camera_projector
+namespace calib::projector
 {
 namespace
 {
@@ -54,18 +54,19 @@ CalibrationResult calibrate(const std::vector<CalibrationObservation>& observati
 }
 
 bool saveCalibration(const std::filesystem::path& path, cv::Size camera_size, cv::Size projector_size,
-                     const ProjectorSurface& surface,
+                     const ProjectorSurface& surface, cv::Size board_size,
                      const cv::Mat& camera_matrix, const cv::Mat& camera_distortion, const CalibrationResult& result,
                      double square_size_mm, std::string& error)
 {
-    if (!result.ok || !validBaseline(result.translation_camera_to_projector) || surface.pattern_x < 0 ||
-        surface.pattern_y < 0 || surface.pattern_width <= 0 || surface.pattern_height <= 0)
+    if (!result.ok || !validBaseline(result.translation_camera_to_projector) || board_size.width <= 0 ||
+        board_size.height <= 0 || surface.pattern_x < 0 || surface.pattern_y < 0 ||
+        surface.pattern_width <= 0 || surface.pattern_height <= 0)
     { error = "cannot save invalid calibration"; return false; }
     try {
         cv::FileStorage storage(path.string(), cv::FileStorage::WRITE);
         if (!storage.isOpened()) { error = "failed to open calibration output"; return false; }
-        storage << "mode" << "camera_projector" << "board_corners_x" << 10 << "board_corners_y" << 7
-                << "square_size_mm" << square_size_mm;
+        storage << "mode" << "camera_projector" << "board_corners_x" << board_size.width
+                << "board_corners_y" << board_size.height << "square_size_mm" << square_size_mm;
         storage << "camera_width" << camera_size.width << "camera_height" << camera_size.height
                 << "projector_width" << projector_size.width << "projector_height" << projector_size.height;
         storage << "pattern_x" << surface.pattern_x << "pattern_y" << surface.pattern_y
@@ -78,4 +79,4 @@ bool saveCalibration(const std::filesystem::path& path, cv::Size camera_size, cv
         storage.release(); return true;
     } catch (const cv::Exception& exception) { error = exception.what(); return false; }
 }
-} // namespace reconstruction::camera_projector
+} // namespace calib::projector
