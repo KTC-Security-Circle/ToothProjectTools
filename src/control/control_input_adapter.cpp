@@ -46,7 +46,8 @@ ControlInputAdapter::ControlInputAdapter(serve::SidecarService& service, JsonLin
       command_executor_(service.cameraService(), service.windowService(), service.projectorService(),
                            service.scanService(), service.scanDatasetValidator(), service.decodeService(),
                            service.captureService(), service.cameraManager(), service.calibrator(),
-                           service.stereoCalibrator(), service.stereoData(), service.reconstructionService())
+                           service.stereoCalibrator(), service.stereoData(), service.reconstructionService(),
+                           service.cameraProjectorCalibrationService())
 {
 }
 
@@ -165,6 +166,14 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
             writeHeadlessFailure(id, *mapped.error);
             return AdapterResult::continue_running;
         }
+        writer_.writeResponse(toControlResponse(id, command_executor_.execute(*mapped.command)));
+        return AdapterResult::continue_running;
+    }
+
+    if (*message.cmd == "camera_projector_calibrate")
+    {
+        const auto mapped = headless_mapper_.mapCameraProjectorCalibrate(message);
+        if (!mapped.ok) { writeHeadlessFailure(id, *mapped.error); return AdapterResult::continue_running; }
         writer_.writeResponse(toControlResponse(id, command_executor_.execute(*mapped.command)));
         return AdapterResult::continue_running;
     }

@@ -220,6 +220,7 @@ class HeadlessCommandMapper
     CommandMapResult mapStereoCalibrate(const control::ControlMessage& message);
     CommandMapResult mapValidateReconstruction(const control::ControlMessage& message);
     CommandMapResult mapReconstructPointCloud(const control::ControlMessage& message);
+    CommandMapResult mapCameraProjectorCalibrate(const control::ControlMessage& message);
 
   private:
     /// camera_service_ <video::CameraService&>: role bindingを保持するdomain service。

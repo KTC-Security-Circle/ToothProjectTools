@@ -140,6 +140,13 @@ struct ControlMessage {
   std::optional<double> min_depth_mm;
   std::optional<double> max_depth_mm;
   std::optional<bool> overwrite;
+  std::optional<std::string> observations_dir;
+  std::optional<std::string> camera_calibration_file;
+  std::optional<int> board_corners_x;
+  std::optional<int> board_corners_y;
+  std::optional<double> square_size_mm;
+  std::optional<double> max_mean_displacement_px;
+  std::optional<double> max_corner_displacement_px;
 };
 
 struct ControlError {

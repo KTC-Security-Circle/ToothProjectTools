@@ -313,6 +313,19 @@ struct ReconstructionGeometryConfig { double max_epipolar_error_px{2.0}; std::op
 struct CmdValidateReconstruction { std::filesystem::path decode_dir; std::filesystem::path calibration_file; ReconstructionGeometryConfig config; };
 struct CmdReconstructPointCloud { std::filesystem::path decode_dir; std::filesystem::path calibration_file; std::filesystem::path output_file; ReconstructionGeometryConfig config; bool overwrite{false}; };
 
+struct CmdCameraProjectorCalibrate
+{
+  std::filesystem::path observations_dir;
+  std::filesystem::path camera_calibration_file;
+  std::filesystem::path output_file;
+  int board_corners_x{0};
+  int board_corners_y{0};
+  double square_size_mm{0.0};
+  double max_mean_displacement_px{0.0};
+  double max_corner_displacement_px{0.0};
+  bool overwrite{false};
+};
+
 using Command = std::variant<
   CmdOpenCamera,
   CmdCloseCamera,
@@ -337,7 +350,8 @@ using Command = std::variant<
   CmdCalibCapture,
   CmdStereoCalibrate,
   CmdValidateReconstruction,
-  CmdReconstructPointCloud
+  CmdReconstructPointCloud,
+  CmdCameraProjectorCalibrate
 >;
 
 } // namespace cmd
