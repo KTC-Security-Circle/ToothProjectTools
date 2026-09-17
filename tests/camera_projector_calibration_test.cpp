@@ -86,6 +86,16 @@ void testSyntheticSolveAndFile()
     std::filesystem::remove(path);
 }
 
+void testDegenerateSolveDoesNotThrow()
+{
+    calib::projector::CalibrationObservation observation;
+    for (int i=0;i<10;++i) { observation.object_points.emplace_back(0,0,0); observation.camera_points.emplace_back(1,1); observation.projector_points.emplace_back(1,1); }
+    const std::vector<calib::projector::CalibrationObservation> observations(3,observation);
+    const cv::Mat k=cv::Mat::eye(3,3,CV_64F), d=cv::Mat::zeros(1,5,CV_64F);
+    const auto result=calib::projector::calibrate(observations,{640,480},{480,270},k,d,12.5);
+    assert(!result.ok && !result.error.empty());
+}
+
 void testDatasetFailuresAndOverwrite()
 {
     const auto root=std::filesystem::temp_directory_path()/"camera_projector_dataset_test";
@@ -173,6 +183,7 @@ int main()
     assert(calib::projector::defaultPosePlan().size()==27);
     testObservationAndMovement();
     testSyntheticSolveAndFile();
+    testDegenerateSolveDoesNotThrow();
     testDatasetFailuresAndOverwrite();
     testOfflineDatasetService();
 }

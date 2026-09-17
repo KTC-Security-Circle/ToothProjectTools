@@ -35,21 +35,28 @@ CalibrationResult calibrate(const std::vector<CalibrationObservation>& observati
         projectors.push_back(observation.projector_points);
     }
     if (objects.size() < 3) { result.error = "fewer than three valid poses"; return result; }
-    cv::Mat projector_matrix = cv::initCameraMatrix2D(objects, projectors, projector_size, 0.0);
-    cv::Mat projector_distortion = cv::Mat::zeros(1, 5, CV_64F), rvecs, tvecs;
-    result.projector_rms = cv::calibrateCamera(objects, projectors, projector_size, projector_matrix,
-                                               projector_distortion, rvecs, tvecs);
-    cv::Mat camera_k = camera_matrix.clone(), camera_d = camera_distortion.clone();
-    cv::Mat r, t, e, f;
-    result.stereo_rms = cv::stereoCalibrate(objects, cameras, projectors, camera_k, camera_d,
-                                            projector_matrix, projector_distortion, camera_size, r, t, e, f,
-                                            cv::CALIB_FIX_INTRINSIC,
-                                            cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, 1e-7));
-    if (!finiteMat(projector_matrix) || !finiteMat(projector_distortion) || !validBaseline(t) || !validRotation(r) ||
-        !std::isfinite(result.projector_rms) || !std::isfinite(result.stereo_rms))
-    { result.error = "calibration result is non-finite, zero-baseline, or rotation is invalid"; return result; }
-    result.ok = true; result.projector_matrix = projector_matrix; result.projector_distortion = projector_distortion;
-    result.rotation_camera_to_projector = r; result.translation_camera_to_projector = t;
+    try
+    {
+        cv::Mat projector_matrix = cv::initCameraMatrix2D(objects, projectors, projector_size, 0.0);
+        cv::Mat projector_distortion = cv::Mat::zeros(1, 5, CV_64F), rvecs, tvecs;
+        result.projector_rms = cv::calibrateCamera(objects, projectors, projector_size, projector_matrix,
+                                                   projector_distortion, rvecs, tvecs);
+        cv::Mat camera_k = camera_matrix.clone(), camera_d = camera_distortion.clone();
+        cv::Mat r, t, e, f;
+        result.stereo_rms = cv::stereoCalibrate(objects, cameras, projectors, camera_k, camera_d,
+                                                projector_matrix, projector_distortion, camera_size, r, t, e, f,
+                                                cv::CALIB_FIX_INTRINSIC,
+                                                cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, 1e-7));
+        if (!finiteMat(projector_matrix) || !finiteMat(projector_distortion) || !validBaseline(t) || !validRotation(r) ||
+            !std::isfinite(result.projector_rms) || !std::isfinite(result.stereo_rms))
+        { result.error = "calibration result is non-finite, zero-baseline, or rotation is invalid"; return result; }
+        result.ok = true; result.projector_matrix = projector_matrix; result.projector_distortion = projector_distortion;
+        result.rotation_camera_to_projector = r; result.translation_camera_to_projector = t;
+    }
+    catch (const cv::Exception& exception)
+    {
+        result.error = "OpenCV calibration failed: " + std::string{exception.what()};
+    }
     return result;
 }
 
