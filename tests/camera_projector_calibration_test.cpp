@@ -8,6 +8,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
@@ -125,7 +126,9 @@ void writePose(const std::filesystem::path& pose,int index,const cv::Mat& camera
     const cv::Mat h_pc=h_projector*h_camera.inv(); cv::Mat px(image_size,CV_32F),py(image_size,CV_32F),mask(image_size,CV_8UC1,cv::Scalar{255});
     for(int y=0;y<image_size.height;++y) for(int x=0;x<image_size.width;++x) {
         const cv::Mat q=h_pc*(cv::Mat_<double>(3,1)<<x,y,1); const double w=q.at<double>(2);
-        px.at<float>(y,x)=static_cast<float>(q.at<double>(0)/w); py.at<float>(y,x)=static_cast<float>(q.at<double>(1)/w); }
+        px.at<float>(y,x)=static_cast<float>(q.at<double>(0)/w); py.at<float>(y,x)=static_cast<float>(q.at<double>(1)/w);
+        if (!std::isfinite(px.at<float>(y,x)) || !std::isfinite(py.at<float>(y,x)) || px.at<float>(y,x)<0 ||
+            py.at<float>(y,x)<0 || px.at<float>(y,x)>=480 || py.at<float>(y,x)>=270) mask.at<unsigned char>(y,x)=0; }
     { cv::FileStorage s((pose/"decode"/"left"/"projector_x.yml").string(),cv::FileStorage::WRITE);s<<"projector_x"<<px; }
     { cv::FileStorage s((pose/"decode"/"left"/"projector_y.yml").string(),cv::FileStorage::WRITE);s<<"projector_y"<<py; }
     cv::imwrite((pose/"decode"/"left"/"valid_mask.png").string(),mask);
@@ -148,6 +151,13 @@ void testOfflineDatasetService()
     assert(std::filesystem::exists(config.output_file));
     auto exists=service.calibrate(config); assert(!exists.ok && exists.error_code=="camera_projector_output_exists");
     config.overwrite=true; result=service.calibrate(config); assert(result.ok);
+    cv::Mat malformed;
+    { cv::FileStorage s((root/"observations"/"pose_004"/"decode"/"left"/"projector_x.yml").string(),cv::FileStorage::READ); s["projector_x"]>>malformed; }
+    malformed.at<float>(240,320)=std::numeric_limits<float>::quiet_NaN();
+    { cv::FileStorage s((root/"observations"/"pose_004"/"decode"/"left"/"projector_x.yml").string(),cv::FileStorage::WRITE); s<<"projector_x"<<malformed; }
+    config.output_file=root/"malformed-rejected.yml"; config.overwrite=false; result=service.calibrate(config);
+    assert(result.ok && result.accepted_pose_count==4 && result.rejected_pose_count==1);
+    writePose(root/"observations"/"pose_004",4,camera_k,projector_k);
     const std::string changed="{\"scan_id\":\"pose\",\"pattern_count\":20,\"projector_width\":480,\"projector_height\":270,\"surface\":{\"pattern_x\":1,\"pattern_y\":0,\"pattern_width\":480,\"pattern_height\":270}}";
     std::ofstream(root/"observations"/"pose_004"/"scan"/"metadata.json") << changed;
     std::ofstream(root/"observations"/"pose_004"/"decode"/"metadata.json") << changed;

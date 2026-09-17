@@ -6,6 +6,7 @@
 #include "scan/scan_dataset_validator.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/core/persistence.hpp>
 
@@ -32,6 +33,23 @@ bool loadMap(const std::filesystem::path& path, const char* key, cv::Mat& value)
 bool supportedMap(const cv::Mat& value)
 {
     return value.channels() == 1 && (value.type() == CV_32S || value.type() == CV_32F);
+}
+
+bool validDecodedCoordinates(const cv::Mat& projector_x, const cv::Mat& projector_y,
+                             const cv::Mat& mask, cv::Size projector_size)
+{
+    if (projector_x.type() != projector_y.type()) return false;
+    for (int y = 0; y < mask.rows; ++y) for (int x = 0; x < mask.cols; ++x)
+    {
+        if (!mask.at<unsigned char>(y, x)) continue;
+        const double px = projector_x.type() == CV_32S ? projector_x.at<int>(y, x)
+                                                        : projector_x.at<float>(y, x);
+        const double py = projector_y.type() == CV_32S ? projector_y.at<int>(y, x)
+                                                        : projector_y.at<float>(y, x);
+        if (!std::isfinite(px) || !std::isfinite(py) || px < 0.0 || py < 0.0 ||
+            px >= projector_size.width || py >= projector_size.height) return false;
+    }
+    return true;
 }
 
 bool sameSurface(const scan::dataset::ScanDatasetMetadata& a, const scan::dataset::ScanDatasetMetadata& b)
@@ -104,7 +122,9 @@ ServiceResult CameraProjectorCalibrationService::calibrate(const CalibrationConf
             !loadMap(decode_left / "projector_y.yml", "projector_y", projector_y) ||
             !supportedMap(projector_x) || !supportedMap(projector_y) || mask.empty() ||
             mask.type() != CV_8UC1 || projector_x.size() != before.size() || projector_y.size() != before.size() ||
-            mask.size() != before.size())
+            mask.size() != before.size() ||
+            !validDecodedCoordinates(projector_x, projector_y, mask,
+                                     {scan_metadata->projector_width, scan_metadata->projector_height}))
         {
             diagnostic.reason = "observation artifact is missing or malformed";
             artifact_failure = true; result.poses.push_back(std::move(diagnostic)); continue;
@@ -153,7 +173,13 @@ ServiceResult CameraProjectorCalibrationService::calibrate(const CalibrationConf
         std::filesystem::remove(*temporary, ec);
         return failure(config, "camera_projector_output_write_failed", save_error);
     }
-    ec.clear(); std::filesystem::rename(*temporary, config.output_file, ec);
+    ec.clear();
+    if (config.overwrite) std::filesystem::rename(*temporary, config.output_file, ec);
+    else
+    {
+        std::filesystem::create_hard_link(*temporary, config.output_file, ec);
+        if (!ec) { std::error_code cleanup_error; std::filesystem::remove(*temporary, cleanup_error); }
+    }
     if (ec) { std::filesystem::remove(*temporary, ec); return failure(config, "camera_projector_output_write_failed", "failed to replace output file"); }
     result.ok = true; result.projector_rms = solved.projector_rms; result.stereo_rms = solved.stereo_rms;
     return result;
