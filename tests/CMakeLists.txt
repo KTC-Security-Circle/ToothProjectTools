@@ -8,3 +8,8 @@ add_executable(reconstruction_domain_test reconstruction_domain_test.cpp)
 target_include_directories(reconstruction_domain_test PRIVATE ${CMAKE_SOURCE_DIR}/src/reconstruction)
 target_link_libraries(reconstruction_domain_test PRIVATE reconstruction)
 add_test(NAME reconstruction_domain_test COMMAND reconstruction_domain_test)
+
+add_executable(camera_roi_sync_test camera_roi_sync_test.cpp)
+target_link_libraries(camera_roi_sync_test PRIVATE scan_service)
+target_compile_features(camera_roi_sync_test PRIVATE cxx_std_20)
+add_test(NAME camera_roi_sync_test COMMAND camera_roi_sync_test)
