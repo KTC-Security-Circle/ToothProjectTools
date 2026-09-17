@@ -11,11 +11,11 @@ mono_calibrate はファイル処理commandである。
 ### args(JSONL)
 
 ```json
-{"id":"20","cmd":"mono_calibrate","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml"}
+{"id":"20","cmd":"mono_calibrate","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml","board_corners_x":10,"board_corners_y":7,"square_size_mm":"<MEASURED_VALUE>"}
 ```
 
 ```json
-{"id":"20","cmd":"mono_calibrate","role":"left","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml","apply_to_camera":true}
+{"id":"20","cmd":"mono_calibrate","role":"left","image_folder":"./data/calib/mono_left","output_file":"./data/calib/mono_left.yml","board_corners_x":10,"board_corners_y":7,"square_size_mm":"<MEASURED_VALUE>","apply_to_camera":true}
 ```
 
 | field | 必須 | 説明 |
@@ -24,6 +24,9 @@ mono_calibrate はファイル処理commandである。
 | `cmd` | 必須 | `mono_calibrate`。 |
 | `image_folder` | 必須 | calibration画像directory。 |
 | `output_file` | 必須 | 出力file。 |
+| `board_corners_x` | 必須 | checkerboard横方向の内部corner数。正の整数。 |
+| `board_corners_y` | 必須 | checkerboard縦方向の内部corner数。正の整数。 |
+| `square_size_mm` | 必須 | 実測した1 squareの辺長(mm)。正数。暗黙defaultはない。 |
 | `role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
 | `apply_to_camera` | 任意 | trueの場合のみ、roleに対応するopen済みcameraへK/Dを反映する。省略時はfalse。 |
 
@@ -53,6 +56,7 @@ calibration画像directory。
 ### 書くArtifact
 
 mono calibration file。
+`RMS`, `image_width`, `image_height`, `board_corners_x`, `board_corners_y`, `square_size_mm`, `K`, `D`を保存する。このfileは`camera_projector_calibrate.camera_calibration_file`へそのまま指定できる。monoとCamera–Projector calibrationには同じcheckerboard実測値を指定する。
 
 ### 必要なruntime resource
 
@@ -68,6 +72,32 @@ mono calibration file。
 | `calibration_image_not_found` | calibration画像がない。 |
 | `calibration_failed` | calibration計算に失敗した。 |
 | `calibration_output_write_failed` | 結果fileを書けない。 |
+
+## calib_detect_corners
+
+### 役割
+
+open済みcameraの現在frameでcheckerboardを検出し、corner描画済みpreviewを保存する。checkerboardが完全に検出できない場合もcommand自体は成功し、`found=false`を返す。
+
+### args(JSONL)
+
+```json
+{"id":"preview-left","cmd":"calib_detect_corners","role":"left","output":"./data/calib/preview/left.png","board_corners_x":10,"board_corners_y":7,"square_size_mm":"<MEASURED_VALUE>"}
+```
+
+`id`, `cmd`, `role`, `output`, `board_corners_x`, `board_corners_y`, `square_size_mm`はすべて必須。board dimensionとsquare sizeは正数でなければならない。
+
+### return
+
+```json
+{"id":"preview-left","ok":true,"role":"left","found":false,"corner_count":0,"expected_corner_count":70,"path":"./data/calib/preview/left.png"}
+```
+
+`found=true`の場合だけ`corner_count`は完全な内部corner数になる。camera未open、frame取得不能、preview出力不能はerrorである。
+
+### 実機session
+
+`scripts/calibration_session.sh`はbackend起動、camera open、MJPEG stream、preview、連番capture、mono calibration、shutdownを一つのsingle-key UIで実行する。`SQUARE_MM`には必ず実測値を指定する。
 
 ## stereo_calibrate
 

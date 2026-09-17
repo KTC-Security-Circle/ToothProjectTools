@@ -10,6 +10,9 @@ MJPEG_HOST="${MJPEG_HOST:-127.0.0.1}"
 MJPEG_PORT="${MJPEG_PORT:-39010}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-60}"
 KEEP_WORK_DIR="${KEEP_WORK_DIR:-0}"
+BOARD_X="${BOARD_X:-10}"
+BOARD_Y="${BOARD_Y:-7}"
+SQUARE_MM="${SQUARE_MM:-24.0}"
 
 WORK_DIR=""
 FIXTURE_ROOT=""
@@ -187,13 +190,15 @@ main() {
     --arg id mono-left \
     --arg image_folder "${FIXTURE_ROOT}/calibration/mono_L" \
     --arg output_file "${OUTPUT_DIR}/calibration/mono_left.yml" \
-    '{id:$id,cmd:"mono_calibrate",image_folder:$image_folder,output_file:$output_file}')"
+    --argjson board_x "${BOARD_X}" --argjson board_y "${BOARD_Y}" --argjson square_mm "${SQUARE_MM}" \
+    '{id:$id,cmd:"mono_calibrate",image_folder:$image_folder,output_file:$output_file,board_corners_x:$board_x,board_corners_y:$board_y,square_size_mm:$square_mm}')"
 
   request_ok mono-right "$(jq -cn \
     --arg id mono-right \
     --arg image_folder "${FIXTURE_ROOT}/calibration/mono_R" \
     --arg output_file "${OUTPUT_DIR}/calibration/mono_right.yml" \
-    '{id:$id,cmd:"mono_calibrate",image_folder:$image_folder,output_file:$output_file}')"
+    --argjson board_x "${BOARD_X}" --argjson board_y "${BOARD_Y}" --argjson square_mm "${SQUARE_MM}" \
+    '{id:$id,cmd:"mono_calibrate",image_folder:$image_folder,output_file:$output_file,board_corners_x:$board_x,board_corners_y:$board_y,square_size_mm:$square_mm}')"
 
   request_ok stereo "$(jq -cn \
     --arg id stereo \

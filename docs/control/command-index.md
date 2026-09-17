@@ -1,5 +1,7 @@
 # コマンド一覧
 
+public JSONL commandは31件（既存30件 + `calib_detect_corners`）である。
+
 | command | 分類 | args(JSONL) | return | event | 読むArtifact | 書くArtifact | 必要なruntime resource | 実装状態 | 詳細docs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `ping` | プロトコル制御 | `id`, `cmd` | `result` | なし | なし | なし | serve app | 実装済み | [protocol.md](./protocol.md#ping) |
@@ -12,7 +14,8 @@
 | `capture_stereo` | 撮影 | `id`, `cmd`, `left_role`, `right_role`, `left_output`, `right_output` | `left_path`, `right_path` | `stereo_frame_saved` | なし | image files | open済みcamera roles | 実装済み | [capture.md](./commands/capture.md#capture_stereo) |
 | `calib_capture_frame` | 撮影 | `id`, `cmd`, `role`, `output` | `path`, `purpose` | `calibration_frame_saved` | なし | calibration image | open済みcamera role | 実装済み | [capture.md](./commands/capture.md#calib_capture_frame) |
 | `calib_capture_stereo` | 撮影 | `id`, `cmd`, `left_role`, `right_role`, `left_output`, `right_output` | `left_path`, `right_path`, `purpose` | `calibration_stereo_frame_saved` | なし | calibration images | open済みcamera roles | 実装済み | [capture.md](./commands/capture.md#calib_capture_stereo) |
-| `mono_calibrate` | ファイル処理 | `id`, `cmd`, `role`, `image_folder`, `output_file` | `role`, `output_file`, `rms` | `mono_calibration_finished` | calibration images | mono calibration file | 現在はopen済みcamera role | 一部実装 | [calibration.md](./commands/calibration.md#mono_calibrate) |
+| `calib_detect_corners` | 撮影 | `id`, `cmd`, `role`, `output`, board fields | `role`, `found`, corner counts, `path` | なし | open済みcamera frame | corner preview image | open済みcamera role | 実装済み | [calibration.md](./commands/calibration.md#calib_detect_corners) |
+| `mono_calibrate` | ファイル処理 | `id`, `cmd`, `image_folder`, `output_file`, board fields | `role`, `output_file`, `rms` | `mono_calibration_finished` | calibration images | mono calibration file | `apply_to_camera=true`時のみopen済みcamera role | 実装済み | [calibration.md](./commands/calibration.md#mono_calibrate) |
 | `stereo_calibrate` | ファイル処理 | `id`, `cmd`, `left_role`, `right_role`, `left_dir`, `right_dir`, `output_file` | `left_role`, `right_role`, `output_file`, `rms` | `stereo_calibration_finished` | calibration images | stereo calibration file | 現在はopen済みcamera roles | 一部実装 | [calibration.md](./commands/calibration.md#stereo_calibrate) |
 | `camera_projector_calibrate` | ファイル処理 | `id`, `cmd`, `observations_dir`, `camera_calibration_file`, `output_file`, board/movement fields | pose counts、RMS、projector size | なし | 保存済みscan/decode observation | Camera–Projector calibration file | なし | 実装済み | [calibration.md](./commands/calibration.md#camera_projector_calibrate) |
 | `open_window` | Window操作 | `id`, `cmd`, `window_role`, `width`, `height` | `window_role`, `window_id`, `width`, `height` | `window_opened` | なし | なし | Window backend | 実装済み | [projector.md](./commands/projector.md#open_window) |

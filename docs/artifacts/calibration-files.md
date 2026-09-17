@@ -11,6 +11,7 @@ mono calibration file は単眼cameraの内部parameterを保存するfileであ
 ### 読むcommand
 
 - `stereo_calibrate`
+- `camera_projector_calibrate`
 
 ### 必須field
 
@@ -30,6 +31,9 @@ mono calibration file は単眼cameraの内部parameterを保存するfileであ
 | `source_image_folder` | 入力画像directory。 |
 | `image_width` | 新規mono calibrationの画像幅。単位pixel。生成時は`image_height`とともに保存する。 |
 | `image_height` | 新規mono calibrationの画像高さ。単位pixel。生成時は`image_width`とともに保存する。 |
+| `board_corners_x` | mono calibrationに使用したcheckerboard横方向の内部corner数。 |
+| `board_corners_y` | mono calibrationに使用したcheckerboard縦方向の内部corner数。 |
+| `square_size_mm` | mono calibrationに使用した実測square寸法。単位mm。 |
 
 ### file format
 
