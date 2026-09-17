@@ -8,6 +8,7 @@
 #include "calibration/stereo_data.hpp"
 #include "reconstruction/reconstruction_service.hpp"
 #include "calibration/calibration_file.hpp"
+#include "calibration/camera_projector_calibration_service.hpp"
 #include "video/camera_service.hpp"
 #include "decode/decode_service.hpp"
 #include "window/monitor_service.hpp"
@@ -174,10 +175,11 @@ struct CommandRuntime
     calib::StereoCalibrator stereo_calibrator;
     calib::StereoData stereo_data;
     reconstruction::ReconstructionService reconstruction_service;
+    calib::projector::CameraProjectorCalibrationService camera_projector_calibration_service{scan_dataset_validator};
     headless::HeadlessCommandExecutor executor{
         camera_service, window_service, projector_service, scan_service, scan_dataset_validator,
         decode_service, capture_service, cameras, &calibrator, &stereo_calibrator, stereo_data,
-        reconstruction_service};
+        reconstruction_service, camera_projector_calibration_service};
 };
 
 control::ControlMessage messageWithId()
@@ -1896,6 +1898,27 @@ void testCommandExecutorDomainRouting()
     result = runtime.executor.execute(cmd::Command{cmd::CmdValidateReconstruction{
         missing, missing / "calibration.yml", {}}});
     assert(result.handled && !result.ok);
+
+    result = runtime.executor.execute(cmd::Command{cmd::CmdCameraProjectorCalibrate{
+        missing, missing / "mono.yml", missing / "camera-projector.yml", 10, 7, 12.5, 1.0, 2.0, false}});
+    assert(result.handled && !result.ok);
+}
+
+void testCameraProjectorMapper()
+{
+    video::CameraManager cameras; video::CameraService camera_service{cameras};
+    headless::HeadlessCommandMapper mapper{camera_service};
+    auto message=messageWithId(); message.observations_dir="observations"; message.camera_calibration_file="mono.yml";
+    message.output_file="camera-projector.yml"; message.board_corners_x=10; message.board_corners_y=7;
+    message.square_size_mm=12.5; message.max_mean_displacement_px=1.0; message.max_corner_displacement_px=2.0;
+    auto mapped=mapper.mapCameraProjectorCalibrate(message); assert(mapped.ok);
+    const auto command=std::get<cmd::CmdCameraProjectorCalibrate>(*mapped.command);
+    assert(!command.overwrite && command.square_size_mm==12.5);
+    message.overwrite=true; mapped=mapper.mapCameraProjectorCalibrate(message);
+    assert(std::get<cmd::CmdCameraProjectorCalibrate>(*mapped.command).overwrite);
+    message.square_size_mm=0.0; assert(!mapper.mapCameraProjectorCalibrate(message).ok);
+    message.square_size_mm=12.5; message.board_corners_x.reset();
+    assert(!mapper.mapCameraProjectorCalibrate(message).ok);
 }
 
 } // namespace
@@ -1924,6 +1947,7 @@ int main()
     testScanDatasetHandler();
     testDecodeHandler();
     testCommandExecutorDomainRouting();
+    testCameraProjectorMapper();
     testProjectorSurfaceConfiguration();
     testServiceValidation();
     testWindowServiceValidation();

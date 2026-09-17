@@ -148,3 +148,54 @@ stereo calibration file。
 | `stereo_image_pair_mismatch` | 左右画像数が一致しない。 |
 | `stereo_calibration_failed` | stereo calibrationに失敗した。 |
 | `file_write_failed` | 結果fileを書けない。 |
+
+## camera_projector_calibrate
+
+保存済みのscan/decode artifactと、その前後に撮影したcheckerboard画像からCamera–Projector calibration ymlを生成するoffline commandである。live Camera/Projector resourceは使用しない。
+
+```json
+{"id":"cp-calib-001","cmd":"camera_projector_calibrate","observations_dir":"./data/calib/camera_projector/observations","camera_calibration_file":"./data/calib/mono_left.yml","output_file":"./data/calib/camera_projector.yml","board_corners_x":10,"board_corners_y":7,"square_size_mm":"<MEASURED_VALUE>","max_mean_displacement_px":"<EXPLICIT_VALUE>","max_corner_displacement_px":"<EXPLICIT_VALUE>","overwrite":false}
+```
+
+上例のplaceholderは実行時にはJSON numberへ置換する。`board_corners_x`、`board_corners_y`、`square_size_mm`、2つのmovement thresholdは必須である。board寸法と`square_size_mm`は正、thresholdは0以上でなければならない。実測していないsquare寸法を仮定してはならない。`overwrite`の省略値はfalseである。
+
+### Observation dataset
+
+```text
+observations_dir/
+  pose_001/
+    reference_before.png
+    reference_after.png
+    scan/metadata.json
+    scan/left/pattern_000.png ...
+    decode/metadata.json
+    decode/left/projector_x.yml
+    decode/left/projector_y.yml
+    decode/left/valid_mask.png
+  pose_002/
+    ...
+```
+
+直下の非hidden directoryを名前の辞書順で処理する。各poseのscan/decode metadataのlogical projector resolutionとpattern rectangleは一致し、全poseでも同一でなければならない。decode mapとmaskおよび全reference画像は同じcamera image sizeを持つ。mono calibrationに画像寸法が保存されている場合も一致が必要である。現在のsolverはlogical projector `480x270`だけを受理する。
+
+1 poseは、board/camera/projectorを固定し、`reference_before`をcaptureし、Gray Code scanをcaptureし、`reference_after`をcaptureし、`decode_patterns`を実行した後に上記directoryへ揃える。beforeからafterまでcheckerboard、camera、projector、lens、focus、zoomを動かしてはならない。near/middle/far × 9 orientationは推奨planであり、APIがexactly 27 posesを要求するわけではない。solverのminimumはvalid 3 posesで、invalid poseはrejectして残りを使用する。
+
+### return
+
+成功時は`output_file`、`total_pose_count`、`accepted_pose_count`、`rejected_pose_count`、`projector_rms`、`stereo_rms`、`projector_width`、`projector_height`を返す。
+
+### Output contract
+
+YMLには`mode`、board dimensions、`square_size_mm`、camera/projector dimensions、pattern rectangle、`camera_K`、`camera_D`、`projector_K`、`projector_D`、`R_camera_to_projector`、`T_camera_to_projector`、両RMSを保存する。Projector座標はdisplay physical pixelではなくlogical projector pixelである。
+
+変換方向は次のとおりである。
+
+```text
+X_projector = R_camera_to_projector * X_camera + T_camera_to_projector
+```
+
+object pointを`square_size_mm`で構築するため、`T_camera_to_projector`の単位はmmである。
+
+### error code
+
+`camera_projector_invalid_config`、`camera_projector_observations_invalid`、`camera_projector_mono_load_failed`、`camera_projector_artifact_load_failed`、`camera_projector_inconsistent_surface`、`camera_projector_insufficient_poses`、`camera_projector_solve_failed`、`camera_projector_output_exists`、`camera_projector_output_write_failed`を区別する。
