@@ -157,7 +157,7 @@ stereo calibration file。
 {"id":"cp-calib-001","cmd":"camera_projector_calibrate","observations_dir":"./data/calib/camera_projector/observations","camera_calibration_file":"./data/calib/mono_left.yml","output_file":"./data/calib/camera_projector.yml","board_corners_x":10,"board_corners_y":7,"square_size_mm":"<MEASURED_VALUE>","max_mean_displacement_px":"<EXPLICIT_VALUE>","max_corner_displacement_px":"<EXPLICIT_VALUE>","overwrite":false}
 ```
 
-上例のplaceholderは実行時にはJSON numberへ置換する。`board_corners_x`、`board_corners_y`、`square_size_mm`、2つのmovement thresholdは必須である。board寸法と`square_size_mm`は正、thresholdは0以上でなければならない。実測していないsquare寸法を仮定してはならない。`overwrite`の省略値はfalseである。
+上例のplaceholderは実行時にはJSON numberへ置換する。`board_corners_x`、`board_corners_y`、`square_size_mm`、2つのmovement thresholdは必須である。board寸法は正で合計10 corner以上、`square_size_mm`は正、thresholdは0以上でなければならない。実測していないsquare寸法を仮定してはならない。`overwrite`の省略値はfalseである。
 
 ### Observation dataset
 

@@ -70,7 +70,9 @@ CameraProjectorCalibrationService::CameraProjectorCalibrationService(
 
 ServiceResult CameraProjectorCalibrationService::calibrate(const CalibrationConfig& config) const
 {
-    if (config.board_size.width <= 0 || config.board_size.height <= 0 || config.square_size_mm <= 0.0 ||
+    if (config.board_size.width <= 0 || config.board_size.height <= 0 ||
+        static_cast<long long>(config.board_size.width) * config.board_size.height < 10 ||
+        config.square_size_mm <= 0.0 ||
         config.max_mean_displacement_px < 0.0 || config.max_corner_displacement_px < 0.0 ||
         config.observations_dir.empty() || config.camera_calibration_file.empty() || config.output_file.empty())
         return failure(config, "camera_projector_invalid_config", "invalid Camera-Projector calibration config");

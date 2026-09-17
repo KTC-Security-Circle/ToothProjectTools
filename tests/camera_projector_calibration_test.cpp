@@ -109,6 +109,9 @@ void testDatasetFailuresAndOverwrite()
     config.output_file=root/"new.yml";
     result=service.calibrate(config);
     assert(!result.ok && result.error_code=="camera_projector_mono_load_failed");
+    config.board_size={3,3};
+    result=service.calibrate(config);
+    assert(!result.ok && result.error_code=="camera_projector_invalid_config");
     std::filesystem::remove_all(root);
 }
 

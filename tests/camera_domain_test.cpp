@@ -1926,6 +1926,8 @@ void testCameraProjectorMapper()
     requireCameraProjector(!mapper.mapCameraProjectorCalibrate(message).ok, "zero square size was accepted");
     message.square_size_mm=12.5; message.board_corners_x.reset();
     requireCameraProjector(!mapper.mapCameraProjectorCalibrate(message).ok, "missing board size was accepted");
+    message.board_corners_x=3; message.board_corners_y=3;
+    requireCameraProjector(!mapper.mapCameraProjectorCalibrate(message).ok, "undersized board was accepted");
 }
 
 } // namespace

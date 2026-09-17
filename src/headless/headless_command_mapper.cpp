@@ -702,9 +702,10 @@ CommandMapResult HeadlessCommandMapper::mapCameraProjectorCalibrate(const contro
     if (!m.square_size_mm) return mapFailure("missing_field","missing required field: square_size_mm");
     if (!m.max_mean_displacement_px) return mapFailure("missing_field","missing required field: max_mean_displacement_px");
     if (!m.max_corner_displacement_px) return mapFailure("missing_field","missing required field: max_corner_displacement_px");
-    if (*m.board_corners_x<=0 || *m.board_corners_y<=0 || *m.square_size_mm<=0.0 ||
+    if (*m.board_corners_x<=0 || *m.board_corners_y<=0 ||
+        static_cast<long long>(*m.board_corners_x) * *m.board_corners_y < 10 || *m.square_size_mm<=0.0 ||
         *m.max_mean_displacement_px<0.0 || *m.max_corner_displacement_px<0.0)
-        return mapFailure("invalid_command","board dimensions and square_size_mm must be positive; displacement thresholds must be non-negative");
+        return mapFailure("invalid_command","board dimensions must provide at least 10 positive corners, square_size_mm must be positive, and displacement thresholds must be non-negative");
     CommandMapResult r; r.ok=true;
     r.command=cmd::CmdCameraProjectorCalibrate{*m.observations_dir,*m.camera_calibration_file,*m.output_file,
         *m.board_corners_x,*m.board_corners_y,*m.square_size_mm,*m.max_mean_displacement_px,
