@@ -268,6 +268,19 @@ struct CmdCalibrate {
 
   /// apply_to_camera <bool>: trueの場合のみopen済みcameraへ結果を反映する。
   bool apply_to_camera{false};
+
+  int board_corners_x{0};
+  int board_corners_y{0};
+  double square_size_mm{0.0};
+};
+
+struct CmdDetectCalibrationCorners {
+  video::CameraId camera_id{video::kInvalidCameraId};
+  std::string role;
+  std::filesystem::path output_path;
+  int board_corners_x{0};
+  int board_corners_y{0};
+  double square_size_mm{0.0};
 };
 
 // キャリブレーション画像の撮影と保存
@@ -348,6 +361,7 @@ using Command = std::variant<
   CmdDecodePatterns,
   CmdCalibrate,
   CmdCalibCapture,
+  CmdDetectCalibrationCorners,
   CmdStereoCalibrate,
   CmdValidateReconstruction,
   CmdReconstructPointCloud,

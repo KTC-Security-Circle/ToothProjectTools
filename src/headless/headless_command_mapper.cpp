@@ -3,6 +3,7 @@
 #include "control/control_message.hpp"
 #include "video/camera_service.hpp"
 
+#include <cmath>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -580,6 +581,12 @@ CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlM
     {
         return *failure;
     }
+    if (!message.board_corners_x) return mapFailure("missing_field", "missing required field: board_corners_x");
+    if (!message.board_corners_y) return mapFailure("missing_field", "missing required field: board_corners_y");
+    if (!message.square_size_mm) return mapFailure("missing_field", "missing required field: square_size_mm");
+    if (*message.board_corners_x <= 0 || *message.board_corners_y <= 0 ||
+        !std::isfinite(*message.square_size_mm) || *message.square_size_mm <= 0.0)
+        return mapFailure("invalid_command", "board dimensions and square_size_mm must be positive");
 
     const bool apply_to_camera = message.apply_to_camera.value_or(false);
     video::CameraId camera_id = video::kInvalidCameraId;
@@ -605,7 +612,29 @@ CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlM
         *message.output_file,
         message.role.value_or(std::string{}),
         apply_to_camera,
+        *message.board_corners_x,
+        *message.board_corners_y,
+        *message.square_size_mm,
     };
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapDetectCalibrationCorners(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.role, "role")) return *failure;
+    if (auto failure = requireString(message.output, "output")) return *failure;
+    if (!message.board_corners_x) return mapFailure("missing_field", "missing required field: board_corners_x");
+    if (!message.board_corners_y) return mapFailure("missing_field", "missing required field: board_corners_y");
+    if (!message.square_size_mm) return mapFailure("missing_field", "missing required field: square_size_mm");
+    if (*message.board_corners_x <= 0 || *message.board_corners_y <= 0 ||
+        !std::isfinite(*message.square_size_mm) || *message.square_size_mm <= 0.0)
+        return mapFailure("invalid_command", "board dimensions and square_size_mm must be positive");
+    const auto camera_id = resolveCameraId(camera_service_, *message.role);
+    if (!camera_id) return mapFailure("camera_not_open", "role is not opened: " + *message.role);
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdDetectCalibrationCorners{*camera_id, *message.role, *message.output,
+        *message.board_corners_x, *message.board_corners_y, *message.square_size_mm};
     return result;
 }
 

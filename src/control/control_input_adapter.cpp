@@ -240,6 +240,18 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
         return handleCalibrationCommand(id, message, false);
     }
 
+    if (*message.cmd == "calib_detect_corners")
+    {
+        const auto mapped = headless_mapper_.mapDetectCalibrationCorners(message);
+        if (!mapped.ok)
+        {
+            writeHeadlessFailure(id, *mapped.error);
+            return AdapterResult::continue_running;
+        }
+        writer_.writeResponse(toControlResponse(id, command_executor_.execute(*mapped.command)));
+        return AdapterResult::continue_running;
+    }
+
     if (*message.cmd == "stereo_calibrate")
     {
         return handleCalibrationCommand(id, message, true);

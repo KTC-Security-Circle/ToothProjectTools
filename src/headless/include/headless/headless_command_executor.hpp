@@ -68,6 +68,7 @@ class HeadlessCommandExecutor
     common::CommandResult executeTyped(const cmd::CmdValidateScanDataset& command);
     common::CommandResult executeTyped(const cmd::CmdDecodePatterns& command);
     common::CommandResult executeTyped(const cmd::CmdCalibrate& command);
+    common::CommandResult executeTyped(const cmd::CmdDetectCalibrationCorners& command);
     common::CommandResult executeTyped(const cmd::CmdCalibCapture& command);
     common::CommandResult executeTyped(const cmd::CmdStereoCalibrate& command);
     common::CommandResult executeTyped(const cmd::CmdValidateReconstruction& command);

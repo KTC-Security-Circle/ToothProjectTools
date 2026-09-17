@@ -14,6 +14,17 @@ common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdCalibr
     return result_adapter::calibration(command.role, command, result);
 }
 
+common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdDetectCalibrationCorners& command)
+{
+    const auto result = calib::detectCorners(cameras_, calibrator_, command);
+    if (!result.ok) return common::failure(result.error->code, result.error->message);
+    return common::success({{"role", result.role},
+        {"found", result.found ? "true" : "false"},
+        {"corner_count", std::to_string(result.corner_count)},
+        {"expected_corner_count", std::to_string(result.expected_corner_count)},
+        {"path", result.output_path.string()}});
+}
+
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdStereoCalibrate& command)
 {
     const auto result = calib::calibrate(
