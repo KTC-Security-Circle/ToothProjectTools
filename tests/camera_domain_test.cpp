@@ -4,6 +4,7 @@
 #include "headless/headless_command_executor.hpp"
 #include "headless/headless_command_mapper.hpp"
 #include "calibration/calibrator.hpp"
+#include "calibration/calibration_service.hpp"
 #include "calibration/stereo_calibrator.hpp"
 #include "calibration/stereo_data.hpp"
 #include "reconstruction/reconstruction_service.hpp"
@@ -22,8 +23,10 @@
 #include "video/camera_manager.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -31,7 +34,9 @@
 #include <limits>
 #include <opencv2/core.hpp>
 #include <opencv2/core/persistence.hpp>
+#include <opencv2/calib3d.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 #include <optional>
 #include <set>
 #include <sstream>
@@ -739,12 +744,18 @@ void testScanMapper()
     message = messageWithId();
     message.image_folder = "./data/calib/mono_left";
     message.output_file = "./data/calib/mono_left.yml";
+    message.board_corners_x = 10;
+    message.board_corners_y = 7;
+    message.square_size_mm = 12.5;
     result = mapper.mapMonoCalibrate(message);
     assert(result.ok && std::holds_alternative<cmd::CmdCalibrate>(*result.command));
     const auto mono = std::get<cmd::CmdCalibrate>(*result.command);
     assert(mono.target_camera_id == video::kInvalidCameraId);
     assert(!mono.apply_to_camera);
     assert(mono.role.empty());
+    assert(mono.board_corners_x == 10);
+    assert(mono.board_corners_y == 7);
+    assert(mono.square_size_mm == 12.5);
 
     message = messageWithId();
     message.left_dir = "./data/calib/stereo_left";
@@ -1597,6 +1608,109 @@ void testMonoCalibrationFileLoader()
     assertMonoCalibrationLoadFails(inf_d_path);
 }
 
+cv::Mat makeSyntheticCheckerboard(int corners_x, int corners_y, int square_pixels = 60)
+{
+    cv::Mat board((corners_y + 1) * square_pixels, (corners_x + 1) * square_pixels, CV_8UC1, cv::Scalar(255));
+    for (int y = 0; y <= corners_y; ++y)
+        for (int x = 0; x <= corners_x; ++x)
+            if ((x + y) % 2 == 0)
+                cv::rectangle(board, {x * square_pixels, y * square_pixels, square_pixels, square_pixels},
+                              cv::Scalar(0), cv::FILLED);
+    return board;
+}
+
+void testMonoBoardConfigAndCornerDetection()
+{
+    video::CameraManager cameras;
+    video::CameraService camera_service{cameras};
+    headless::HeadlessCommandMapper mapper{camera_service};
+    auto message = messageWithId();
+    message.image_folder = "images"; message.output_file = "mono.yml";
+    message.board_corners_x = 10; message.board_corners_y = 7; message.square_size_mm = 12.5;
+    auto mapped = mapper.mapMonoCalibrate(message);
+    requireCameraProjector(mapped.ok, "mono calibration with explicit BoardConfig did not map");
+    const auto command = std::get<cmd::CmdCalibrate>(*mapped.command);
+    requireCameraProjector(command.board_corners_x == 10 && command.board_corners_y == 7 &&
+                           command.square_size_mm == 12.5, "mono BoardConfig changed during mapping");
+    message.board_corners_x = 0;
+    requireCameraProjector(!mapper.mapMonoCalibrate(message).ok, "zero board_corners_x was accepted");
+    message.board_corners_x = 10; message.board_corners_y = -1;
+    requireCameraProjector(!mapper.mapMonoCalibrate(message).ok, "negative board_corners_y was accepted");
+    message.board_corners_y = 7; message.square_size_mm = 0.0;
+    requireCameraProjector(!mapper.mapMonoCalibrate(message).ok, "zero square_size_mm was accepted");
+
+    auto preview = messageWithId();
+    preview.role = "left"; preview.output = "preview.png";
+    preview.board_corners_x = 10; preview.board_corners_y = 7; preview.square_size_mm = 12.5;
+    const auto unopened = mapper.mapDetectCalibrationCorners(preview);
+    requireCameraProjector(!unopened.ok && unopened.error->code == "camera_not_open",
+                           "corner preview did not resolve the camera role");
+    preview.output.reset();
+    requireCameraProjector(mapper.mapDetectCalibrationCorners(preview).error->code == "missing_field",
+                           "corner preview accepted a missing output");
+
+    calib::Calibrator calibrator;
+    calibrator.setBoardConfig({{10, 7}, 12.5F});
+    cv::Mat rendered; std::vector<cv::Point2f> corners;
+    const auto checkerboard = makeSyntheticCheckerboard(10, 7);
+    requireCameraProjector(calibrator.detectAndDraw(checkerboard, rendered, corners),
+                           "synthetic checkerboard was not detected");
+    requireCameraProjector(corners.size() == 70 && !rendered.empty(),
+                           "synthetic checkerboard corner count/preview is invalid");
+    cv::Mat blank(checkerboard.size(), CV_8UC1, cv::Scalar(127));
+    requireCameraProjector(!calibrator.detectAndDraw(blank, rendered, corners),
+                           "blank image was reported as a checkerboard");
+}
+
+void testMonoCalibrationArtifactAndCameraProjectorCompatibility()
+{
+    const auto directory = testTempDir("mono_calibration_board_config");
+    const auto images = directory / "images";
+    std::filesystem::create_directories(images);
+    const cv::Mat board = makeSyntheticCheckerboard(10, 7, 50);
+    const cv::Mat camera_K = (cv::Mat_<double>(3, 3) << 760.0, 0.0, 440.0, 0.0, 755.0, 320.0, 0.0, 0.0, 1.0);
+    const std::array<cv::Vec3d, 6> rotations{{
+        {0.02, -0.04, 0.01}, {0.12, -0.18, 0.04}, {-0.15, 0.12, -0.06},
+        {0.20, 0.08, 0.10}, {-0.08, -0.22, -0.12}, {0.16, -0.10, 0.18}}};
+    const std::array<cv::Vec3d, 6> translations{{
+        {-55.0, -38.0, 235.0}, {-62.0, -42.0, 255.0}, {-48.0, -35.0, 225.0},
+        {-58.0, -45.0, 270.0}, {-45.0, -32.0, 245.0}, {-65.0, -40.0, 260.0}}};
+    const std::vector<cv::Point3f> outer{{-12.5F, -12.5F, 0.0F}, {125.0F, -12.5F, 0.0F},
+                                         {125.0F, 87.5F, 0.0F}, {-12.5F, 87.5F, 0.0F}};
+    const std::array<cv::Point2f, 4> source{{{0, 0}, {549, 0}, {549, 399}, {0, 399}}};
+    for (std::size_t i = 0; i < rotations.size(); ++i)
+    {
+        std::vector<cv::Point2f> destination;
+        cv::projectPoints(outer, rotations[i], translations[i], camera_K, cv::noArray(), destination);
+        cv::Mat image(640, 880, CV_8UC1, cv::Scalar(255));
+        cv::warpPerspective(board, image, cv::getPerspectiveTransform(source.data(), destination.data()), image.size(),
+                            cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(255));
+        requireCameraProjector(cv::imwrite((images / ("frame_" + std::to_string(i) + ".png")).string(), image),
+                               "failed to write synthetic mono calibration image");
+    }
+    video::CameraManager cameras;
+    calib::Calibrator calibrator;
+    const auto output = directory / "mono_left.yml";
+    const auto result = calib::calibrate(cameras, &calibrator,
+        {video::kInvalidCameraId, images.string(), output.string(), {}, false, 10, 7, 12.5});
+    requireCameraProjector(result.ok && std::isfinite(result.rms), "synthetic mono calibration failed");
+
+    cv::FileStorage storage(output.string(), cv::FileStorage::READ);
+    int board_x = 0, board_y = 0, image_width = 0, image_height = 0;
+    double square_mm = 0.0; cv::Mat K, D;
+    storage["board_corners_x"] >> board_x; storage["board_corners_y"] >> board_y;
+    storage["square_size_mm"] >> square_mm; storage["image_width"] >> image_width;
+    storage["image_height"] >> image_height; storage["K"] >> K; storage["D"] >> D;
+    requireCameraProjector(board_x == 10 && board_y == 7 && square_mm == 12.5,
+                           "mono calibration artifact lost BoardConfig");
+    requireCameraProjector(image_width == 880 && image_height == 640 && K.rows == 3 && K.cols == 3 && !D.empty(),
+                           "mono calibration artifact is incomplete");
+    std::string load_error;
+    const auto loaded = calib::file::loadMonoCalibrationFile(output, load_error);
+    requireCameraProjector(loaded && loaded->image_width == 880 && loaded->image_height == 640,
+                           "Camera-Projector mono calibration loader rejected the artifact");
+}
+
 void testScanDatasetValidator()
 {
     scan::dataset::ScanDatasetValidator validator;
@@ -1953,6 +2067,8 @@ int main()
     testProjectorHandler();
     testScanDatasetResolver();
     testMonoCalibrationFileLoader();
+    testMonoBoardConfigAndCornerDetection();
+    testMonoCalibrationArtifactAndCameraProjectorCompatibility();
     testScanDatasetHandler();
     testDecodeHandler();
     testCommandExecutorDomainRouting();
