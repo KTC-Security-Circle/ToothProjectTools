@@ -9,6 +9,7 @@ CAMERA_ID="${CAMERA_ID:-0}"; GUARD="${SYNC_GUARD_MS:-30}"; TIMEOUT="${SYNC_TIMEO
 MJPEG_PORT="${MJPEG_PORT:-39010}"; OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/data/check_camera_projector}"
 MONITOR_INDEX="${MONITOR_INDEX:-0}"
 PROJECTOR_ROLE=projector; WINDOW_ROLE=projector; CAMERA_ROLE=left
+PENDING_EVENTS=()
 
 command -v jq >/dev/null || { echo 'jq is required' >&2; exit 2; }
 [[ -x "${BACKEND}" ]] || { echo "backend not executable: ${BACKEND}" >&2; exit 2; }
@@ -24,14 +25,24 @@ request() {
   local json="$1" id line
   id="$(jq -r '.id' <<<"${json}")"; printf '%s\n' "${json}" >&"${BACKEND_PROC[1]}"
   while IFS= read -r line <&"${BACKEND_PROC[0]}"; do
-    [[ "$(jq -r '.id // empty' <<<"${line}" 2>/dev/null)" == "${id}" ]] || continue
+    if [[ "$(jq -r '.id // empty' <<<"${line}" 2>/dev/null)" != "${id}" ]]; then
+      [[ -n "$(jq -r '.event // empty' <<<"${line}" 2>/dev/null)" ]] && PENDING_EVENTS+=("${line}")
+      continue
+    fi
     jq -e '.ok == true' >/dev/null <<<"${line}" || { echo "${line}" >&2; return 1; }
     RESPONSE="${line}"; return 0
   done
 }
 
 wait_for_event() {
-  local event="$1" timeout="${2:-$((TIMEOUT / 1000 + 10))}" line seen
+  local event="$1" timeout="${2:-$((TIMEOUT / 1000 + 10))}" line seen i
+  for i in "${!PENDING_EVENTS[@]}"; do
+    line="${PENDING_EVENTS[$i]}"
+    seen="$(jq -r '.event // empty' <<<"${line}" 2>/dev/null)"
+    unset 'PENDING_EVENTS[i]'
+    if [[ "${seen}" == "scan_failed" ]]; then echo "${line}" >&2; return 1; fi
+    if [[ "${seen}" == "${event}" ]]; then RESPONSE="${line}"; return 0; fi
+  done
   while IFS= read -r -t "${timeout}" line <&"${BACKEND_PROC[0]}"; do
     seen="$(jq -r '.event // empty' <<<"${line}" 2>/dev/null)"
     if [[ "${seen}" == "scan_failed" ]]; then
@@ -60,7 +71,7 @@ request '{"id":"stream","cmd":"start_stream","role":"left"}'
 echo "[STREAM] $(jq -r '.url' <<<"${RESPONSE}")"
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${window_width}" --argjson height "${window_height}" '{id:"window",cmd:"open_window",window_role:"projector",title:"Camera Projector Check",width:$width,height:$height,monitor_index:$monitor,fullscreen:true}')"
 request '{"id":"projector","cmd":"open_projector","projector_role":"projector","window_role":"projector","width":480,"height":270}'
-display_width=$((window_width - 32))
+display_width=$((window_width - 64))
 (( display_width > 0 )) || { echo 'photodiode_marker_margin_unavailable' >&2; exit 2; }
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${display_width}" --argjson height "${window_height}" '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,placement:"center"}')"
 request '{"id":"patterns","cmd":"generate_patterns","projector_role":"projector"}'
