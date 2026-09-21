@@ -358,7 +358,8 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
     }
     if ((message.photodiode_baud && *message.photodiode_baud <= 0) ||
         (message.sync_timeout_ms && *message.sync_timeout_ms <= 0) ||
-        (message.sync_guard_ms && *message.sync_guard_ms < 0))
+        (message.sync_guard_ms && *message.sync_guard_ms < 0) ||
+        (message.max_patterns && *message.max_patterns <= 0))
     {
         return mapFailure("invalid_command", "photodiode_baud and sync_timeout_ms must be positive and sync_guard_ms non-negative");
     }
@@ -372,7 +373,8 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
                                        *message.output_dir,
                                        message.photodiode_device.value_or("/dev/ttyUSB0"),
                                        message.photodiode_baud.value_or(115200),
-                                       message.sync_timeout_ms.value_or(1000), message.sync_guard_ms.value_or(30)};
+                                       message.sync_timeout_ms.value_or(1000), message.sync_guard_ms.value_or(30),
+                                       message.max_patterns.value_or(0)};
     return result;
 }
 

@@ -60,7 +60,9 @@ request '{"id":"stream","cmd":"start_stream","role":"left"}'
 echo "[STREAM] $(jq -r '.url' <<<"${RESPONSE}")"
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${window_width}" --argjson height "${window_height}" '{id:"window",cmd:"open_window",window_role:"projector",title:"Camera Projector Check",width:$width,height:$height,monitor_index:$monitor,fullscreen:true}')"
 request '{"id":"projector","cmd":"open_projector","projector_role":"projector","window_role":"projector","width":480,"height":270}'
-request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${window_width}" --argjson height "${window_height}" '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,placement:"center"}')"
+display_width=$((window_width - 32))
+(( display_width > 0 )) || { echo 'photodiode_marker_margin_unavailable' >&2; exit 2; }
+request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${display_width}" --argjson height "${window_height}" '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,placement:"center"}')"
 request '{"id":"patterns","cmd":"generate_patterns","projector_role":"projector"}'
 echo "Photodiode connected: ${DEVICE} @ ${BAUD}"
 
@@ -81,11 +83,10 @@ while true; do
       else echo 'photodiode timeout' >&2; fi ;;
     s)
       mkdir -p -- "${OUTPUT_DIR}"
-      request "$(jq -cn --arg out "${OUTPUT_DIR}" --arg dev "${DEVICE}" --argjson baud "${BAUD}" --argjson timeout "${TIMEOUT}" --argjson guard "${GUARD}" '{id:"scan",cmd:"scan_start",projector_role:"projector",left_role:"left",output_dir:$out,photodiode_device:$dev,photodiode_baud:$baud,sync_timeout_ms:$timeout,sync_guard_ms:$guard}')"
+      request "$(jq -cn --arg out "${OUTPUT_DIR}" --arg dev "${DEVICE}" --argjson baud "${BAUD}" --argjson timeout "${TIMEOUT}" --argjson guard "${GUARD}" '{id:"scan",cmd:"scan_start",projector_role:"projector",left_role:"left",output_dir:$out,photodiode_device:$dev,photodiode_baud:$baud,sync_timeout_ms:$timeout,sync_guard_ms:$guard,max_patterns:1}')"
       wait_for_event scan_frame_captured
       echo "captured: $(jq -r '.left_path' <<<"${RESPONSE}")"
-      request '{"id":"stop","cmd":"scan_stop"}'
-      wait_for_event scan_stopped
+      wait_for_event scan_completed
       echo "one-pattern synchronized capture completed: ${OUTPUT_DIR}" ;;
     q) break ;;
   esac

@@ -77,6 +77,7 @@ struct ControlMessage {
   std::optional<int> photodiode_baud;
   std::optional<int> sync_timeout_ms;
   std::optional<int> sync_guard_ms;
+  std::optional<int> max_patterns;
 
   /// threshold <std::optional<int>>: GrayCode decode threshold。
   std::optional<int> threshold;

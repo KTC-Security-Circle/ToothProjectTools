@@ -90,7 +90,8 @@ ScanService::~ScanService()
 ScanResult ScanService::startScan(const ScanStartConfig& config)
 {
     if (config.projector_role.empty() || config.left_role.empty() || config.photodiode_device.empty() ||
-        config.photodiode_baud <= 0 || config.sync_timeout_ms <= 0 || config.sync_guard_ms < 0)
+        config.photodiode_baud <= 0 || config.sync_timeout_ms <= 0 || config.sync_guard_ms < 0 ||
+        config.max_patterns < 0)
     {
         return ScanResult::failure(config.scan_id.value_or(std::string{}), "invalid_scan_config",
                                    "invalid scan configuration");
@@ -148,7 +149,10 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     }
 
     std::string metadata_error;
-    if (!writeMetadata(config, scan_id, snapshot->pattern_count, snapshot->code_width, snapshot->code_height,
+    const int scan_pattern_count = config.max_patterns > 0
+                                       ? std::min(config.max_patterns, snapshot->pattern_count)
+                                       : snapshot->pattern_count;
+    if (!writeMetadata(config, scan_id, scan_pattern_count, snapshot->code_width, snapshot->code_height,
                        snapshot->surface, metadata_error))
     {
         return ScanResult::failure(scan_id, "scan_start_failed", metadata_error);
@@ -162,7 +166,7 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
         active_config_ = worker_config;
         active_window_role_ = snapshot->window_role;
         state_ = ScanState::running;
-        pattern_count_ = snapshot->pattern_count;
+        pattern_count_ = scan_pattern_count;
         captured_count_ = 0;
         current_index_ = -1;
         last_error_code_.clear();
@@ -174,7 +178,7 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
         worker_.request_stop();
         worker_ = std::jthread{};
     }
-    worker_ = std::jthread([this, worker_config, scan_id, pattern_count = snapshot->pattern_count](
+    worker_ = std::jthread([this, worker_config, scan_id, pattern_count = scan_pattern_count](
                                std::stop_token token) { workerLoop(token, worker_config, scan_id, pattern_count); });
 
     auto result = scanStatus(scan_id);

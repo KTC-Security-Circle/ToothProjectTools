@@ -617,12 +617,14 @@ void testScanMapper()
 
     message.photodiode_baud = 115200;
     message.photodiode_device = "/dev/ttyACM0";
+    message.max_patterns = 1;
     message.scan_id = "session_001";
     result = mapper.mapStartScan(message);
     assert(result.ok && std::holds_alternative<cmd::CmdStartScan>(*result.command));
     const auto start = std::get<cmd::CmdStartScan>(*result.command);
     assert(start.scan_id == "session_001");
     assert(start.photodiode_device == "/dev/ttyACM0" && start.photodiode_baud == 115200);
+    assert(start.max_patterns == 1);
 
     message.scan_id = "";
     result = mapper.mapStartScan(message);

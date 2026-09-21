@@ -180,6 +180,7 @@ struct CmdStartScan
     int photodiode_baud{115200};
     int sync_timeout_ms{1000};
     int sync_guard_ms{30};
+    int max_patterns{0};
 };
 
 struct CmdScanStatus

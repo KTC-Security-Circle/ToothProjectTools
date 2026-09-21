@@ -28,6 +28,7 @@ returnは受付結果である。
 | `photodiode_baud` | 任意 | serial baud。default `115200`。 |
 | `sync_timeout_ms` | 任意 | event/frame待機timeout。default `1000`。 |
 | `sync_guard_ms` | 任意 | Photodiode event後のCamera選択guard。default `30`。 |
+| `max_patterns` | 任意 | 診断用のpattern取得上限。省略時は全pattern。 |
 
 ### return
 

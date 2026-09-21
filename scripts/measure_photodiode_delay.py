@@ -87,7 +87,7 @@ def main():
         writer.writerows(rows)
     delays = [row[4] for row in rows]
     mean, median, p95, p99, maximum = statistics.mean(delays), statistics.median(delays), percentile(delays,.95), percentile(delays,.99), max(delays)
-    recommended = math.ceil(p99 + args.safety_margin_ms)
+    recommended = max(0, math.ceil(p99 + args.safety_margin_ms))
     print(f"count: {len(delays)}\nmean: {mean:.3f}\nmedian: {median:.3f}\np95: {p95:.3f}\np99: {p99:.3f}\nmax: {maximum:.3f}")
     print(f"recommended_guard_ms: {recommended}\ntimestamp_source: current_frame_sample_host_timestamp\ncsv: {args.output}")
 

@@ -129,6 +129,7 @@ ReadResult JsonLineReader::read() {
         !readInteger(root, "photodiode_baud", message.photodiode_baud, error_message) ||
         !readInteger(root, "sync_timeout_ms", message.sync_timeout_ms, error_message) ||
         !readInteger(root, "sync_guard_ms", message.sync_guard_ms, error_message) ||
+        !readInteger(root, "max_patterns", message.max_patterns, error_message) ||
         !readInteger(root, "threshold", message.threshold, error_message) ||
         !readInteger(root, "projector_width", message.projector_width, error_message) ||
         !readInteger(root, "projector_height", message.projector_height, error_message) ||
