@@ -12,7 +12,7 @@ returnは受付結果である。
 ### args(JSONL)
 
 ```json
-{"id":"70","cmd":"scan_start","scan_id":"session_001","left_role":"left","right_role":"right","projector_role":"projector","output_dir":"./data/scan/session_001","settle_ms":120}
+{"id":"70","cmd":"scan_start","scan_id":"session_001","left_role":"left","right_role":"right","projector_role":"projector","output_dir":"./data/scan/session_001","photodiode_device":"/dev/ttyUSB0","photodiode_baud":115200,"sync_timeout_ms":1000,"sync_guard_ms":30}
 ```
 
 | field | 必須 | 説明 |
@@ -21,10 +21,13 @@ returnは受付結果である。
 | `cmd` | 必須 | `scan_start`。 |
 | `scan_id` | 任意 | scan session ID。省略時は実装が生成する。 |
 | `left_role` | 必須 | left camera role。 |
-| `right_role` | 必須 | right camera role。 |
+| `right_role` | 任意 | stereo時のright camera role。 |
 | `projector_role` | 必須 | projector role。 |
 | `output_dir` | 必須 | scan dataset出力directory。 |
-| `settle_ms` | 任意 | pattern表示後に待つ時間。 |
+| `photodiode_device` | 任意 | serial device。default `/dev/ttyUSB0`。 |
+| `photodiode_baud` | 任意 | serial baud。default `115200`。 |
+| `sync_timeout_ms` | 任意 | event/frame待機timeout。default `1000`。 |
+| `sync_guard_ms` | 任意 | Photodiode event後のCamera選択guard。default `30`。 |
 
 ### return
 
@@ -66,8 +69,9 @@ scan dataset。`metadata.json` にはDecode用の `projector_width` / `projector
 ### 必要なruntime resource
 
 open済みleft camera。
-open済みright camera。
+stereo時はopen済みright camera。
 open済みprojector。
+`0`/`1` eventを出力するPhotodiode serial device。
 生成済みpattern。`scan_start` は生成済みpattern列を使用し、surface設定を使って暗黙に再生成しない。表示時だけdisplay regionへnearest-neighborで拡大する。
 Scan worker。
 
@@ -76,7 +80,7 @@ Scan worker。
 | code | 条件 |
 | --- | --- |
 | `missing_field` | 必須fieldがない。 |
-| `invalid_command` | role、output_dir、settle_msが不正である。 |
+| `invalid_command` | role、output_dir、Photodiode設定が不正である。 |
 | `invalid_scan_config` | scan設定が不正である。 |
 | `invalid_output_path` | `output_dir` が不正、またはcapture出力pathが不正である。 |
 | `camera_not_open` | camera roleがopenされていない。 |
@@ -86,6 +90,13 @@ Scan worker。
 | `directory_create_failed` | scan dataset directoryまたはcapture出力directoryを作成できない。 |
 | `scan_start_failed` | metadata.jsonを書けず、scanを開始できない。 |
 | `pattern_show_failed` | pattern表示に失敗した。 |
+| `photodiode_device_not_found` | serial deviceが存在しない。 |
+| `photodiode_permission_denied` | serial device権限がない。 |
+| `photodiode_open_failed` | serial open/configurationに失敗した。 |
+| `photodiode_timeout` | expected eventをtimeout内に受信できない。 |
+| `photodiode_invalid_event` | `0`/`1`以外を受信した。 |
+| `photodiode_marker_margin_unavailable` | active pattern外に32x32 markerを配置できない。 |
+| `camera_frame_timeout` | event timestamp + guard以降のframeを取得できない。 |
 | `capture_failed` | frame取得に失敗した。 |
 | `empty_frame` | captureしたframeが空である。 |
 | `file_write_failed` | capture画像を書けない。 |

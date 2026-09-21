@@ -35,7 +35,11 @@ scan_dataset/
 | `pattern_count` | Gray Code論理解像度から生成したpattern画像数。 |
 | `projector_width` | Decode用Gray Code論理解像度の幅。 |
 | `projector_height` | Decode用Gray Code論理解像度の高さ。 |
-| `settle_ms` | pattern表示後に待つ時間。 |
+| `sync` | `photodiode`。 |
+| `photodiode_device` | scan時のserial device path。 |
+| `photodiode_baud` | serial baud。 |
+| `sync_timeout_ms` | event/frame timeout。 |
+| `sync_guard_ms` | eventからframe selectionまでのguard。 |
 | `output_dir` | dataset root。 |
 | `surface.monitor_index` | monitor index。 |
 | `surface.monitor_width` | monitor幅。 |
