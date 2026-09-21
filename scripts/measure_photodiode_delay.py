@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 import argparse, collections, csv, math, os, select, statistics, termios, threading, time
-import cv2
-import numpy as np
+try:
+    import numpy as np
+except ImportError as error:
+    raise SystemExit("numpy is required") from error
+try:
+    import cv2
+except ImportError as error:
+    raise SystemExit("OpenCV Python module is required (import cv2 failed)") from error
 
 def percentile(values, p):
     ordered = sorted(values)
@@ -20,8 +26,16 @@ def main():
     parser.add_argument("--projector-y", type=int, default=0)
     parser.add_argument("--projector-width", type=int, default=1920)
     parser.add_argument("--projector-height", type=int, default=1080)
+    parser.add_argument("--white-threshold", type=int, default=200)
+    parser.add_argument("--black-threshold", type=int, default=55)
+    parser.add_argument("--required-ratio", type=float, default=0.95)
+    parser.add_argument("--warmup-seconds", type=float, default=1.5)
+    parser.add_argument("--warmup-frames", type=int, default=30)
     args = parser.parse_args()
     if args.transitions < 1: raise SystemExit("transitions must be positive")
+    if not 0 <= args.black_threshold < args.white_threshold <= 255:
+        raise SystemExit("thresholds must satisfy 0 <= black < white <= 255")
+    if not 0.0 < args.required_ratio <= 1.0: raise SystemExit("required ratio must be in (0, 1]")
     baud = getattr(termios, f"B{args.baud}", None)
     if baud is None: raise SystemExit(f"unsupported baud: {args.baud}")
     fd = os.open(args.device, os.O_RDWR | os.O_NOCTTY | os.O_NONBLOCK)
@@ -43,12 +57,25 @@ def main():
             ok, frame = camera.read()
             if ok:
                 received_ns = time.monotonic_ns()
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) if frame.ndim == 3 else frame
+                mean = float(gray.mean())
+                white_ratio = float(np.count_nonzero(gray >= args.white_threshold)) / gray.size
+                black_ratio = float(np.count_nonzero(gray <= args.black_threshold)) / gray.size
                 with frames_lock:
-                    frames.append((received_ns, float(frame.mean())))
+                    frames.append((received_ns, white_ratio, black_ratio, mean))
 
     camera_thread = threading.Thread(target=drain_camera, daemon=True)
     camera_thread.start()
     try:
+        warmup_deadline = time.monotonic() + max(args.warmup_seconds, 0.0)
+        while True:
+            with frames_lock:
+                warmed_frames = len(frames)
+            if warmed_frames >= args.warmup_frames and time.monotonic() >= warmup_deadline:
+                break
+            if time.monotonic() > warmup_deadline + 5.0:
+                raise RuntimeError("camera warmup failed: insufficient frames")
+            time.sleep(0.01)
         for sequence in range(1, args.transitions + 1):
             expected = 1 if sequence % 2 else 0
             image = np.full((args.projector_height, args.projector_width, 3), 255 if expected else 0, np.uint8)
@@ -64,26 +91,29 @@ def main():
                     received = int(line); received_ns = time.monotonic_ns()
                     if received == expected: pd_ns = received_ns; break
             if pd_ns is None: raise RuntimeError(f"photodiode timeout at transition {sequence}")
-            camera_ns = None
+            camera_ns = None; matched_ratio = None; mean_brightness = None
             while time.monotonic() < deadline:
                 with frames_lock:
                     candidates = tuple(frames)
-                for ts, mean in candidates:
+                for ts, white_ratio, black_ratio, mean in candidates:
                     if ts < shown_ns:
                         continue
-                    if (expected == 1 and mean >= 128.0) or (expected == 0 and mean < 128.0):
-                        camera_ns = ts; break
+                    ratio = white_ratio if expected == 1 else black_ratio
+                    if ratio >= args.required_ratio:
+                        camera_ns = ts; matched_ratio = ratio; mean_brightness = mean; break
                 if camera_ns is not None: break
                 time.sleep(0.001)
             if camera_ns is None: raise RuntimeError(f"camera transition timeout at {sequence}")
             delay_ms = (camera_ns - pd_ns) / 1_000_000.0
-            rows.append((sequence, "white" if expected else "black", pd_ns, camera_ns, delay_ms))
+            rows.append((sequence, "white" if expected else "black", pd_ns, camera_ns, delay_ms,
+                         matched_ratio, mean_brightness))
             print(f"[{sequence:03d}] {rows[-1][1]} delay_ms={delay_ms:.3f}")
     finally:
         camera_stop.set(); camera_thread.join(timeout=2.0)
         camera.release(); cv2.destroyAllWindows(); os.close(fd)
     with open(args.output, "w", newline="", encoding="utf-8") as output:
-        writer = csv.writer(output); writer.writerow(["sequence","state","photodiode_ns","camera_ns","delay_ms"])
+        writer = csv.writer(output); writer.writerow(["sequence","state","photodiode_ns","camera_ns","delay_ms",
+                                                       "matched_ratio","mean_brightness"])
         writer.writerows(rows)
     delays = [row[4] for row in rows]
     mean, median, p95, p99, maximum = statistics.mean(delays), statistics.median(delays), percentile(delays,.95), percentile(delays,.99), max(delays)

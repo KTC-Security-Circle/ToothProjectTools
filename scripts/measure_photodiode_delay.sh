@@ -12,6 +12,11 @@ PROJECTOR_X="${PROJECTOR_X:-0}"
 PROJECTOR_Y="${PROJECTOR_Y:-0}"
 PROJECTOR_WIDTH="${PROJECTOR_WIDTH:-1920}"
 PROJECTOR_HEIGHT="${PROJECTOR_HEIGHT:-1080}"
+WHITE_THRESHOLD="${WHITE_THRESHOLD:-200}"
+BLACK_THRESHOLD="${BLACK_THRESHOLD:-55}"
+REQUIRED_RATIO="${REQUIRED_RATIO:-0.95}"
+WARMUP_SECONDS="${WARMUP_SECONDS:-1.5}"
+WARMUP_FRAMES="${WARMUP_FRAMES:-30}"
 
 [[ -e "${PHOTODIODE_DEVICE}" ]] || { printf 'device not found: %s\n' "${PHOTODIODE_DEVICE}" >&2; exit 2; }
 [[ -r "${PHOTODIODE_DEVICE}" && -w "${PHOTODIODE_DEVICE}" ]] || { printf 'permission denied: %s\n' "${PHOTODIODE_DEVICE}" >&2; exit 3; }
@@ -22,4 +27,7 @@ exec python3 "${SCRIPT_DIR}/measure_photodiode_delay.py" \
   --device "${PHOTODIODE_DEVICE}" --baud "${PHOTODIODE_BAUD}" --camera "${CAMERA_ID}" \
   --transitions "${TRANSITIONS}" --safety-margin-ms "${SAFETY_MARGIN_MS}" --output "${OUTPUT_CSV}" \
   --projector-x "${PROJECTOR_X}" --projector-y "${PROJECTOR_Y}" \
-  --projector-width "${PROJECTOR_WIDTH}" --projector-height "${PROJECTOR_HEIGHT}"
+  --projector-width "${PROJECTOR_WIDTH}" --projector-height "${PROJECTOR_HEIGHT}" \
+  --white-threshold "${WHITE_THRESHOLD}" --black-threshold "${BLACK_THRESHOLD}" \
+  --required-ratio "${REQUIRED_RATIO}" --warmup-seconds "${WARMUP_SECONDS}" \
+  --warmup-frames "${WARMUP_FRAMES}"
