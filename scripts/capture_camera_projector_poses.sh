@@ -19,7 +19,10 @@ WINDOW_ROLE="${WINDOW_ROLE:-projector}"
 CODE_WIDTH="${CODE_WIDTH:-480}"
 CODE_HEIGHT="${CODE_HEIGHT:-270}"
 
-SCAN_SETTLE_MS="${SCAN_SETTLE_MS:-120}"
+PHOTODIODE_DEVICE="${PHOTODIODE_DEVICE:-/dev/ttyUSB0}"
+PHOTODIODE_BAUD="${PHOTODIODE_BAUD:-115200}"
+SYNC_TIMEOUT_MS="${SYNC_TIMEOUT_MS:-1000}"
+SYNC_GUARD_MS="${SYNC_GUARD_MS:-30}"
 REFERENCE_SETTLE_SEC="${REFERENCE_SETTLE_SEC:-0.20}"
 DECODE_THRESHOLD="${DECODE_THRESHOLD:-10}"
 SCAN_TIMEOUT_SEC="${SCAN_TIMEOUT_SEC:-120}"
@@ -267,7 +270,10 @@ capture_pose() {
       --arg projector_role "${PROJECTOR_ROLE}" \
       --arg left_role "${CAMERA_ROLE}" \
       --arg output_dir "${tmp_dir}/scan" \
-      --argjson settle_ms "${SCAN_SETTLE_MS}" \
+      --arg photodiode_device "${PHOTODIODE_DEVICE}" \
+      --argjson photodiode_baud "${PHOTODIODE_BAUD}" \
+      --argjson sync_timeout_ms "${SYNC_TIMEOUT_MS}" \
+      --argjson sync_guard_ms "${SYNC_GUARD_MS}" \
       '{
         id:$id,
         cmd:"scan_start",
@@ -275,8 +281,10 @@ capture_pose() {
         projector_role:$projector_role,
         left_role:$left_role,
         output_dir:$output_dir,
-        settle_ms:$settle_ms,
-        sync_source:"fixed_delay"
+        photodiode_device:$photodiode_device,
+        photodiode_baud:$photodiode_baud,
+        sync_timeout_ms:$sync_timeout_ms,
+        sync_guard_ms:$sync_guard_ms
       }'
   )"
   request "${id}" "${json}" || return 1
@@ -384,6 +392,11 @@ initialize_runtime() {
       '{id:$id,cmd:"open_camera",camera_id:$camera_id,role:$role}'
   )"
   request "${id}" "${json}" || die "open_camera failed"
+
+  id="init-stream"
+  json="$(jq -cn --arg id "${id}" --arg role "${CAMERA_ROLE}" '{id:$id,cmd:"start_stream",role:$role}')"
+  request "${id}" "${json}" || die "start_stream failed"
+  printf '[STREAM] %s\n' "$(jq -r '.url // empty' <<<"${LAST_RESPONSE}")"
 
   id="init-window"
   json="$(

@@ -92,12 +92,11 @@ SerialPhotodiodeTransport::receive(std::chrono::milliseconds timeout)
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline)
     {
-        if (const auto newline = buffer_.find('\n'); newline != std::string::npos)
+        if (!pending_events_.empty())
         {
-            auto line = buffer_.substr(0, newline);
-            buffer_.erase(0, newline + 1);
-            if (!line.empty() && line.back() == '\r') line.pop_back();
-            return parsePhotodiodeLine(line, std::chrono::steady_clock::now(), ++sequence_);
+            auto event = pending_events_.front();
+            pending_events_.pop_front();
+            return event;
         }
 
         const auto now = std::chrono::steady_clock::now();
@@ -114,7 +113,19 @@ SerialPhotodiodeTransport::receive(std::chrono::milliseconds timeout)
             throw PhotodiodeTransportError("photodiode_open_failed", "photodiode serial device disconnected");
         char bytes[128];
         const auto count = ::read(fd_, bytes, sizeof(bytes));
-        if (count > 0) buffer_.append(bytes, static_cast<std::size_t>(count));
+        if (count > 0)
+        {
+            const auto received_at = std::chrono::steady_clock::now();
+            buffer_.append(bytes, static_cast<std::size_t>(count));
+            for (auto newline = buffer_.find('\n'); newline != std::string::npos;
+                 newline = buffer_.find('\n'))
+            {
+                auto line = buffer_.substr(0, newline);
+                buffer_.erase(0, newline + 1);
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+                pending_events_.push_back(parsePhotodiodeLine(line, received_at, ++sequence_));
+            }
+        }
         else if (count < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR)
             throw PhotodiodeTransportError("photodiode_open_failed", std::string{"serial read failed: "} + std::strerror(errno));
     }
