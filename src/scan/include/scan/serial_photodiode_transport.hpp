@@ -3,6 +3,7 @@
 #include "structured_light/pattern_sync.hpp"
 
 #include <cstdint>
+#include <deque>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -38,6 +39,7 @@ class SerialPhotodiodeTransport final : public structured_light::sync::Photodiod
   private:
     int fd_{-1};
     std::string buffer_;
+    std::deque<structured_light::sync::SyncEvent> pending_events_;
     std::uint64_t sequence_{0};
 };
 
