@@ -227,14 +227,7 @@ std::optional<FrameSample> Camera::getFrameSample() {
 std::optional<FrameSample> Camera::firstFrameAtOrAfter(
     std::chrono::steady_clock::time_point timestamp) {
     std::lock_guard<std::mutex> lock(frame_mutex_);
-    for (const auto& sample : frame_ring_) {
-        if (sample.timestamp >= timestamp) {
-            FrameSample result = sample;
-            result.image = result.image.clone();
-            return result;
-        }
-    }
-    return std::nullopt;
+    return video::firstFrameAtOrAfter(frame_ring_, timestamp);
 }
 
 void Camera::setFrameRingCapacity(std::size_t capacity) {

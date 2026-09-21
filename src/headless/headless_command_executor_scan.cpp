@@ -13,10 +13,8 @@ common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdStartS
 {
     return result_adapter::scan(scan_service_.startScan({
         command.scan_id, command.projector_role, command.left_role, command.right_role,
-        std::filesystem::path{command.output_dir}, command.settle_ms, command.sync_source,
-        command.sync_timeout_ms, command.sync_guard_ms, command.sync_stable_frames,
-        command.roi_x, command.roi_y, command.roi_width, command.roi_height,
-        command.roi_black_threshold, command.roi_white_threshold}));
+        std::filesystem::path{command.output_dir}, command.photodiode_device, command.photodiode_baud,
+        command.sync_timeout_ms, command.sync_guard_ms}));
 }
 
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdScanStatus& command)

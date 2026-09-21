@@ -57,7 +57,7 @@ struct ProjectorSurfaceRequest
     ProjectorPlacement placement{ProjectorPlacement::center};
 };
 
-bool canPlaceSyncMarker(const ProjectorSurface& surface);
+bool canPlacePhotodiodeMarker(const ProjectorSurface& surface);
 
 struct ProjectorScanSnapshot
 {

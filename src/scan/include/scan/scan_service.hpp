@@ -4,6 +4,8 @@
 #include "scan/scan_result.hpp"
 
 #include <filesystem>
+#include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -26,6 +28,11 @@ class ProjectorService;
 struct ProjectorSurface;
 } // namespace projector
 
+namespace structured_light::sync
+{
+class PhotodiodeTransport;
+}
+
 namespace scan
 {
 
@@ -46,28 +53,21 @@ struct ScanStartConfig
     /// output_dir <std::filesystem::path>: scan dataset保存先directory。
     std::filesystem::path output_dir;
 
-    /// settle_ms <int>: pattern表示後、captureまで待機する時間ms。
-    int settle_ms{120};
-
-    /// sync_source <string>: fixed_delay / camera_roi / photodiode。未指定相当はfixed_delay。
-    std::string sync_source{"fixed_delay"};
+    std::string photodiode_device{"/dev/ttyUSB0"};
+    int photodiode_baud{115200};
     int sync_timeout_ms{1000};
     int sync_guard_ms{30};
-    int sync_stable_frames{3};
-    int roi_x{0};
-    int roi_y{0};
-    int roi_width{32};
-    int roi_height{32};
-    int roi_black_threshold{40};
-    int roi_white_threshold{180};
-    int roi_decode_margin{4};
 };
+
+using PhotodiodeTransportFactory = std::function<std::unique_ptr<structured_light::sync::PhotodiodeTransport>(
+    const std::string&, int)>;
 
 class ScanService
 {
   public:
     ScanService(projector::ProjectorService& projector_service, capture::CaptureService& capture_service,
-                video::CameraService& camera_service, ScanEventSink& event_sink);
+                video::CameraService& camera_service, ScanEventSink& event_sink,
+                PhotodiodeTransportFactory photodiode_factory = {});
     ~ScanService();
 
     ScanService(const ScanService&) = delete;
@@ -111,6 +111,7 @@ class ScanService
     capture::CaptureService& capture_service_;
     video::CameraService& camera_service_;
     ScanEventSink& event_sink_;
+    PhotodiodeTransportFactory photodiode_factory_;
 
     mutable std::mutex mutex_;
     std::mutex scan_capture_mutex_;

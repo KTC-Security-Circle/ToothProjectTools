@@ -218,7 +218,7 @@ void writeScanMetadata(const std::filesystem::path& dir, int pattern_count = 2, 
            << "  \"left_role\": \"left\",\n"
            << "  \"right_role\": \"right\",\n"
            << "  \"pattern_count\": " << pattern_count << ",\n"
-           << "  \"settle_ms\": 120,\n"
+           << "  \"sync\": \"photodiode\",\n"
            << "  \"output_dir\": \"" << dir.string() << "\",\n"
            << "  \"surface\": {\n"
            << "    \"surface_width\": " << pattern_width << ",\n"
@@ -314,31 +314,6 @@ void testStructuredLightPatternGeneration()
         out_of_range_thrown = true;
     }
     require(out_of_range_thrown, "StructuredLight out-of-range access did not throw");
-}
-
-void enableCameraRoiSync(const std::filesystem::path& dir, int roi_x, int roi_y, int roi_width, int roi_height,
-                         int margin)
-{
-    cv::FileStorage storage((dir / "metadata.json").string(), cv::FileStorage::READ);
-    const auto pattern_count = static_cast<int>(storage["pattern_count"]);
-    const auto projector_width = static_cast<int>(storage["projector_width"]);
-    const auto projector_height = static_cast<int>(storage["projector_height"]);
-    storage.release();
-    std::ofstream output(dir / "metadata.json");
-    output << "{\n"
-           << "  \"scan_id\": \"session_001\",\n"
-           << "  \"pattern_count\": " << pattern_count << ",\n"
-           << "  \"projector_width\": " << projector_width << ",\n"
-           << "  \"projector_height\": " << projector_height << ",\n"
-           << "  \"sync_source\": \"camera_roi\",\n"
-           << "  \"roi_x\": " << roi_x << ",\n"
-           << "  \"roi_y\": " << roi_y << ",\n"
-           << "  \"roi_width\": " << roi_width << ",\n"
-           << "  \"roi_height\": " << roi_height << ",\n"
-           << "  \"roi_decode_margin\": " << margin << ",\n"
-           << "  \"surface\": {\"pattern_width\": " << projector_width
-           << ", \"pattern_height\": " << projector_height << ", \"pattern_x\": 0, \"pattern_y\": 0}\n"
-           << "}\n";
 }
 
 cv::Mat readYmlMat(const std::filesystem::path& path, const std::string& key)
@@ -636,17 +611,18 @@ void testScanMapper()
     assert(!result.ok && result.error->code == "missing_field");
 
     message.output_dir = "./data/scan/test";
-    message.settle_ms = -1;
+    message.photodiode_baud = 0;
     result = mapper.mapStartScan(message);
     assert(!result.ok && result.error->code == "invalid_command");
 
-    message.settle_ms = 0;
+    message.photodiode_baud = 115200;
+    message.photodiode_device = "/dev/ttyACM0";
     message.scan_id = "session_001";
     result = mapper.mapStartScan(message);
     assert(result.ok && std::holds_alternative<cmd::CmdStartScan>(*result.command));
     const auto start = std::get<cmd::CmdStartScan>(*result.command);
     assert(start.scan_id == "session_001");
-    assert(start.settle_ms == 0);
+    assert(start.photodiode_device == "/dev/ttyACM0" && start.photodiode_baud == 115200);
 
     message.scan_id = "";
     result = mapper.mapStartScan(message);
@@ -1865,37 +1841,16 @@ void testDecodeServiceSyntheticDataset()
     assert(result.left_valid_count == 0 && result.right_valid_count == 0);
 }
 
-void testDecodeExcludesCameraSyncRoiOnly()
-{
-    scan::dataset::ScanDatasetValidator validator;
-    decode::DecodeService decode_service{validator};
-    const auto input_dir = testTempDir("decode_camera_roi_input");
-    const auto output_dir = testTempDir("decode_camera_roi_output");
-    writeSyntheticGrayCodeDataset(input_dir, 8, 4);
-    enableCameraRoiSync(input_dir, 3, 1, 2, 1, 1);
-
-    const auto result =
-        decode_service.decodePatterns(decode::DecodePatternsConfig{input_dir, output_dir, 15, false});
-    assert(result.ok);
-    assert(result.left_valid_count == 20 && result.right_valid_count == 20);
-    const auto projector_x = readYmlMat(output_dir / "left" / "projector_x.yml", "projector_x");
-    const auto mask = cv::imread((output_dir / "left" / "valid_mask.png").string(), cv::IMREAD_GRAYSCALE);
-    assert(mask.at<uchar>(0, 2) == 0 && mask.at<uchar>(2, 5) == 0);
-    assert(projector_x.at<int>(1, 3) == -1);
-    assert(mask.at<uchar>(0, 1) == 255 && projector_x.at<int>(0, 1) == 1);
-    assert(mask.at<uchar>(3, 7) == 255 && projector_x.at<int>(3, 7) == 7);
-}
-
-void testSyncMarkerRequiresProjectorMargin()
+void testPhotodiodeMarkerRequiresProjectorMargin()
 {
     projector::ProjectorSurface surface;
     surface.surface_width = 16;
     surface.surface_height = 12;
     surface.pattern_width = 16;
     surface.pattern_height = 12;
-    assert(!projector::canPlaceSyncMarker(surface));
-    surface.surface_width = 24;
-    assert(projector::canPlaceSyncMarker(surface));
+    assert(!projector::canPlacePhotodiodeMarker(surface));
+    surface.surface_width = 48;
+    assert(projector::canPlacePhotodiodeMarker(surface));
 
     surface.surface_width = 9;
     surface.surface_height = 10;
@@ -1903,10 +1858,10 @@ void testSyncMarkerRequiresProjectorMargin()
     surface.pattern_y = 9;
     surface.pattern_width = 1;
     surface.pattern_height = 1;
-    assert(!projector::canPlaceSyncMarker(surface));
+    assert(!projector::canPlacePhotodiodeMarker(surface));
 }
 
-void testCameraRoiScanRejectsStereoBeforeStart()
+void testPhotodiodeScanConfigValidation()
 {
     FakeWindowBackend backend;
     auto monitor_service = fakeMonitorService();
@@ -1922,17 +1877,12 @@ void testCameraRoiScanRejectsStereoBeforeStart()
     config.projector_role = "projector";
     config.left_role = "left";
     config.right_role = "right";
-    config.output_dir = testTempDir("camera_roi_stereo_rejected");
-    config.sync_source = "camera_roi";
+    config.output_dir = testTempDir("photodiode_scan_validation");
+    config.photodiode_device.clear();
     auto result = scan_service.startScan(config);
     assert(!result.ok && result.error->code == "invalid_scan_config");
 
-    config.right_role.clear();
-    result = scan_service.startScan(config);
-    assert(!result.ok && result.error->code == "projector_not_open");
-
-    config.right_role = "right";
-    config.sync_source = "fixed_delay";
+    config.photodiode_device = "/dev/ttyUSB0";
     result = scan_service.startScan(config);
     assert(!result.ok && result.error->code == "projector_not_open");
 }
@@ -2079,9 +2029,8 @@ int main()
     testProjectorServiceValidation();
     testScanDatasetValidator();
     testDecodeServiceSyntheticDataset();
-    testDecodeExcludesCameraSyncRoiOnly();
-    testSyncMarkerRequiresProjectorMargin();
-    testCameraRoiScanRejectsStereoBeforeStart();
+    testPhotodiodeMarkerRequiresProjectorMargin();
+    testPhotodiodeScanConfigValidation();
     testDecodeServiceFailures();
     return 0;
 }

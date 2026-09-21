@@ -1,7 +1,7 @@
 add_library(scan_service STATIC
   scan_result.cpp
   scan_event.cpp
-  camera_roi_sync_tracker.cpp
+  serial_photodiode_transport.cpp
   scan_service.cpp
 )
 

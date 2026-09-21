@@ -16,15 +16,15 @@ namespace projector
 {
 namespace
 {
-constexpr int sync_marker_size = 8;
+constexpr int photodiode_marker_size = 32;
 
 cv::Rect syncMarkerRect(const ProjectorSurface& surface)
 {
     const std::array candidates{
-        cv::Rect{surface.pattern_x - sync_marker_size, surface.pattern_y, sync_marker_size, sync_marker_size},
-        cv::Rect{surface.pattern_x + surface.pattern_width, surface.pattern_y, sync_marker_size, sync_marker_size},
-        cv::Rect{surface.pattern_x, surface.pattern_y - sync_marker_size, sync_marker_size, sync_marker_size},
-        cv::Rect{surface.pattern_x, surface.pattern_y + surface.pattern_height, sync_marker_size, sync_marker_size}};
+        cv::Rect{surface.pattern_x - photodiode_marker_size, surface.pattern_y, photodiode_marker_size, photodiode_marker_size},
+        cv::Rect{surface.pattern_x + surface.pattern_width, surface.pattern_y, photodiode_marker_size, photodiode_marker_size},
+        cv::Rect{surface.pattern_x, surface.pattern_y - photodiode_marker_size, photodiode_marker_size, photodiode_marker_size},
+        cv::Rect{surface.pattern_x, surface.pattern_y + surface.pattern_height, photodiode_marker_size, photodiode_marker_size}};
     const cv::Rect bounds{0, 0, surface.surface_width, surface.surface_height};
     for (const auto& candidate : candidates)
     {
@@ -37,7 +37,7 @@ cv::Rect syncMarkerRect(const ProjectorSurface& surface)
 }
 } // namespace
 
-bool canPlaceSyncMarker(const ProjectorSurface& surface)
+bool canPlacePhotodiodeMarker(const ProjectorSurface& surface)
 {
     return syncMarkerRect(surface).area() > 0;
 }
@@ -473,7 +473,7 @@ cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const Pro
     cv::Mat canvas(surface.surface_height, surface.surface_width, display_pattern.type(), cv::Scalar::all(0));
     const cv::Rect roi{surface.pattern_x, surface.pattern_y, surface.pattern_width, surface.pattern_height};
     display_pattern.copyTo(canvas(roi));
-    // Gray Code領域外の余白へ同期markerを置く。余白がない場合は
+    // Gray Code領域外の余白へPhotodiode markerを置く。余白がない場合は
     // active patternを壊さないためmarkerを描画しない。
     const auto marker = syncMarkerRect(surface);
     if (marker.area() > 0)

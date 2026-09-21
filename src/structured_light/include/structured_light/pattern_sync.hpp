@@ -5,13 +5,10 @@
 #include <string>
 #include <optional>
 
-#include <opencv2/core/mat.hpp>
-#include <opencv2/core/types.hpp>
-
 namespace structured_light::sync
 {
 enum class MarkerState { black, white, undecided };
-enum class SyncSource { camera_roi, photodiode, fixed_delay };
+enum class SyncSource { photodiode };
 
 /**
  * @brief 同期markerの光学状態とhost monotonic timestampを表す。
@@ -24,19 +21,9 @@ struct SyncEvent
     MarkerState state{MarkerState::undecided};
     std::chrono::steady_clock::time_point timestamp{};
     std::uint64_t sequence{0};
-    SyncSource source{SyncSource::camera_roi};
+    SyncSource source{SyncSource::photodiode};
     double confidence{0.0};
 };
-
-struct RoiSyncConfig
-{
-    cv::Rect roi;
-    double black_threshold{40.0};
-    double white_threshold{180.0};
-    int stable_frames{3};
-};
-
-struct RoiObservation { MarkerState state{MarkerState::undecided}; double mean_brightness{0.0}; };
 
 /** @brief 光学同期イベントを供給する抽象境界。timestampはhostのsteady_clock domainである。 */
 class PatternSyncSource
@@ -69,8 +56,7 @@ class PhotodiodeSyncSource final : public PatternSyncSource
     PhotodiodeTransport& transport_;
 };
 
-/** @brief ROI平均輝度をhysteresis thresholdでmarker状態へ変換する。 */
-RoiObservation observeRoi(const cv::Mat&, const RoiSyncConfig&, MarkerState previous_state);
 std::string toString(MarkerState);
 std::string toString(SyncSource);
+std::chrono::steady_clock::time_point selectionTime(const SyncEvent&, std::chrono::milliseconds guard);
 } // namespace structured_light::sync

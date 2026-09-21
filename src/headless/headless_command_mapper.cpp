@@ -352,9 +352,15 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
     {
         return mapFailure("invalid_command", "scan_id must not be empty");
     }
-    if (message.settle_ms && *message.settle_ms < 0)
+    if (message.photodiode_device && message.photodiode_device->empty())
     {
-        return mapFailure("invalid_command", "settle_ms must be non-negative");
+        return mapFailure("invalid_command", "photodiode_device must not be empty");
+    }
+    if ((message.photodiode_baud && *message.photodiode_baud <= 0) ||
+        (message.sync_timeout_ms && *message.sync_timeout_ms <= 0) ||
+        (message.sync_guard_ms && *message.sync_guard_ms < 0))
+    {
+        return mapFailure("invalid_command", "photodiode_baud and sync_timeout_ms must be positive and sync_guard_ms non-negative");
     }
 
     CommandMapResult result;
@@ -364,13 +370,9 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
                                        *message.left_role,
                                        message.right_role.value_or(std::string{}),
                                        *message.output_dir,
-                                       message.settle_ms.value_or(120),
-                                       message.sync_source.value_or("fixed_delay"),
-                                       message.sync_timeout_ms.value_or(1000), message.sync_guard_ms.value_or(30),
-                                       message.sync_stable_frames.value_or(3), message.roi_x.value_or(0),
-                                       message.roi_y.value_or(0), message.roi_width.value_or(32),
-                                       message.roi_height.value_or(32), message.roi_black_threshold.value_or(40),
-                                       message.roi_white_threshold.value_or(180)};
+                                       message.photodiode_device.value_or("/dev/ttyUSB0"),
+                                       message.photodiode_baud.value_or(115200),
+                                       message.sync_timeout_ms.value_or(1000), message.sync_guard_ms.value_or(30)};
     return result;
 }
 

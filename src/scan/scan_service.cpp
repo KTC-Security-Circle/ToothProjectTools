@@ -1,5 +1,5 @@
 #include "scan/scan_service.hpp"
-#include "scan/camera_roi_sync_tracker.hpp"
+#include "scan/serial_photodiode_transport.hpp"
 
 #include "capture/capture_result.hpp"
 #include "capture/capture_service.hpp"
@@ -7,6 +7,7 @@
 #include "projector/projector_service.hpp"
 #include "structured_light/pattern_sync.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <opencv2/core.hpp>
 #include <filesystem>
@@ -65,44 +66,20 @@ std::string nowIsoLike()
     return stream.str();
 }
 
-std::string captureCode(const capture::CaptureStereoResult& result)
-{
-    if (!result.error)
-    {
-        return "capture_failed";
-    }
-    switch (result.error->code)
-    {
-    case capture::CaptureErrorCode::CameraNotFound:
-    case capture::CaptureErrorCode::CameraNotOpen:
-        return "camera_not_open";
-    case capture::CaptureErrorCode::InvalidOutputPath:
-        return "invalid_output_path";
-    case capture::CaptureErrorCode::DirectoryCreateFailed:
-        return "directory_create_failed";
-    case capture::CaptureErrorCode::EmptyFrame:
-        return "empty_frame";
-    case capture::CaptureErrorCode::FileWriteFailed:
-        return "file_write_failed";
-    case capture::CaptureErrorCode::InternalError:
-        return "capture_failed";
-    }
-    return "capture_failed";
-}
-
-std::string captureMessage(const capture::CaptureStereoResult& result)
-{
-    return result.error ? result.error->message : std::string{"failed to capture stereo frame"};
-}
-
 } // namespace
 
 ScanService::ScanService(projector::ProjectorService& projector_service,
                          capture::CaptureService& capture_service, video::CameraService& camera_service,
-                         ScanEventSink& event_sink)
+                         ScanEventSink& event_sink, PhotodiodeTransportFactory photodiode_factory)
     : projector_service_(projector_service), capture_service_(capture_service), camera_service_(camera_service),
-      event_sink_(event_sink)
+      event_sink_(event_sink), photodiode_factory_(std::move(photodiode_factory))
 {
+    if (!photodiode_factory_)
+    {
+        photodiode_factory_ = [](const std::string& device, int baud) {
+            return std::make_unique<SerialPhotodiodeTransport>(device, baud);
+        };
+    }
 }
 
 ScanService::~ScanService()
@@ -112,15 +89,8 @@ ScanService::~ScanService()
 
 ScanResult ScanService::startScan(const ScanStartConfig& config)
 {
-    const bool valid_source = config.sync_source == "fixed_delay" || config.sync_source == "camera_roi" ||
-                              config.sync_source == "photodiode";
-    if (config.projector_role.empty() || config.left_role.empty() || config.settle_ms < 0 || !valid_source ||
-        (config.sync_source == "camera_roi" && !config.right_role.empty()) ||
-        config.sync_timeout_ms <= 0 || config.sync_guard_ms < 0 || config.sync_stable_frames <= 0 ||
-        config.roi_x < 0 || config.roi_y < 0 || config.roi_width <= 0 || config.roi_height <= 0 ||
-        config.roi_decode_margin < 0 ||
-        config.roi_black_threshold < 0 || config.roi_white_threshold > 255 ||
-        config.roi_black_threshold >= config.roi_white_threshold)
+    if (config.projector_role.empty() || config.left_role.empty() || config.photodiode_device.empty() ||
+        config.photodiode_baud <= 0 || config.sync_timeout_ms <= 0 || config.sync_guard_ms < 0)
     {
         return ScanResult::failure(config.scan_id.value_or(std::string{}), "invalid_scan_config",
                                    "invalid scan configuration");
@@ -154,10 +124,10 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     {
         return ScanResult::failure(scan_id, "pattern_not_generated", "patterns are not generated");
     }
-    if (config.sync_source == "camera_roi" && !projector::canPlaceSyncMarker(snapshot->surface))
+    if (!projector::canPlacePhotodiodeMarker(snapshot->surface))
     {
-        return ScanResult::failure(scan_id, "sync_marker_margin_unavailable",
-                                   "camera_roi synchronization requires projector margin outside the active pattern");
+        return ScanResult::failure(scan_id, "photodiode_marker_margin_unavailable",
+                                   "photodiode synchronization requires a 32x32 projector margin outside the active pattern");
     }
 
     const auto left_id = camera_service_.resolveCameraId(config.left_role);
@@ -341,11 +311,62 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         return;
     }
 
-    const structured_light::sync::RoiSyncConfig roi_config{
-        cv::Rect(config.roi_x, config.roi_y, config.roi_width, config.roi_height),
-        static_cast<double>(config.roi_black_threshold), static_cast<double>(config.roi_white_threshold),
-        config.sync_stable_frames};
-    CameraRoiSyncTracker roi_sync_tracker(roi_config, std::chrono::milliseconds(config.sync_guard_ms));
+    std::unique_ptr<structured_light::sync::PhotodiodeTransport> photodiode_transport;
+    try
+    {
+        photodiode_transport = photodiode_factory_(config.photodiode_device, config.photodiode_baud);
+    }
+    catch (const PhotodiodeTransportError& error)
+    {
+        std::lock_guard lock(mutex_);
+        state_ = ScanState::failed;
+        last_error_code_ = error.code();
+        last_error_message_ = error.what();
+        pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                  {"error_message", last_error_message_}});
+        return;
+    }
+    structured_light::sync::PhotodiodeSyncSource photodiode_source(*photodiode_transport);
+
+    // MCUは状態変化時だけeventを送る。scan開始前にmarkerをwhiteへ確立し、
+    // pattern 0 (black)が必ずtransitionになるようpre-armする。
+    try
+    {
+        const auto black_result = projector_service_.showPattern(config.projector_role, 0);
+        if (!black_result.ok)
+        {
+            throw PhotodiodeTransportError("pattern_show_failed", "failed to show black pre-arm pattern");
+        }
+        const auto black_shown_at = std::chrono::steady_clock::now();
+        (void)photodiode_source.waitForTransition(
+            structured_light::sync::MarkerState::black, black_shown_at,
+            std::chrono::milliseconds(std::min(config.sync_timeout_ms, 200)));
+
+        const auto white_result = projector_service_.showPattern(config.projector_role, 1);
+        if (!white_result.ok)
+        {
+            throw PhotodiodeTransportError("pattern_show_failed", "failed to show white pre-arm pattern");
+        }
+        const auto white_shown_at = std::chrono::steady_clock::now();
+        const auto white_event = photodiode_source.waitForTransition(
+            structured_light::sync::MarkerState::white, white_shown_at,
+            std::chrono::milliseconds(config.sync_timeout_ms));
+        if (!white_event)
+        {
+            throw PhotodiodeTransportError("photodiode_timeout", "Photodiode pre-arm white eventを受信できませんでした");
+        }
+    }
+    catch (const PhotodiodeTransportError& error)
+    {
+        std::lock_guard lock(mutex_);
+        state_ = ScanState::failed;
+        last_error_code_ = error.code();
+        last_error_message_ = error.what();
+        pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                  {"error_message", last_error_message_}});
+        return;
+    }
+
     for (int index = 0; index < pattern_count; ++index)
     {
         if (stop_token.stop_requested())
@@ -395,84 +416,71 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         }
 
         const auto show_timestamp = std::chrono::steady_clock::now();
-        std::optional<video::FrameSample> selected_sample;
-        auto selected_at = show_timestamp + std::chrono::milliseconds(config.settle_ms);
-        if (config.sync_source == "camera_roi")
+        const auto expected = (index % 2 == 0) ? structured_light::sync::MarkerState::black
+                                               : structured_light::sync::MarkerState::white;
+        std::optional<structured_light::sync::SyncEvent> event;
+        try
         {
-            const auto expected = (index % 2 == 0) ? structured_light::sync::MarkerState::black
-                                                    : structured_light::sync::MarkerState::white;
-            roi_sync_tracker.beginPattern(expected, show_timestamp,
-                                          std::chrono::milliseconds(config.sync_timeout_ms));
-            while (!stop_token.stop_requested() && !roi_sync_tracker.timedOut(std::chrono::steady_clock::now()))
-            {
-                const auto sample = camera_service_.latestFrame(*left_id);
-                if (!sample)
-                {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                    continue;
-                }
-                const auto decision = roi_sync_tracker.observe(*sample);
-                if (decision.status == CameraRoiSyncStatus::transition_confirmed)
-                {
-                    selected_at = *decision.selected_at;
-                    break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(2));
-            }
-            if (!roi_sync_tracker.confirmed())
-            {
-                std::lock_guard lock(mutex_);
-                state_ = ScanState::failed;
-                last_error_code_ = "sync_timeout";
-                last_error_message_ = "camera ROIで投影切替を検出できませんでした";
-                pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                           {"error_message", last_error_message_}});
-                return;
-            }
-            const auto selection_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(config.sync_timeout_ms);
-            while (!stop_token.stop_requested() && !selected_sample && std::chrono::steady_clock::now() < selection_deadline)
-            {
-                selected_sample = camera_service_.firstFrameAtOrAfter(*left_id, selected_at);
-                if (!selected_sample) std::this_thread::sleep_for(std::chrono::milliseconds(2));
-            }
-            if (!selected_sample)
-            {
-                std::lock_guard lock(mutex_);
-                state_ = ScanState::failed;
-                last_error_code_ = "sync_timeout";
-                last_error_message_ = "camera ROI同期後のguard済みframeを取得できませんでした";
-                pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                           {"error_message", last_error_message_}});
-                return;
-            }
+            event = photodiode_source.waitForTransition(expected, show_timestamp,
+                                                        std::chrono::milliseconds(config.sync_timeout_ms));
         }
-        else if (config.sync_source == "photodiode")
+        catch (const PhotodiodeTransportError& error)
         {
             std::lock_guard lock(mutex_);
             state_ = ScanState::failed;
-            last_error_code_ = "photodiode_transport_unavailable";
-            last_error_message_ = "Photodiode transportは未接続のため使用できません";
+            last_error_code_ = error.code();
+            last_error_message_ = error.what();
             pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
                                        {"error_message", last_error_message_}});
             return;
         }
-        else if (config.settle_ms > 0)
-            std::this_thread::sleep_for(std::chrono::milliseconds(config.settle_ms));
+        if (!event)
+        {
+            std::lock_guard lock(mutex_);
+            state_ = ScanState::failed;
+            last_error_code_ = "photodiode_timeout";
+            last_error_message_ = "Photodiode eventをtimeout内に受信できませんでした";
+            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                       {"error_message", last_error_message_}});
+            return;
+        }
+
+        const auto selected_at = structured_light::sync::selectionTime(
+            *event, std::chrono::milliseconds(config.sync_guard_ms));
+        std::optional<video::FrameSample> selected_left;
+        std::optional<video::FrameSample> selected_right;
+        const auto selection_deadline = std::chrono::steady_clock::now() +
+                                        std::chrono::milliseconds(config.sync_timeout_ms);
+        while (!stop_token.stop_requested() && std::chrono::steady_clock::now() < selection_deadline &&
+               (!selected_left || (right_id && !selected_right)))
+        {
+            if (!selected_left) selected_left = camera_service_.firstFrameAtOrAfter(*left_id, selected_at);
+            if (right_id && !selected_right)
+                selected_right = camera_service_.firstFrameAtOrAfter(*right_id, selected_at);
+            if (!selected_left || (right_id && !selected_right))
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        if (!selected_left || (right_id && !selected_right))
+        {
+            std::lock_guard lock(mutex_);
+            state_ = ScanState::failed;
+            last_error_code_ = "camera_frame_timeout";
+            last_error_message_ = "Photodiode timestamp + guard以降のcamera frameを取得できませんでした";
+            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                       {"error_message", last_error_message_}});
+            return;
+        }
 
         const auto left_path = config.output_dir / "left" / patternFileName(index);
         const auto right_path = config.output_dir / "right" / patternFileName(index);
-        capture::CaptureResult single_capture_result;
-        capture::CaptureStereoResult capture_result;
+        capture::CaptureResult left_capture_result;
+        capture::CaptureResult right_capture_result;
         {
             std::lock_guard capture_lock(scan_capture_mutex_);
-            if (right_id)
-                capture_result = capture_service_.captureStereo(*left_id, *right_id, left_path, right_path);
-            else if (selected_sample)
-                single_capture_result = capture_service_.saveFrameSample(*selected_sample, left_path);
-            else
-                single_capture_result = capture_service_.captureFrame(*left_id, left_path);
+            left_capture_result = capture_service_.saveFrameSample(*selected_left, left_path);
+            if (right_id) right_capture_result = capture_service_.saveFrameSample(*selected_right, right_path);
         }
-        if ((right_id && !capture_result.ok) || (!right_id && !single_capture_result.ok))
+        if (!left_capture_result.ok || (right_id && !right_capture_result.ok))
         {
             int captured = 0;
             int current = -1;
@@ -481,8 +489,9 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             {
                 std::lock_guard lock(mutex_);
                 state_ = ScanState::failed;
-                last_error_code_ = right_id ? captureCode(capture_result) : "capture_failed";
-                last_error_message_ = right_id ? captureMessage(capture_result) : (single_capture_result.error ? single_capture_result.error->message : "single camera capture failed");
+                last_error_code_ = "capture_failed";
+                const auto& failed = !left_capture_result.ok ? left_capture_result : right_capture_result;
+                last_error_message_ = failed.error ? failed.error->message : "frame sample save failed";
                 captured = captured_count_;
                 current = current_index_;
                 error_code = last_error_code_;
@@ -564,18 +573,14 @@ bool ScanService::writeMetadata(const ScanStartConfig& config, const std::string
                << "  \"projector_role\": \"" << jsonEscape(config.projector_role) << "\",\n"
                << "  \"left_role\": \"" << jsonEscape(config.left_role) << "\",\n"
                << "  \"right_role\": \"" << jsonEscape(config.right_role) << "\",\n"
-               << "  \"sync_source\": \"" << jsonEscape(config.sync_source) << "\",\n"
+               << "  \"sync\": \"photodiode\",\n"
+               << "  \"photodiode_device\": \"" << jsonEscape(config.photodiode_device) << "\",\n"
+               << "  \"photodiode_baud\": " << config.photodiode_baud << ",\n"
                << "  \"sync_timeout_ms\": " << config.sync_timeout_ms << ",\n"
                << "  \"sync_guard_ms\": " << config.sync_guard_ms << ",\n"
-               << "  \"roi_x\": " << config.roi_x << ",\n"
-               << "  \"roi_y\": " << config.roi_y << ",\n"
-               << "  \"roi_width\": " << config.roi_width << ",\n"
-               << "  \"roi_height\": " << config.roi_height << ",\n"
-               << "  \"roi_decode_margin\": " << config.roi_decode_margin << ",\n"
                << "  \"pattern_count\": " << pattern_count << ",\n"
                << "  \"projector_width\": " << code_width << ",\n"
                << "  \"projector_height\": " << code_height << ",\n"
-               << "  \"settle_ms\": " << config.settle_ms << ",\n"
                << "  \"output_dir\": \"" << jsonEscape(config.output_dir.string()) << "\",\n"
                << "  \"surface\": {\n"
                << "    \"monitor_index\": " << surface.monitor_index << ",\n"
