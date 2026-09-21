@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, csv, math, os, select, statistics, termios, time
+import argparse, collections, csv, math, os, select, statistics, termios, threading, time
 import cv2
 import numpy as np
 
@@ -34,11 +34,25 @@ def main():
     cv2.namedWindow(window, cv2.WINDOW_NORMAL); cv2.moveWindow(window, args.projector_x, args.projector_y)
     cv2.resizeWindow(window, args.projector_width, args.projector_height)
     rows, buffer = [], b""
+    frames = collections.deque(maxlen=1000)
+    frames_lock = threading.Lock()
+    camera_stop = threading.Event()
+
+    def drain_camera():
+        while not camera_stop.is_set():
+            ok, frame = camera.read()
+            if ok:
+                received_ns = time.monotonic_ns()
+                with frames_lock:
+                    frames.append((received_ns, float(frame.mean())))
+
+    camera_thread = threading.Thread(target=drain_camera, daemon=True)
+    camera_thread.start()
     try:
         for sequence in range(1, args.transitions + 1):
             expected = 1 if sequence % 2 else 0
             image = np.full((args.projector_height, args.projector_width, 3), 255 if expected else 0, np.uint8)
-            cv2.imshow(window, image); cv2.waitKey(1)
+            cv2.imshow(window, image); cv2.waitKey(1); shown_ns = time.monotonic_ns()
             deadline = time.monotonic() + 5.0; pd_ns = None
             while time.monotonic() < deadline and pd_ns is None:
                 ready, _, _ = select.select([fd], [], [], 0.05)
@@ -52,16 +66,21 @@ def main():
             if pd_ns is None: raise RuntimeError(f"photodiode timeout at transition {sequence}")
             camera_ns = None
             while time.monotonic() < deadline:
-                ok, frame = camera.read()
-                if not ok: continue
-                ts = time.monotonic_ns(); mean = float(frame.mean())
-                if (expected == 1 and mean >= 128.0) or (expected == 0 and mean < 128.0):
-                    camera_ns = ts; break
+                with frames_lock:
+                    candidates = tuple(frames)
+                for ts, mean in candidates:
+                    if ts < shown_ns:
+                        continue
+                    if (expected == 1 and mean >= 128.0) or (expected == 0 and mean < 128.0):
+                        camera_ns = ts; break
+                if camera_ns is not None: break
+                time.sleep(0.001)
             if camera_ns is None: raise RuntimeError(f"camera transition timeout at {sequence}")
             delay_ms = (camera_ns - pd_ns) / 1_000_000.0
             rows.append((sequence, "white" if expected else "black", pd_ns, camera_ns, delay_ms))
             print(f"[{sequence:03d}] {rows[-1][1]} delay_ms={delay_ms:.3f}")
     finally:
+        camera_stop.set(); camera_thread.join(timeout=2.0)
         camera.release(); cv2.destroyAllWindows(); os.close(fd)
     with open(args.output, "w", newline="", encoding="utf-8") as output:
         writer = csv.writer(output); writer.writerow(["sequence","state","photodiode_ns","camera_ns","delay_ms"])

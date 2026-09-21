@@ -7,6 +7,7 @@ BACKEND="${TOOTH_BACKEND:-${REPO_ROOT}/build/release-opencv-4.10-static/src/serv
 DEVICE="${PHOTODIODE_DEVICE:-/dev/ttyUSB0}"; BAUD="${PHOTODIODE_BAUD:-115200}"
 CAMERA_ID="${CAMERA_ID:-0}"; GUARD="${SYNC_GUARD_MS:-30}"; TIMEOUT="${SYNC_TIMEOUT_MS:-1000}"
 MJPEG_PORT="${MJPEG_PORT:-39010}"; OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/data/check_camera_projector}"
+MONITOR_INDEX="${MONITOR_INDEX:-0}"
 PROJECTOR_ROLE=projector; WINDOW_ROLE=projector; CAMERA_ROLE=left
 
 command -v jq >/dev/null || { echo 'jq is required' >&2; exit 2; }
@@ -30,23 +31,36 @@ request() {
 }
 
 wait_for_event() {
-  local event="$1" line
-  while IFS= read -r line <&"${BACKEND_PROC[0]}"; do
-    [[ "$(jq -r '.event // empty' <<<"${line}" 2>/dev/null)" == "${event}" ]] || continue
-    RESPONSE="${line}"
-    return 0
+  local event="$1" timeout="${2:-$((TIMEOUT / 1000 + 10))}" line seen
+  while IFS= read -r -t "${timeout}" line <&"${BACKEND_PROC[0]}"; do
+    seen="$(jq -r '.event // empty' <<<"${line}" 2>/dev/null)"
+    if [[ "${seen}" == "scan_failed" ]]; then
+      echo "${line}" >&2
+      return 1
+    fi
+    if [[ "${seen}" == "${event}" ]]; then
+      RESPONSE="${line}"
+      return 0
+    fi
   done
+  echo "timeout waiting for ${event}" >&2
+  return 1
 }
 
 while IFS= read -r line <&"${BACKEND_PROC[0]}"; do [[ "${line}" == *'"event":"ready"'* ]] && break; done
 request '{"id":"ping","cmd":"ping"}'
 request '{"id":"monitors","cmd":"list_monitors"}'
+monitor_count="$(jq -r '(.monitor_count // "0") | tonumber' <<<"${RESPONSE}")"
+(( MONITOR_INDEX >= 0 && MONITOR_INDEX < monitor_count )) || { echo "MONITOR_INDEX=${MONITOR_INDEX} is out of range" >&2; exit 2; }
+monitors_json="$(jq -r '.monitors_json // "[]"' <<<"${RESPONSE}")"
+window_width="$(jq -r --argjson i "${MONITOR_INDEX}" '.[$i].width' <<<"${monitors_json}")"
+window_height="$(jq -r --argjson i "${MONITOR_INDEX}" '.[$i].height' <<<"${monitors_json}")"
 request "$(jq -cn --argjson camera "${CAMERA_ID}" '{id:"camera",cmd:"open_camera",camera_id:$camera,role:"left"}')"
 request '{"id":"stream","cmd":"start_stream","role":"left"}'
 echo "[STREAM] $(jq -r '.url' <<<"${RESPONSE}")"
-request '{"id":"window","cmd":"open_window","window_role":"projector","title":"Camera Projector Check","width":1920,"height":1080,"fullscreen":true}'
+request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${window_width}" --argjson height "${window_height}" '{id:"window",cmd:"open_window",window_role:"projector",title:"Camera Projector Check",width:$width,height:$height,monitor_index:$monitor,fullscreen:true}')"
 request '{"id":"projector","cmd":"open_projector","projector_role":"projector","window_role":"projector","width":480,"height":270}'
-request '{"id":"surface","cmd":"configure_projector_surface","projector_role":"projector","monitor_index":0,"width":480,"height":270,"placement":"center"}'
+request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${window_width}" --argjson height "${window_height}" '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,placement:"center"}')"
 request '{"id":"patterns","cmd":"generate_patterns","projector_role":"projector"}'
 echo "Photodiode connected: ${DEVICE} @ ${BAUD}"
 
@@ -71,6 +85,7 @@ while true; do
       wait_for_event scan_frame_captured
       echo "captured: $(jq -r '.left_path' <<<"${RESPONSE}")"
       request '{"id":"stop","cmd":"scan_stop"}'
+      wait_for_event scan_stopped
       echo "one-pattern synchronized capture completed: ${OUTPUT_DIR}" ;;
     q) break ;;
   esac
