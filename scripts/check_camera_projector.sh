@@ -12,14 +12,33 @@ PROJECTOR_ROLE=projector; WINDOW_ROLE=projector; CAMERA_ROLE=left
 PENDING_EVENTS=()
 
 command -v jq >/dev/null || { echo 'jq is required' >&2; exit 2; }
+command -v stty >/dev/null || { echo 'stty is required' >&2; exit 2; }
 [[ -x "${BACKEND}" ]] || { echo "backend not executable: ${BACKEND}" >&2; exit 2; }
 [[ -e "${DEVICE}" ]] || { echo "device not found: ${DEVICE}" >&2; exit 2; }
 [[ -r "${DEVICE}" && -w "${DEVICE}" ]] || { echo "permission denied: ${DEVICE}" >&2; exit 3; }
-stty -F "${DEVICE}" "${BAUD}" raw -echo
-exec 4<>"${DEVICE}"
+SERIAL_OPEN=0
+
+open_serial() {
+  (( SERIAL_OPEN == 0 )) || return 0
+  stty -F "${DEVICE}" "${BAUD}" raw -echo
+  exec 4<>"${DEVICE}"
+  SERIAL_OPEN=1
+}
+
+close_serial() {
+  (( SERIAL_OPEN == 1 )) || return 0
+  exec 4>&- 4<&-
+  SERIAL_OPEN=0
+}
 
 coproc BACKEND_PROC { "${BACKEND}" serve --control stdio --mjpeg-port "${MJPEG_PORT}"; }
-trap 'printf "%s\n" '\''{"id":"quit","cmd":"shutdown"}'\'' >&"${BACKEND_PROC[1]}" 2>/dev/null || true; exec 4>&- 4<&-; wait "${BACKEND_PROC_PID}" 2>/dev/null || true' EXIT INT TERM
+cleanup() {
+  printf '%s\n' '{"id":"quit","cmd":"shutdown"}' >&"${BACKEND_PROC[1]}" 2>/dev/null || true
+  close_serial
+  wait "${BACKEND_PROC_PID}" 2>/dev/null || true
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
 
 request() {
   local json="$1" id line
@@ -75,7 +94,7 @@ display_width=$((window_width - 64))
 (( display_width > 0 )) || { echo 'photodiode_marker_margin_unavailable' >&2; exit 2; }
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${display_width}" --argjson height "${window_height}" '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,placement:"center"}')"
 request '{"id":"patterns","cmd":"generate_patterns","projector_role":"projector"}'
-echo "Photodiode connected: ${DEVICE} @ ${BAUD}"
+echo "Photodiode ready: ${DEVICE} @ ${BAUD}"
 
 index=0
 while true; do
@@ -85,14 +104,19 @@ while true; do
     n) request '{"id":"next","cmd":"next_pattern","projector_role":"projector"}' ;;
     p) request '{"id":"prev","cmd":"prev_pattern","projector_role":"projector"}' ;;
     t)
+      open_serial
       index=$((1-index)); expected="${index}"
       request "$(jq -cn --argjson index "${index}" '{id:"transition",cmd:"show_pattern",projector_role:"projector",index:$index}')"
       shown_ns="$(date +%s%N)"
       if IFS= read -r -t 5 received <&4; then
         received="${received%$'\r'}"; now_ns="$(date +%s%N)"
-        awk -v e="${expected}" -v r="${received}" -v a="${shown_ns}" -v b="${now_ns}" 'BEGIN{printf "expected=%s received=%s latency_ms=%.3f\n",e,r,(b-a)/1000000}'
+        [[ "${received}" == 0 || "${received}" == 1 ]] || { echo "photodiode invalid event: ${received}" >&2; continue; }
+        expected_name="$([[ "${expected}" == 1 ]] && echo white || echo black)"
+        received_name="$([[ "${received}" == 1 ]] && echo white || echo black)"
+        awk -v e="${expected_name}" -v r="${received_name}" -v a="${shown_ns}" -v b="${now_ns}" 'BEGIN{printf "expected=%s received=%s host_observed_latency_ms=%.3f\n",e,r,(b-a)/1000000}'
       else echo 'photodiode timeout' >&2; fi ;;
     s)
+      close_serial
       mkdir -p -- "${OUTPUT_DIR}"
       request "$(jq -cn --arg out "${OUTPUT_DIR}" --arg dev "${DEVICE}" --argjson baud "${BAUD}" --argjson timeout "${TIMEOUT}" --argjson guard "${GUARD}" '{id:"scan",cmd:"scan_start",projector_role:"projector",left_role:"left",output_dir:$out,photodiode_device:$dev,photodiode_baud:$baud,sync_timeout_ms:$timeout,sync_guard_ms:$guard,max_patterns:1}')"
       wait_for_event scan_frame_captured

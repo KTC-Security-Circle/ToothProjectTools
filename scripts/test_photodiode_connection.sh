@@ -7,11 +7,17 @@ TIMEOUT_SEC="${PHOTODIODE_TIMEOUT_SEC:-5}"
 
 [[ -e "${DEVICE}" ]] || { printf 'device not found: %s\n' "${DEVICE}" >&2; exit 2; }
 [[ -r "${DEVICE}" && -w "${DEVICE}" ]] || { printf 'permission denied: %s\n' "${DEVICE}" >&2; exit 3; }
+command -v stty >/dev/null || { printf 'stty is required\n' >&2; exit 4; }
 
 printf 'device: %s\nbaud: %s\n\n' "${DEVICE}" "${BAUD}"
 stty -F "${DEVICE}" "${BAUD}" raw -echo -echoe -echok || { printf 'failed to configure: %s\n' "${DEVICE}" >&2; exit 4; }
 exec 3<>"${DEVICE}"
-trap 'exec 3>&- 3<&- 2>/dev/null || true; printf "\nclosed: %s\n" "${DEVICE}"' EXIT INT TERM
+cleanup() {
+  exec 3>&- 3<&- 2>/dev/null || true
+  printf "\nclosed: %s\n" "${DEVICE}"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
 
 count=0
 previous=""

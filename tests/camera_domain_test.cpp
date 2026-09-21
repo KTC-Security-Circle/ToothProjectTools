@@ -303,6 +303,12 @@ void testStructuredLightPatternGeneration()
     const auto& black = structured_light.getPattern(pattern_count - 1);
     require(cv::countNonZero(white != 255) == 0, "StructuredLight penultimate pattern is not white");
     require(cv::countNonZero(black) == 0, "StructuredLight final pattern is not black");
+    require(projector::photodiodeMarkerValue(pattern_count - 2) ==
+                (((pattern_count - 2) % 2 == 0) ? 0 : 255),
+            "FULL WHITE marker does not follow index parity");
+    require(projector::photodiodeMarkerValue(pattern_count - 1) ==
+                (((pattern_count - 1) % 2 == 0) ? 0 : 255),
+            "FULL BLACK marker does not follow index parity");
 
     bool out_of_range_thrown = false;
     try
@@ -625,6 +631,10 @@ void testScanMapper()
     assert(start.scan_id == "session_001");
     assert(start.photodiode_device == "/dev/ttyACM0" && start.photodiode_baud == 115200);
     assert(start.max_patterns == 1);
+
+    message.max_patterns = 0;
+    result = mapper.mapStartScan(message);
+    assert(result.ok && std::get<cmd::CmdStartScan>(*result.command).max_patterns == 0);
 
     message.scan_id = "";
     result = mapper.mapStartScan(message);
@@ -1853,6 +1863,11 @@ void testPhotodiodeMarkerRequiresProjectorMargin()
     assert(!projector::canPlacePhotodiodeMarker(surface));
     surface.surface_width = 48;
     assert(projector::canPlacePhotodiodeMarker(surface));
+    surface.surface_width = 80;
+    surface.pattern_x = 32;
+    assert(projector::canPlacePhotodiodeMarker(surface));
+    assert(projector::photodiodeMarkerValue(0) == 0);
+    assert(projector::photodiodeMarkerValue(1) == 255);
 
     surface.surface_width = 9;
     surface.surface_height = 10;

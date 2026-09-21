@@ -359,11 +359,11 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
     if ((message.photodiode_baud && *message.photodiode_baud <= 0) ||
         (message.sync_timeout_ms && *message.sync_timeout_ms <= 0) ||
         (message.sync_guard_ms && *message.sync_guard_ms < 0) ||
-        (message.max_patterns && *message.max_patterns <= 0))
+        (message.max_patterns && *message.max_patterns < 0))
     {
         return mapFailure("invalid_command",
-                          "photodiode_baud, sync_timeout_ms, and max_patterns must be positive and "
-                          "sync_guard_ms non-negative");
+                          "photodiode_baud and sync_timeout_ms must be positive; max_patterns and "
+                          "sync_guard_ms must be non-negative");
     }
 
     CommandMapResult result;

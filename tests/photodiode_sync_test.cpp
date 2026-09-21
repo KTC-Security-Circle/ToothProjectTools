@@ -87,10 +87,22 @@ void testGuardAndFrameSelection()
     const auto selected_at = structured_light::sync::selectionTime(pd, 30ms);
     require(selected_at == t + 30ms, "guard calculation is incorrect");
 
-    video::FrameRingBuffer frames{frame(1, t - 5ms), frame(2, t + 5ms),
-                                  frame(3, t + 20ms), frame(4, t + 40ms)};
+    video::FrameRingBuffer frames{frame(1, t + 10ms), frame(2, t + 20ms),
+                                  frame(3, t + 35ms), frame(4, t + 50ms)};
     const auto selected = video::firstFrameAtOrAfter(frames, selected_at);
-    require(selected && selected->sequence == 4, "first frame at or after guard was not selected");
+    require(selected && selected->sequence == 3, "first frame at or after guard was not selected");
+}
+
+void testPreArmAndPatternParitySequence()
+{
+    const auto t = Clock::time_point{4s};
+    FakeTransport transport({event(MarkerState::white, t + 1ms, 1),
+                             event(MarkerState::black, t + 2ms, 2),
+                             event(MarkerState::white, t + 3ms, 3)});
+    structured_light::sync::PhotodiodeSyncSource source(transport);
+    require(source.waitForTransition(MarkerState::white, t, 10ms).has_value(), "white pre-arm failed");
+    require(source.waitForTransition(MarkerState::black, t, 10ms).has_value(), "pattern 0 black failed");
+    require(source.waitForTransition(MarkerState::white, t, 10ms).has_value(), "pattern 1 white failed");
 }
 
 void testStereoUsesSameSelectionTimestamp()
@@ -114,5 +126,6 @@ int main()
     testTimeout();
     testGuardAndFrameSelection();
     testStereoUsesSameSelectionTimestamp();
+    testPreArmAndPatternParitySequence();
     return 0;
 }

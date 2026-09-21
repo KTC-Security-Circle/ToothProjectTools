@@ -342,6 +342,8 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             throw PhotodiodeTransportError("pattern_show_failed", "failed to show black pre-arm pattern");
         }
         const auto black_shown_at = std::chrono::steady_clock::now();
+        // 現在すでにblackならMCUはeventを送らないため、black確認timeoutは許容する。
+        // 続くwhite eventだけを必須にし、pattern 0のblack transitionを保証する。
         (void)photodiode_source.waitForTransition(
             structured_light::sync::MarkerState::black, black_shown_at,
             std::chrono::milliseconds(std::min(config.sync_timeout_ms, 200)));

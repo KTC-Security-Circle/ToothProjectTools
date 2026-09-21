@@ -41,6 +41,11 @@ bool canPlacePhotodiodeMarker(const ProjectorSurface& surface)
 {
     return syncMarkerRect(surface).area() > 0;
 }
+
+int photodiodeMarkerValue(std::size_t pattern_index)
+{
+    return (pattern_index % 2) == 0 ? 0 : 255;
+}
 namespace
 {
 
@@ -477,7 +482,7 @@ cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const Pro
     // active patternを壊さないためmarkerを描画しない。
     const auto marker = syncMarkerRect(surface);
     if (marker.area() > 0)
-        canvas(marker).setTo((pattern_index % 2) == 0 ? cv::Scalar::all(0) : cv::Scalar::all(255));
+        canvas(marker).setTo(cv::Scalar::all(photodiodeMarkerValue(pattern_index)));
     return canvas;
 }
 

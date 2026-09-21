@@ -28,7 +28,7 @@ returnは受付結果である。
 | `photodiode_baud` | 任意 | serial baud。default `115200`。 |
 | `sync_timeout_ms` | 任意 | event/frame待機timeout。default `1000`。 |
 | `sync_guard_ms` | 任意 | Photodiode event後のCamera選択guard。default `30`。 |
-| `max_patterns` | 任意 | 診断用のpattern取得上限。省略時は全pattern。 |
+| `max_patterns` | 任意 | 診断用のpattern取得上限。`0`または省略時は全pattern、正数は先頭N patternのみ。 |
 
 ### return
 
@@ -46,7 +46,7 @@ returnは受付結果である。
 | `left_role` | 使用するleft camera role。 |
 | `right_role` | 使用するright camera role。 |
 | `output_dir` | scan dataset出力directory。 |
-| `pattern_count` | 全pattern数。 |
+| `pattern_count` | 実際に取得するpattern数。`max_patterns`指定時はその上限を反映する。 |
 | `captured_count` | 取得済みpattern数。 |
 | `current_index` | 現在処理中のpattern index。開始直後は `-1`。 |
 
