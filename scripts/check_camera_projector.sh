@@ -29,6 +29,15 @@ request() {
   done
 }
 
+wait_for_event() {
+  local event="$1" line
+  while IFS= read -r line <&"${BACKEND_PROC[0]}"; do
+    [[ "$(jq -r '.event // empty' <<<"${line}" 2>/dev/null)" == "${event}" ]] || continue
+    RESPONSE="${line}"
+    return 0
+  done
+}
+
 while IFS= read -r line <&"${BACKEND_PROC[0]}"; do [[ "${line}" == *'"event":"ready"'* ]] && break; done
 request '{"id":"ping","cmd":"ping"}'
 request '{"id":"monitors","cmd":"list_monitors"}'
@@ -43,7 +52,7 @@ echo "Photodiode connected: ${DEVICE} @ ${BAUD}"
 
 index=0
 while true; do
-  printf '\n[n] next [p] previous [t] Photodiode test [s] synchronized scan [q] quit: '
+  printf '\n[n] next [p] previous [t] Photodiode test [s] one-pattern synchronized capture [q] quit: '
   IFS= read -rsn1 key </dev/tty; echo
   case "${key}" in
     n) request '{"id":"next","cmd":"next_pattern","projector_role":"projector"}' ;;
@@ -59,7 +68,10 @@ while true; do
     s)
       mkdir -p -- "${OUTPUT_DIR}"
       request "$(jq -cn --arg out "${OUTPUT_DIR}" --arg dev "${DEVICE}" --argjson baud "${BAUD}" --argjson timeout "${TIMEOUT}" --argjson guard "${GUARD}" '{id:"scan",cmd:"scan_start",projector_role:"projector",left_role:"left",output_dir:$out,photodiode_device:$dev,photodiode_baud:$baud,sync_timeout_ms:$timeout,sync_guard_ms:$guard}')"
-      echo "synchronized scan started: ${OUTPUT_DIR}" ;;
+      wait_for_event scan_frame_captured
+      echo "captured: $(jq -r '.left_path' <<<"${RESPONSE}")"
+      request '{"id":"stop","cmd":"scan_stop"}'
+      echo "one-pattern synchronized capture completed: ${OUTPUT_DIR}" ;;
     q) break ;;
   esac
 done
