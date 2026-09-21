@@ -213,16 +213,16 @@ find_next_pose_index() {
   done
 }
 
-show_black_pattern() {
+show_reference_pattern() {
   local id="$1"
-  local black_index="$2"
+  local white_index="$2"
   local json
 
   json="$(
     jq -cn \
       --arg id "${id}" \
       --arg role "${PROJECTOR_ROLE}" \
-      --argjson index "${black_index}" \
+      --argjson index "${white_index}" \
       '{id:$id,cmd:"show_pattern",projector_role:$role,index:$index}'
   )"
 
@@ -231,7 +231,7 @@ show_black_pattern() {
 
 capture_pose() {
   local pose_index="$1"
-  local black_index="$2"
+  local white_index="$2"
 
   local pose_name tmp_dir final_dir failed_dir scan_id
   local id json
@@ -246,8 +246,8 @@ capture_pose() {
 
   log "${pose_name}: reference_before"
 
-  id="${pose_name}-black-before"
-  show_black_pattern "${id}" "${black_index}" || return 1
+  id="${pose_name}-white-before"
+  show_reference_pattern "${id}" "${white_index}" || return 1
   sleep "${REFERENCE_SETTLE_SEC}"
 
   id="${pose_name}-before"
@@ -292,9 +292,9 @@ capture_pose() {
 
   log "${pose_name}: reference_after"
 
-  # scan sequence末尾は全黒。明示的に再表示してbefore/after条件を揃える。
-  id="${pose_name}-black-after"
-  show_black_pattern "${id}" "${black_index}" || return 1
+  # Chessboard corner検出用referenceは十分に明るいFULL WHITEで統一する。
+  id="${pose_name}-white-after"
+  show_reference_pattern "${id}" "${white_index}" || return 1
   sleep "${REFERENCE_SETTLE_SEC}"
 
   id="${pose_name}-after"
@@ -351,7 +351,7 @@ capture_pose() {
 
 initialize_runtime() {
   local id json monitor_count monitors_json
-  local pattern_count black_index
+  local pattern_count white_index horizontal_margin vertical_margin
 
   id="init-ping"
   request "${id}" "$(jq -cn --arg id "${id}" '{id:$id,cmd:"ping"}')" ||
@@ -375,10 +375,18 @@ initialize_runtime() {
     WINDOW_HEIGHT="$(jq -r --argjson i "${MONITOR_INDEX}" '.[$i].height' <<<"${monitors_json}")"
   fi
   if [[ -z "${DISPLAY_WIDTH}" ]]; then
-    DISPLAY_WIDTH="${WINDOW_WIDTH}"
+    DISPLAY_WIDTH=$((WINDOW_WIDTH - 64))
   fi
   if [[ -z "${DISPLAY_HEIGHT}" ]]; then
     DISPLAY_HEIGHT="${WINDOW_HEIGHT}"
+  fi
+
+  (( DISPLAY_WIDTH > 0 && DISPLAY_HEIGHT > 0 && DISPLAY_WIDTH <= WINDOW_WIDTH && DISPLAY_HEIGHT <= WINDOW_HEIGHT )) ||
+    die "invalid display dimensions: ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}"
+  horizontal_margin=$((WINDOW_WIDTH - DISPLAY_WIDTH))
+  vertical_margin=$((WINDOW_HEIGHT - DISPLAY_HEIGHT))
+  if (( horizontal_margin < 64 && vertical_margin < 64 )); then
+    die "Photodiode marker用の32x32余白がありません (center配置では横または縦に64px必要です)"
   fi
 
   log "camera=${CAMERA_ID}, monitor=${MONITOR_INDEX}, window=${WINDOW_WIDTH}x${WINDOW_HEIGHT}, code=${CODE_WIDTH}x${CODE_HEIGHT}, display=${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}"
@@ -457,6 +465,17 @@ initialize_runtime() {
       }'
   )"
   request "${id}" "${json}" || die "configure_projector_surface failed"
+  local surface_width surface_height pattern_width pattern_height pattern_x pattern_y
+  surface_width="$(jq -r '(.surface_width // "0") | tonumber' <<<"${LAST_RESPONSE}")"
+  surface_height="$(jq -r '(.surface_height // "0") | tonumber' <<<"${LAST_RESPONSE}")"
+  pattern_width="$(jq -r '(.pattern_width // "0") | tonumber' <<<"${LAST_RESPONSE}")"
+  pattern_height="$(jq -r '(.pattern_height // "0") | tonumber' <<<"${LAST_RESPONSE}")"
+  pattern_x="$(jq -r '(.pattern_x // "0") | tonumber' <<<"${LAST_RESPONSE}")"
+  pattern_y="$(jq -r '(.pattern_y // "0") | tonumber' <<<"${LAST_RESPONSE}")"
+  if (( pattern_x < 32 && surface_width - pattern_x - pattern_width < 32 &&
+        pattern_y < 32 && surface_height - pattern_y - pattern_height < 32 )); then
+    die "Photodiode marker用の32x32余白がありません"
+  fi
 
   id="init-patterns"
   json="$(
@@ -470,20 +489,23 @@ initialize_runtime() {
   pattern_count="$(jq -r '(.pattern_count // "0") | tonumber' <<<"${LAST_RESPONSE}")"
   (( pattern_count >= 2 )) || die "invalid generated pattern_count: ${pattern_count}"
 
-  black_index=$((pattern_count - 1))
-  show_black_pattern "init-black" "${black_index}" || die "failed to show black pattern"
+  white_index=$((pattern_count - 2))
+  show_reference_pattern "init-white" "${white_index}" || die "failed to show white reference pattern"
 
-  BLACK_INDEX="${black_index}"
+  WHITE_INDEX="${white_index}"
 }
 
 main() {
-  local cmd black_index pose_index pose_name key failed_dir
+  local cmd white_index pose_index pose_name key failed_dir
 
   for cmd in jq mkfifo grep tail date sleep; do
     require_command "${cmd}"
   done
 
   [[ -x "${TOOTH_BACKEND}" ]] || die "backend not executable: ${TOOTH_BACKEND}"
+  [[ -e "${PHOTODIODE_DEVICE}" ]] || die "Photodiode device not found: ${PHOTODIODE_DEVICE}"
+  [[ -r "${PHOTODIODE_DEVICE}" && -w "${PHOTODIODE_DEVICE}" ]] ||
+    die "permission denied: ${PHOTODIODE_DEVICE}"
   [[ -r /dev/tty && -w /dev/tty ]] || die "/dev/tty is required for single-key input"
 
   mkdir -p -- "${OBSERVATIONS_DIR}"
@@ -503,7 +525,7 @@ main() {
   ok "backend ready"
 
   initialize_runtime
-  black_index="${BLACK_INDEX}"
+  white_index="${WHITE_INDEX}"
   pose_index="$(find_next_pose_index)"
 
   while true; do
@@ -518,7 +540,7 @@ main() {
         ;;
       ' ')
         printf '\n'
-        if capture_pose "${pose_index}" "${black_index}"; then
+        if capture_pose "${pose_index}" "${white_index}"; then
           ((pose_index += 1))
         else
           printf -v pose_name 'pose_%03d' "${pose_index}"
