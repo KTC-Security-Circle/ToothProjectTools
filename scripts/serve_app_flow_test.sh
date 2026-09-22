@@ -322,14 +322,14 @@ test_scan_validation() {
   request_error "scan-missing-left" "missing_field" \
     '{"id":"scan-missing-left","cmd":"scan_start","projector_role":"projector","right_role":"right","output_dir":"./data/scan/test"}'
 
-  request_error "scan-missing-right" "missing_field" \
+  request_error "scan-missing-right" "projector_not_open" \
     '{"id":"scan-missing-right","cmd":"scan_start","projector_role":"projector","left_role":"left","output_dir":"./data/scan/test"}'
 
   request_error "scan-missing-output" "missing_field" \
     '{"id":"scan-missing-output","cmd":"scan_start","projector_role":"projector","left_role":"left","right_role":"right"}'
 
-  request_error "scan-invalid-settle" "invalid_command" \
-    '{"id":"scan-invalid-settle","cmd":"scan_start","projector_role":"projector","left_role":"left","right_role":"right","output_dir":"./data/scan/test","settle_ms":-1}'
+  request_error "scan-invalid-baud" "invalid_command" \
+    '{"id":"scan-invalid-baud","cmd":"scan_start","projector_role":"projector","left_role":"left","right_role":"right","output_dir":"./data/scan/test","photodiode_baud":0}'
 
   request_error "scan-validate-missing-input" "missing_field" \
     '{"id":"scan-validate-missing-input","cmd":"scan_validate"}'

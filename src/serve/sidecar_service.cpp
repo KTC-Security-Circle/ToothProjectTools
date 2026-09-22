@@ -248,6 +248,8 @@ calib::StereoCalibrator* SidecarService::stereoCalibrator()
 }
 
 reconstruction::ReconstructionService& SidecarService::reconstructionService() { return reconstruction_service_; }
+calib::projector::CameraProjectorCalibrationService& SidecarService::cameraProjectorCalibrationService()
+{ return camera_projector_calibration_service_; }
 
 calib::StereoData& SidecarService::stereoData()
 {

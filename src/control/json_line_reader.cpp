@@ -125,17 +125,11 @@ ReadResult JsonLineReader::read() {
         !readString(root, "input_dir", message.input_dir, error_message) ||
         !readBool(root, "allow_partial", message.allow_partial, error_message) ||
         !readBool(root, "apply_to_camera", message.apply_to_camera, error_message) ||
-        !readInteger(root, "settle_ms", message.settle_ms, error_message) ||
-        !readString(root, "sync_source", message.sync_source, error_message) ||
+        !readString(root, "photodiode_device", message.photodiode_device, error_message) ||
+        !readInteger(root, "photodiode_baud", message.photodiode_baud, error_message) ||
         !readInteger(root, "sync_timeout_ms", message.sync_timeout_ms, error_message) ||
         !readInteger(root, "sync_guard_ms", message.sync_guard_ms, error_message) ||
-        !readInteger(root, "sync_stable_frames", message.sync_stable_frames, error_message) ||
-        !readInteger(root, "roi_x", message.roi_x, error_message) ||
-        !readInteger(root, "roi_y", message.roi_y, error_message) ||
-        !readInteger(root, "roi_width", message.roi_width, error_message) ||
-        !readInteger(root, "roi_height", message.roi_height, error_message) ||
-        !readInteger(root, "roi_black_threshold", message.roi_black_threshold, error_message) ||
-        !readInteger(root, "roi_white_threshold", message.roi_white_threshold, error_message) ||
+        !readInteger(root, "max_patterns", message.max_patterns, error_message) ||
         !readInteger(root, "threshold", message.threshold, error_message) ||
         !readInteger(root, "projector_width", message.projector_width, error_message) ||
         !readInteger(root, "projector_height", message.projector_height, error_message) ||
@@ -157,6 +151,13 @@ ReadResult JsonLineReader::read() {
         !readNumber(root, "max_epipolar_error_px", message.max_epipolar_error_px, error_message) ||
         !readNumber(root, "min_depth_mm", message.min_depth_mm, error_message) ||
         !readNumber(root, "max_depth_mm", message.max_depth_mm, error_message) ||
+        !readString(root, "observations_dir", message.observations_dir, error_message) ||
+        !readString(root, "camera_calibration_file", message.camera_calibration_file, error_message) ||
+        !readInteger(root, "board_corners_x", message.board_corners_x, error_message) ||
+        !readInteger(root, "board_corners_y", message.board_corners_y, error_message) ||
+        !readNumber(root, "square_size_mm", message.square_size_mm, error_message) ||
+        !readNumber(root, "max_mean_displacement_px", message.max_mean_displacement_px, error_message) ||
+        !readNumber(root, "max_corner_displacement_px", message.max_corner_displacement_px, error_message) ||
         !readBool(root, "overwrite", message.overwrite, error_message)) {
       return ReadResult{
           ReadStatus::invalid,

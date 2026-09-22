@@ -176,18 +176,11 @@ struct CmdStartScan
     /// output_dir <std::string>: scan dataset保存先directory。
     std::string output_dir;
 
-    /// settle_ms <int>: pattern表示後captureまでの待機時間ms。
-    int settle_ms{120};
-    std::string sync_source{"fixed_delay"};
+    std::string photodiode_device{"/dev/ttyUSB0"};
+    int photodiode_baud{115200};
     int sync_timeout_ms{1000};
     int sync_guard_ms{30};
-    int sync_stable_frames{3};
-    int roi_x{0};
-    int roi_y{0};
-    int roi_width{32};
-    int roi_height{32};
-    int roi_black_threshold{40};
-    int roi_white_threshold{180};
+    int max_patterns{0};
 };
 
 struct CmdScanStatus
@@ -268,6 +261,19 @@ struct CmdCalibrate {
 
   /// apply_to_camera <bool>: trueの場合のみopen済みcameraへ結果を反映する。
   bool apply_to_camera{false};
+
+  int board_corners_x{0};
+  int board_corners_y{0};
+  double square_size_mm{0.0};
+};
+
+struct CmdDetectCalibrationCorners {
+  video::CameraId camera_id{video::kInvalidCameraId};
+  std::string role;
+  std::filesystem::path output_path;
+  int board_corners_x{0};
+  int board_corners_y{0};
+  double square_size_mm{0.0};
 };
 
 // キャリブレーション画像の撮影と保存
@@ -313,6 +319,19 @@ struct ReconstructionGeometryConfig { double max_epipolar_error_px{2.0}; std::op
 struct CmdValidateReconstruction { std::filesystem::path decode_dir; std::filesystem::path calibration_file; ReconstructionGeometryConfig config; };
 struct CmdReconstructPointCloud { std::filesystem::path decode_dir; std::filesystem::path calibration_file; std::filesystem::path output_file; ReconstructionGeometryConfig config; bool overwrite{false}; };
 
+struct CmdCameraProjectorCalibrate
+{
+  std::filesystem::path observations_dir;
+  std::filesystem::path camera_calibration_file;
+  std::filesystem::path output_file;
+  int board_corners_x{0};
+  int board_corners_y{0};
+  double square_size_mm{0.0};
+  double max_mean_displacement_px{0.0};
+  double max_corner_displacement_px{0.0};
+  bool overwrite{false};
+};
+
 using Command = std::variant<
   CmdOpenCamera,
   CmdCloseCamera,
@@ -335,9 +354,11 @@ using Command = std::variant<
   CmdDecodePatterns,
   CmdCalibrate,
   CmdCalibCapture,
+  CmdDetectCalibrationCorners,
   CmdStereoCalibrate,
   CmdValidateReconstruction,
-  CmdReconstructPointCloud
+  CmdReconstructPointCloud,
+  CmdCameraProjectorCalibrate
 >;
 
 } // namespace cmd

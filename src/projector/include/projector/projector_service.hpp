@@ -4,6 +4,7 @@
 #include "projector/projector_result.hpp"
 
 #include <memory>
+#include <cstddef>
 #include <mutex>
 #include <opencv2/core/mat.hpp>
 #include <optional>
@@ -57,7 +58,8 @@ struct ProjectorSurfaceRequest
     ProjectorPlacement placement{ProjectorPlacement::center};
 };
 
-bool canPlaceSyncMarker(const ProjectorSurface& surface);
+bool canPlacePhotodiodeMarker(const ProjectorSurface& surface);
+int photodiodeMarkerValue(std::size_t pattern_index);
 
 struct ProjectorScanSnapshot
 {

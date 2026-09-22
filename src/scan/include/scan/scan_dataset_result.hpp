@@ -47,9 +47,6 @@ struct ScanDatasetMetadata
     /// projector_height <int>: Decode用Gray Code論理解像度の高さ。
     int projector_height{0};
 
-    /// settle_ms <int>: scan時のsettle time。
-    int settle_ms{0};
-
     /// surface_width <int>: projector surface width。
     int surface_width{0};
 
@@ -80,12 +77,11 @@ struct ScanDatasetMetadata
     /// display_y <int>: surface内の表示領域左上Y座標。
     int display_y{0};
 
-    std::string sync_source;
-    int roi_x{0};
-    int roi_y{0};
-    int roi_width{0};
-    int roi_height{0};
-    int roi_decode_margin{0};
+    std::string sync;
+    std::string photodiode_device;
+    int photodiode_baud{0};
+    int sync_timeout_ms{0};
+    int sync_guard_ms{0};
 };
 
 struct ScanDatasetValidationResult

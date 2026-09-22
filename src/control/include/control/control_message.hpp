@@ -73,18 +73,11 @@ struct ControlMessage {
   /// allow_partial <std::optional<bool>>: partial datasetをvalid扱いするか。
   std::optional<bool> allow_partial;
 
-  /// settle_ms <std::optional<int>>: pattern表示後captureまでの待機時間ms。
-  std::optional<int> settle_ms;
-  std::optional<std::string> sync_source;
+  std::optional<std::string> photodiode_device;
+  std::optional<int> photodiode_baud;
   std::optional<int> sync_timeout_ms;
   std::optional<int> sync_guard_ms;
-  std::optional<int> sync_stable_frames;
-  std::optional<int> roi_x;
-  std::optional<int> roi_y;
-  std::optional<int> roi_width;
-  std::optional<int> roi_height;
-  std::optional<int> roi_black_threshold;
-  std::optional<int> roi_white_threshold;
+  std::optional<int> max_patterns;
 
   /// threshold <std::optional<int>>: GrayCode decode threshold。
   std::optional<int> threshold;
@@ -140,6 +133,13 @@ struct ControlMessage {
   std::optional<double> min_depth_mm;
   std::optional<double> max_depth_mm;
   std::optional<bool> overwrite;
+  std::optional<std::string> observations_dir;
+  std::optional<std::string> camera_calibration_file;
+  std::optional<int> board_corners_x;
+  std::optional<int> board_corners_y;
+  std::optional<double> square_size_mm;
+  std::optional<double> max_mean_displacement_px;
+  std::optional<double> max_corner_displacement_px;
 };
 
 struct ControlError {

@@ -46,7 +46,8 @@ ControlInputAdapter::ControlInputAdapter(serve::SidecarService& service, JsonLin
       command_executor_(service.cameraService(), service.windowService(), service.projectorService(),
                            service.scanService(), service.scanDatasetValidator(), service.decodeService(),
                            service.captureService(), service.cameraManager(), service.calibrator(),
-                           service.stereoCalibrator(), service.stereoData(), service.reconstructionService())
+                           service.stereoCalibrator(), service.stereoData(), service.reconstructionService(),
+                           service.cameraProjectorCalibrationService())
 {
 }
 
@@ -169,6 +170,14 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
         return AdapterResult::continue_running;
     }
 
+    if (*message.cmd == "camera_projector_calibrate")
+    {
+        const auto mapped = headless_mapper_.mapCameraProjectorCalibrate(message);
+        if (!mapped.ok) { writeHeadlessFailure(id, *mapped.error); return AdapterResult::continue_running; }
+        writer_.writeResponse(toControlResponse(id, command_executor_.execute(*mapped.command)));
+        return AdapterResult::continue_running;
+    }
+
     if (*message.cmd == "start_stream")
     {
         if (!message.role || message.role->empty())
@@ -229,6 +238,18 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
     if (*message.cmd == "mono_calibrate")
     {
         return handleCalibrationCommand(id, message, false);
+    }
+
+    if (*message.cmd == "calib_detect_corners")
+    {
+        const auto mapped = headless_mapper_.mapDetectCalibrationCorners(message);
+        if (!mapped.ok)
+        {
+            writeHeadlessFailure(id, *mapped.error);
+            return AdapterResult::continue_running;
+        }
+        writer_.writeResponse(toControlResponse(id, command_executor_.execute(*mapped.command)));
+        return AdapterResult::continue_running;
     }
 
     if (*message.cmd == "stereo_calibrate")

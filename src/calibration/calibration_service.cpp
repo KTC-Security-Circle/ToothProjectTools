@@ -104,6 +104,13 @@ MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator
     {
         return failure(output_file, "calibration_failed", "mono calibrator is not available");
     }
+    if (command.board_corners_x <= 0 || command.board_corners_y <= 0 ||
+        !std::isfinite(command.square_size_mm) || command.square_size_mm <= 0.0)
+    {
+        return failure(output_file, "invalid_command", "board dimensions and square_size_mm must be positive");
+    }
+    calibrator->setBoardConfig({{command.board_corners_x, command.board_corners_y},
+                                static_cast<float>(command.square_size_mm)});
 
     const fs::path image_folder{command.image_folder};
     if (!fs::exists(image_folder) || !fs::is_directory(image_folder))
@@ -158,6 +165,8 @@ MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator
             return failure(output_file, "calibration_output_write_failed", "failed to open mono calibration output file");
         }
         fs_out << "RMS" << rms << "image_width" << image_size.width << "image_height" << image_size.height
+               << "board_corners_x" << command.board_corners_x << "board_corners_y" << command.board_corners_y
+               << "square_size_mm" << command.square_size_mm
                << "K" << K << "D" << D;
         fs_out.release();
         fs::rename(*temporary_file, output_file);
@@ -192,6 +201,60 @@ MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator
     result.ok = true;
     result.rms = rms;
     result.output_file = output_file;
+    return result;
+}
+
+CornerDetectionResult detectCorners(video::CameraManager& cameras, calib::Calibrator* calibrator,
+                                    const cmd::CmdDetectCalibrationCorners& command)
+{
+    CornerDetectionResult result;
+    result.role = command.role;
+    result.output_path = command.output_path;
+    result.expected_corner_count = command.board_corners_x * command.board_corners_y;
+    if (!calibrator)
+    {
+        result.error = MonoCalibrationError{"calibration_failed", "mono calibrator is not available"};
+        return result;
+    }
+    if (command.board_corners_x <= 0 || command.board_corners_y <= 0 ||
+        !std::isfinite(command.square_size_mm) || command.square_size_mm <= 0.0)
+    {
+        result.error = MonoCalibrationError{"invalid_command", "board dimensions and square_size_mm must be positive"};
+        return result;
+    }
+    auto* camera = cameras.get(command.camera_id);
+    if (!camera || !camera->isOpened())
+    {
+        result.error = MonoCalibrationError{"camera_not_open", "camera is not open"};
+        return result;
+    }
+    const auto frame = camera->getFrame();
+    if (frame.empty())
+    {
+        result.error = MonoCalibrationError{"empty_frame", "valid camera frame is not available"};
+        return result;
+    }
+    calibrator->setBoardConfig({{command.board_corners_x, command.board_corners_y},
+                                static_cast<float>(command.square_size_mm)});
+    cv::Mat preview;
+    std::vector<cv::Point2f> corners;
+    try
+    {
+        result.found = calibrator->detectAndDraw(frame, preview, corners);
+        if (!ensureOutputParent(command.output_path) || !cv::imwrite(command.output_path.string(), preview))
+        {
+            result.error = MonoCalibrationError{"calibration_output_write_failed",
+                                                "failed to write corner preview image"};
+            return result;
+        }
+    }
+    catch (const std::exception& error)
+    {
+        result.error = MonoCalibrationError{"calibration_output_write_failed", error.what()};
+        return result;
+    }
+    result.ok = true;
+    result.corner_count = result.found ? static_cast<int>(corners.size()) : 0;
     return result;
 }
 

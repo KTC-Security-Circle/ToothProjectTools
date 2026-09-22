@@ -1,6 +1,6 @@
 #pragma once
 
-#include "reconstruction/camera_projector_service.hpp"
+#include "calibration/camera_projector_calibration.hpp"
 #include <opencv2/core.hpp>
 #include <string>
 #include <vector>
@@ -17,7 +17,7 @@ struct ObservationResult
     bool valid{false};
     double mean_corner_displacement{0.0};
     double max_corner_displacement{0.0};
-    reconstruction::camera_projector::CalibrationObservation observation;
+    CalibrationObservation observation;
     std::string error;
 };
 

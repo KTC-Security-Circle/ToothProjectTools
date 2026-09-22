@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <chrono>
 #include <deque>
+#include <optional>
 #include <opencv2/core/mat.hpp>
 #include <opencv2/videoio.hpp> // cv::VideoWriter::fourcc
 
@@ -21,6 +22,18 @@ namespace video {
   };
 
   using FrameRingBuffer = std::deque<FrameSample>;
+
+  inline std::optional<FrameSample> firstFrameAtOrAfter(
+      const FrameRingBuffer& frames, std::chrono::steady_clock::time_point timestamp) {
+    for (const auto& sample : frames) {
+      if (sample.timestamp >= timestamp) {
+        FrameSample result = sample;
+        result.image = result.image.clone();
+        return result;
+      }
+    }
+    return std::nullopt;
+  }
 
   using CameraId = std::uint32_t;
   constexpr CameraId kInvalidCameraId = 0;

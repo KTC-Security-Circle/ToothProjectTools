@@ -36,6 +36,17 @@ struct MonoCalibrationResult
     std::optional<MonoCalibrationError> error;
 };
 
+struct CornerDetectionResult
+{
+    bool ok{false};
+    std::string role;
+    bool found{false};
+    int corner_count{0};
+    int expected_corner_count{0};
+    std::filesystem::path output_path;
+    std::optional<MonoCalibrationError> error;
+};
+
 /// @brief 保存済み単眼画像からmono calibrationを実行する。
 ///
 /// Args:
@@ -47,5 +58,8 @@ struct MonoCalibrationResult
 ///   <MonoCalibrationResult>: calibration成否、RMS、出力file、失敗時error。
 MonoCalibrationResult calibrate(video::CameraManager& cameras, calib::Calibrator* calibrator,
                                 const cmd::CmdCalibrate& command);
+
+CornerDetectionResult detectCorners(video::CameraManager& cameras, calib::Calibrator* calibrator,
+                                    const cmd::CmdDetectCalibrationCorners& command);
 
 } // namespace calib

@@ -246,14 +246,7 @@ DecodePatternsResult DecodeService::decodePatterns(const DecodePatternsConfig& c
 
     DecodeSideResult left;
     DecodeSideResult right;
-    cv::Rect excluded_roi;
-    if (metadata && metadata->sync_source == "camera_roi" && metadata->roi_width > 0 && metadata->roi_height > 0)
-    {
-        const int margin = std::max(0, metadata->roi_decode_margin);
-        const cv::Rect requested{metadata->roi_x - margin, metadata->roi_y - margin,
-                                 metadata->roi_width + 2 * margin, metadata->roi_height + 2 * margin};
-        excluded_roi = requested & cv::Rect{0, 0, left_patterns.front().cols, left_patterns.front().rows};
-    }
+    const cv::Rect excluded_roi;
     try
     {
         left = decodeSide(left_patterns, result.projector_width, result.projector_height, config.threshold,

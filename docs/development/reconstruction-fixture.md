@@ -157,13 +157,13 @@ build/release-opencv-4.10-static/src/serve/tooth-backend \
 Left mono calibration:
 
 ```json
-{"id":"fixture-mono-left","cmd":"mono_calibrate","image_folder":"/path/to/fixture/calibration/mono_L","output_file":"/tmp/tooth-output/calibration/mono_left.yml"}
+{"id":"fixture-mono-left","cmd":"mono_calibrate","image_folder":"/path/to/fixture/calibration/mono_L","output_file":"/tmp/tooth-output/calibration/mono_left.yml","board_corners_x":10,"board_corners_y":7,"square_size_mm":"<FIXTURE_MEASURED_VALUE>"}
 ```
 
 Right mono calibration:
 
 ```json
-{"id":"fixture-mono-right","cmd":"mono_calibrate","image_folder":"/path/to/fixture/calibration/mono_R","output_file":"/tmp/tooth-output/calibration/mono_right.yml"}
+{"id":"fixture-mono-right","cmd":"mono_calibrate","image_folder":"/path/to/fixture/calibration/mono_R","output_file":"/tmp/tooth-output/calibration/mono_right.yml","board_corners_x":10,"board_corners_y":7,"square_size_mm":"<FIXTURE_MEASURED_VALUE>"}
 ```
 
 Stereo calibration:

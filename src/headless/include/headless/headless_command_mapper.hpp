@@ -209,6 +209,7 @@ class HeadlessCommandMapper
     /// Return:
     ///   <CommandMapResult>: 変換成功時のcmd::Command、失敗時のerror。
     CommandMapResult mapMonoCalibrate(const control::ControlMessage& message);
+    CommandMapResult mapDetectCalibrationCorners(const control::ControlMessage& message);
 
     /// @brief stereo_calibrate用ControlMessageをCmdStereoCalibrateへ変換する。
     ///
@@ -220,6 +221,7 @@ class HeadlessCommandMapper
     CommandMapResult mapStereoCalibrate(const control::ControlMessage& message);
     CommandMapResult mapValidateReconstruction(const control::ControlMessage& message);
     CommandMapResult mapReconstructPointCloud(const control::ControlMessage& message);
+    CommandMapResult mapCameraProjectorCalibrate(const control::ControlMessage& message);
 
   private:
     /// camera_service_ <video::CameraService&>: role bindingを保持するdomain service。

@@ -39,12 +39,14 @@ HeadlessCommandExecutor::HeadlessCommandExecutor(
     decode::DecodeService& decode_service, capture::CaptureService& capture_service,
     video::CameraManager& cameras, calib::Calibrator* calibrator,
     calib::StereoCalibrator* stereo_calibrator, calib::StereoData& stereo_data,
-    reconstruction::ReconstructionService& reconstruction_service)
+    reconstruction::ReconstructionService& reconstruction_service,
+    calib::projector::CameraProjectorCalibrationService& camera_projector_calibration_service)
     : camera_service_(camera_service), window_service_(window_service), projector_service_(projector_service),
       scan_service_(scan_service), scan_dataset_validator_(scan_dataset_validator), decode_service_(decode_service),
       capture_service_(capture_service), cameras_(cameras), calibrator_(calibrator),
       stereo_calibrator_(stereo_calibrator), stereo_data_(stereo_data),
-      reconstruction_service_(reconstruction_service)
+      reconstruction_service_(reconstruction_service),
+      camera_projector_calibration_service_(camera_projector_calibration_service)
 {
 }
 
