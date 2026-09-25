@@ -13,7 +13,9 @@ common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdStartS
 {
     return result_adapter::scan(scan_service_.startScan({
         command.scan_id, command.projector_role, command.left_role, command.right_role,
-        std::filesystem::path{command.output_dir}, command.photodiode_device, command.photodiode_baud,
+        std::filesystem::path{command.output_dir},
+        command.sync_mode == "photodiode" ? scan::ScanSyncMode::photodiode : scan::ScanSyncMode::delay,
+        command.delay_ms, command.photodiode_device, command.photodiode_baud,
         command.sync_timeout_ms, command.sync_guard_ms, command.max_patterns}));
 }
 

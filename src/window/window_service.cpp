@@ -362,6 +362,11 @@ WindowService::WindowService(WindowBackend& backend, win::MonitorService& monito
 
 WindowService::~WindowService() = default;
 
+void WindowService::setWindowActionExecutor(WindowActionExecutor* executor)
+{
+    action_executor_ = executor;
+}
+
 WindowResult WindowService::openWindow(const WindowOpenConfig& config)
 {
     if (!isValidRole(config.role))
@@ -636,6 +641,23 @@ WindowResult WindowService::executeOpenWindow(OpenWindowRequest& request)
         if (window_id == win::kInvalidWindowId)
         {
             return WindowResult::failure(config.role, "window_open_failed", "window backend returned invalid id");
+        }
+        if (config.post_open_key || config.post_open_action)
+        {
+            if (!action_executor_)
+            {
+                (void)backend_.closeWindow(window_id);
+                return WindowResult::failure(config.role, "window_post_open_action_unsupported",
+                                             "no WindowActionExecutor is configured");
+            }
+            const auto action = action_executor_->execute(window_id, config.post_open_key, config.post_open_action);
+            if (!action.ok)
+            {
+                (void)backend_.closeWindow(window_id);
+                return WindowResult::failure(config.role,
+                    action.error_code.empty() ? "window_post_open_action_failed" : action.error_code,
+                    action.error_message.empty() ? "post-open window action failed" : action.error_message);
+            }
         }
         role_to_window_id_[config.role] = window_id;
         role_to_window_title_[config.role] = title;

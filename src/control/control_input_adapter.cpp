@@ -47,7 +47,7 @@ ControlInputAdapter::ControlInputAdapter(serve::SidecarService& service, JsonLin
                            service.scanService(), service.scanDatasetValidator(), service.decodeService(),
                            service.captureService(), service.cameraManager(), service.calibrator(),
                            service.stereoCalibrator(), service.stereoData(), service.reconstructionService(),
-                           service.cameraProjectorCalibrationService())
+                           service.cameraProjectorCalibrationService(), service.stereoScanService())
 {
 }
 
@@ -135,6 +135,14 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
     if (*message.cmd == "scan_start")
     {
         return handleScanCommand(id, message, ScanCommandKind::start);
+    }
+
+    if (*message.cmd == "stereo_scan")
+    {
+        const auto mapped = headless_mapper_.mapStereoScan(message);
+        if (!mapped.ok) { writeHeadlessFailure(id, *mapped.error); return AdapterResult::continue_running; }
+        writer_.writeResponse(toControlResponse(id, command_executor_.execute(*mapped.command)));
+        return AdapterResult::continue_running;
     }
 
     if (*message.cmd == "scan_status")

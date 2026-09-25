@@ -4,6 +4,7 @@
 #include "video/camera_service.hpp"
 
 #include <cmath>
+#include <chrono>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -70,6 +71,19 @@ std::optional<video::CameraId> resolveCameraId(video::CameraService& camera_serv
 std::filesystem::path normalizeOutputPathForCompare(const std::filesystem::path& path)
 {
     return std::filesystem::absolute(path).lexically_normal();
+}
+
+std::string generatedStereoScanId()
+{
+    const auto value = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    const auto base = "scan_" + std::to_string(value);
+    for (int suffix = 0; ; ++suffix)
+    {
+        const auto candidate = suffix == 0 ? base : base + "_" + std::to_string(suffix);
+        std::error_code error;
+        if (!std::filesystem::exists(std::filesystem::path{"data/scans"} / candidate, error) || error) return candidate;
+    }
 }
 
 
@@ -150,6 +164,8 @@ CommandMapResult HeadlessCommandMapper::mapOpenWindow(const control::ControlMess
         *message.height,
         message.monitor_index,
         message.fullscreen.value_or(false),
+        message.post_open_key,
+        message.post_open_action,
     };
     return result;
 }
@@ -352,18 +368,25 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
     {
         return mapFailure("invalid_command", "scan_id must not be empty");
     }
-    if (message.photodiode_device && message.photodiode_device->empty())
+    const auto sync_mode = message.sync_mode.value_or("delay");
+    if (sync_mode != "delay" && sync_mode != "photodiode")
+    {
+        return mapFailure("invalid_command", "sync_mode must be delay or photodiode");
+    }
+    if (sync_mode == "photodiode" && message.photodiode_device && message.photodiode_device->empty())
     {
         return mapFailure("invalid_command", "photodiode_device must not be empty");
     }
-    if ((message.photodiode_baud && *message.photodiode_baud <= 0) ||
+    if ((message.delay_ms && *message.delay_ms < 0) ||
+        (sync_mode == "photodiode" && message.photodiode_baud && *message.photodiode_baud <= 0) ||
         (message.sync_timeout_ms && *message.sync_timeout_ms <= 0) ||
-        (message.sync_guard_ms && *message.sync_guard_ms < 0) ||
+        (sync_mode == "photodiode" && message.guard_ms && *message.guard_ms < 0) ||
+        (sync_mode == "photodiode" && message.sync_guard_ms && *message.sync_guard_ms < 0) ||
         (message.max_patterns && *message.max_patterns < 0))
     {
         return mapFailure("invalid_command",
-                          "photodiode_baud and sync_timeout_ms must be positive; max_patterns and "
-                          "sync_guard_ms must be non-negative");
+                          "delay_ms, guard_ms, sync_guard_ms and max_patterns must be non-negative; "
+                          "photodiode_baud and sync_timeout_ms must be positive");
     }
 
     CommandMapResult result;
@@ -373,10 +396,67 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
                                        *message.left_role,
                                        message.right_role.value_or(std::string{}),
                                        *message.output_dir,
+                                       sync_mode,
+                                       message.delay_ms.value_or(100),
                                        message.photodiode_device.value_or("/dev/ttyUSB0"),
                                        message.photodiode_baud.value_or(115200),
-                                       message.sync_timeout_ms.value_or(1000), message.sync_guard_ms.value_or(30),
+                                       message.sync_timeout_ms.value_or(1000),
+                                       message.guard_ms.value_or(message.sync_guard_ms.value_or(30)),
                                        message.max_patterns.value_or(0)};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapStereoScan(const control::ControlMessage& message)
+{
+    if (!message.monitor_index) return mapFailure("missing_field", "missing required field: monitor_index");
+    const auto left_id = message.left_camera_id.value_or(0);
+    const auto right_id = message.right_camera_id.value_or(2);
+    const auto sync_mode = message.sync_mode.value_or("delay");
+    const auto delay_ms = message.delay_ms.value_or(100);
+    const auto guard_ms = message.guard_ms.value_or(message.sync_guard_ms.value_or(99));
+    const auto code_width = message.code_width.value_or(480);
+    const auto code_height = message.code_height.value_or(270);
+    const auto threshold = message.decode_threshold.value_or(message.threshold.value_or(15));
+    const auto epipolar = message.max_epipolar_error_px.value_or(2.0);
+    if (*message.monitor_index < 0 || left_id < 0 || right_id < 0 || left_id == right_id)
+        return mapFailure("invalid_command", "monitor and camera ids must be valid and cameras must differ");
+    if (sync_mode != "delay" && sync_mode != "photodiode")
+        return mapFailure("invalid_command", "sync_mode must be delay or photodiode");
+    const auto placement = message.placement.value_or("center");
+    if (placement != "center" && placement != "custom")
+        return mapFailure("invalid_command", "placement must be center or custom");
+    if (placement == "custom" && (!message.x || !message.y))
+        return mapFailure("missing_field", "custom placement requires x and y");
+    if (delay_ms < 0 || guard_ms < 0 || code_width <= 0 || code_height <= 0 || threshold < 0 ||
+        !std::isfinite(epipolar) || epipolar < 0.0)
+        return mapFailure("invalid_command", "invalid stereo_scan numeric configuration");
+    if (sync_mode == "photodiode" && message.photodiode_device && message.photodiode_device->empty())
+        return mapFailure("invalid_command", "photodiode_device must not be empty");
+    if ((message.photodiode_baud && *message.photodiode_baud <= 0) ||
+        (message.sync_timeout_ms && *message.sync_timeout_ms <= 0))
+        return mapFailure("invalid_command", "photodiode_baud and sync_timeout_ms must be positive");
+    const auto scan_id = message.scan_id.value_or(generatedStereoScanId());
+    if (scan_id.empty()) return mapFailure("invalid_command", "scan_id must not be empty");
+    const auto output_dir = message.output_dir
+        ? std::filesystem::path{*message.output_dir}
+        : std::filesystem::path{"data/scans"} / scan_id;
+    const auto ply_file = message.ply_file
+        ? std::filesystem::path{*message.ply_file}
+        : output_dir / "cloud.ply";
+    if (output_dir.empty() || ply_file.empty()) return mapFailure("invalid_output_path", "output paths must not be empty");
+
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdStereoScan{
+        static_cast<video::CameraId>(left_id), static_cast<video::CameraId>(right_id),
+        message.left_role.value_or("left"), message.right_role.value_or("right"),
+        message.window_role.value_or("projector"), message.projector_role.value_or("projector"),
+        *message.monitor_index, code_width, code_height, message.display_width, message.display_height,
+        placement, message.x, message.y,
+        message.calibration_file.value_or("data/calib/stereo.yml"), sync_mode, delay_ms,
+        message.photodiode_device.value_or("/dev/ttyUSB0"), message.photodiode_baud.value_or(115200),
+        message.sync_timeout_ms.value_or(1000), guard_ms, threshold, epipolar, scan_id,
+        output_dir, ply_file, message.post_open_key, message.post_open_action};
     return result;
 }
 
@@ -579,14 +659,10 @@ CommandMapResult HeadlessCommandMapper::mapCalibrationCaptureStereo(const contro
 
 CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlMessage& message)
 {
-    if (auto failure = requireString(message.image_folder, "image_folder"))
-    {
-        return *failure;
-    }
-    if (auto failure = requireString(message.output_file, "output_file"))
-    {
-        return *failure;
-    }
+    const bool right = message.role && *message.role == "right";
+    const auto image_folder = message.image_folder.value_or(right ? "data/calib/mono_right" : "data/calib/mono_left");
+    const auto output_file = message.output_file.value_or(right ? "data/calib/mono_right.yml" : "data/calib/mono_left.yml");
+    if (image_folder.empty() || output_file.empty()) return mapFailure("invalid_command", "calibration paths must not be empty");
     if (!message.board_corners_x) return mapFailure("missing_field", "missing required field: board_corners_x");
     if (!message.board_corners_y) return mapFailure("missing_field", "missing required field: board_corners_y");
     if (!message.square_size_mm) return mapFailure("missing_field", "missing required field: square_size_mm");
@@ -614,8 +690,8 @@ CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlM
     result.ok = true;
     result.command = cmd::CmdCalibrate{
         camera_id,
-        *message.image_folder,
-        *message.output_file,
+        image_folder,
+        output_file,
         message.role.value_or(std::string{}),
         apply_to_camera,
         *message.board_corners_x,
@@ -646,29 +722,16 @@ CommandMapResult HeadlessCommandMapper::mapDetectCalibrationCorners(const contro
 
 CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::ControlMessage& message)
 {
-    if (auto failure = requireString(message.left_dir, "left_dir"))
-    {
-        return *failure;
-    }
-    if (auto failure = requireString(message.right_dir, "right_dir"))
-    {
-        return *failure;
-    }
-    if (auto failure = requireString(message.left_calibration_file, "left_calibration_file"))
-    {
-        return *failure;
-    }
-    if (auto failure = requireString(message.right_calibration_file, "right_calibration_file"))
-    {
-        return *failure;
-    }
-    if (auto failure = requireString(message.output_file, "output_file"))
-    {
-        return *failure;
-    }
+    const auto left_value = message.left_dir.value_or("data/calib/stereo/left");
+    const auto right_value = message.right_dir.value_or("data/calib/stereo/right");
+    const auto left_calibration = message.left_calibration_file.value_or("data/calib/mono_left.yml");
+    const auto right_calibration = message.right_calibration_file.value_or("data/calib/mono_right.yml");
+    const auto output_value = message.output_file.value_or("data/calib/stereo.yml");
+    if (left_value.empty() || right_value.empty() || left_calibration.empty() || right_calibration.empty() || output_value.empty())
+        return mapFailure("invalid_command", "calibration paths must not be empty");
 
-    const auto left_dir = std::filesystem::path{*message.left_dir};
-    const auto right_dir = std::filesystem::path{*message.right_dir};
+    const auto left_dir = std::filesystem::path{left_value};
+    const auto right_dir = std::filesystem::path{right_value};
     if (normalizeOutputPathForCompare(left_dir) == normalizeOutputPathForCompare(right_dir))
     {
         return mapFailure("invalid_command", "left_dir and right_dir must be different paths");
@@ -712,11 +775,11 @@ CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::Contro
         right_camera_id,
         left_dir.string(),
         right_dir.string(),
-        *message.output_file,
+        output_value,
         message.left_role.value_or(std::string{}),
         message.right_role.value_or(std::string{}),
-        *message.left_calibration_file,
-        *message.right_calibration_file,
+        left_calibration,
+        right_calibration,
         apply_to_camera,
     };
     return result;

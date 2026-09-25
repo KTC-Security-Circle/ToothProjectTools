@@ -3,6 +3,7 @@ target_include_directories(sidecar_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/in
 target_link_libraries(sidecar_service
   PUBLIC camera_service window_service monitor_service projector_service scan_service
          scan_dataset_service decode_service capture calibration reconstruction mjpeg_stream video
+         stereo_scan_service common
   PRIVATE cv_lib logger
 )
 target_compile_features(sidecar_service PUBLIC cxx_std_20)

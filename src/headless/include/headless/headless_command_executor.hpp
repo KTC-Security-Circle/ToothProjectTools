@@ -16,6 +16,7 @@ namespace projector { class ProjectorService; }
 namespace scan { class ScanService; }
 namespace scan::dataset { class ScanDatasetValidator; }
 namespace decode { class DecodeService; }
+namespace stereo_scan { class StereoScanService; }
 
 namespace headless
 {
@@ -39,7 +40,8 @@ class HeadlessCommandExecutor
                             calib::Calibrator* calibrator, calib::StereoCalibrator* stereo_calibrator,
                             calib::StereoData& stereo_data,
                             reconstruction::ReconstructionService& reconstruction_service,
-                            calib::projector::CameraProjectorCalibrationService& camera_projector_calibration_service);
+                            calib::projector::CameraProjectorCalibrationService& camera_projector_calibration_service,
+                            stereo_scan::StereoScanService& stereo_scan_service);
 
     /// @return service結果を外部応答形式へ写像したcommand result。
     common::CommandResult execute(const cmd::Command& command);
@@ -73,6 +75,7 @@ class HeadlessCommandExecutor
     common::CommandResult executeTyped(const cmd::CmdStereoCalibrate& command);
     common::CommandResult executeTyped(const cmd::CmdValidateReconstruction& command);
     common::CommandResult executeTyped(const cmd::CmdReconstructPointCloud& command);
+    common::CommandResult executeTyped(const cmd::CmdStereoScan& command);
     common::CommandResult executeTyped(const cmd::CmdCameraProjectorCalibrate& command);
 
     video::CameraService& camera_service_;
@@ -88,6 +91,7 @@ class HeadlessCommandExecutor
     calib::StereoData& stereo_data_;
     reconstruction::ReconstructionService& reconstruction_service_;
     calib::projector::CameraProjectorCalibrationService& camera_projector_calibration_service_;
+    stereo_scan::StereoScanService& stereo_scan_service_;
 };
 
 } // namespace headless

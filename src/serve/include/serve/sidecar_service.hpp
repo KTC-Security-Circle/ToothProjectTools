@@ -15,6 +15,7 @@
 #include "scan/scan_service.hpp"
 #include "window/window_service.hpp"
 #include "video/camera_manager.hpp"
+#include "stereo_scan/stereo_scan_service.hpp"
 #include "window/window_manager.hpp"
 
 #include <map>
@@ -240,6 +241,7 @@ class SidecarService
     calib::StereoData& stereoData();
     reconstruction::ReconstructionService& reconstructionService();
     calib::projector::CameraProjectorCalibrationService& cameraProjectorCalibrationService();
+    stereo_scan::StereoScanService& stereoScanService();
 
     /// @brief sidecar serviceを停止し、cameraとstreamを解放する。
     ///
@@ -310,6 +312,7 @@ class SidecarService
     calib::StereoData stereo_data_;
     reconstruction::ReconstructionService reconstruction_service_;
     calib::projector::CameraProjectorCalibrationService camera_projector_calibration_service_{scan_dataset_validator_};
+    stereo_scan::StereoScanService stereo_scan_service_;
 
     /// bindings_ <std::map<std::string, CameraBinding>>: roleごとのMJPEG publisherを保持するsidecar binding。
     std::map<std::string, CameraBinding> bindings_;

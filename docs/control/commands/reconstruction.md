@@ -15,3 +15,5 @@ left camera座標系・単位mmのASCII XYZ PLYを同期生成する。projector
 ```
 
 `overwrite`のdefaultはfalse。event、status、cancel、background workerはない。相対pathはprocess working directory基準で解決する。主なerror codeは`decode_dir_not_found`、`decode_result_invalid`、`calibration_file_not_found`、`calibration_file_invalid`、`image_size_mismatch`、`insufficient_valid_correspondence`、`triangulation_failed`、`output_file_exists`、`file_write_failed`である。
+
+高レベル `stereo_scan` はこの同じ `ReconstructionService` を呼び出し、defaultで `<output_dir>/decode` と `data/calib/stereo.yml` を入力、`<output_dir>/cloud.ply` を出力にする。再構成ロジックやPLY writerはFacade内に重複実装しない。

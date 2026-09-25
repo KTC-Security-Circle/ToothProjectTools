@@ -20,6 +20,7 @@
 #include "scan/scan_dataset_validator.hpp"
 #include "window/window_service.hpp"
 #include "structured_light/structured_light.hpp"
+#include "stereo_scan/stereo_scan_service.hpp"
 #include "video/camera_manager.hpp"
 
 #include <algorithm>
@@ -130,6 +131,20 @@ class FakeWindowBackend final : public win::WindowBackend
     int last_delay_ms{0};
 };
 
+class FakeWindowActionExecutor final : public win::WindowActionExecutor
+{
+  public:
+    win::WindowActionResult execute(win::WindowId id, const std::optional<std::string>& key,
+                                    const std::optional<std::string>& action) override
+    {
+        called = true; window_id = id; last_key = key; last_action = action;
+        return succeed ? win::WindowActionResult{true, {}, {}}
+                       : win::WindowActionResult{false, "window_post_open_action_failed", "fake failure"};
+    }
+    bool succeed{true}; bool called{false}; win::WindowId window_id{win::kInvalidWindowId};
+    std::optional<std::string> last_key; std::optional<std::string> last_action;
+};
+
 template <typename Function> auto runWindowRequest(win::WindowService& service, Function function)
 {
     auto future = std::async(std::launch::async, std::move(function));
@@ -185,10 +200,14 @@ struct CommandRuntime
     calib::StereoData stereo_data;
     reconstruction::ReconstructionService reconstruction_service;
     calib::projector::CameraProjectorCalibrationService camera_projector_calibration_service{scan_dataset_validator};
+    stereo_scan::StereoScanService stereo_scan_service{
+        camera_service, window_service, projector_service, scan_service, decode_service, reconstruction_service,
+        scan_events, [](const std::string& role) { return common::success({{"url", role}}); },
+        [](const std::string&) { return common::success(); }};
     headless::HeadlessCommandExecutor executor{
         camera_service, window_service, projector_service, scan_service, scan_dataset_validator,
         decode_service, capture_service, cameras, &calibrator, &stereo_calibrator, stereo_data,
-        reconstruction_service, camera_projector_calibration_service};
+        reconstruction_service, camera_projector_calibration_service, stereo_scan_service};
 };
 
 control::ControlMessage messageWithId()
@@ -609,7 +628,7 @@ void testScanMapper()
     message.left_role = "left";
     message.right_role.reset();
     result = mapper.mapStartScan(message);
-    assert(!result.ok && result.error->code == "missing_field");
+    assert(result.ok && std::get<cmd::CmdStartScan>(*result.command).right_role.empty());
 
     message.right_role = "right";
     message.output_dir.reset();
@@ -617,6 +636,7 @@ void testScanMapper()
     assert(!result.ok && result.error->code == "missing_field");
 
     message.output_dir = "./data/scan/test";
+    message.sync_mode = "photodiode";
     message.photodiode_baud = 0;
     result = mapper.mapStartScan(message);
     assert(!result.ok && result.error->code == "invalid_command");
@@ -654,7 +674,7 @@ void testScanMapper()
 
     message.input_dir = "";
     result = mapper.mapValidateScanDataset(message);
-    assert(!result.ok && result.error->code == "invalid_command");
+    assert(!result.ok && result.error->code == "missing_field");
 
     message.input_dir = "./data/scan/session_001";
     result = mapper.mapValidateScanDataset(message);
@@ -682,7 +702,7 @@ void testScanMapper()
     message.output_dir = "./data/decode/session_001";
     message.input_dir = "";
     result = mapper.mapDecodePatterns(message);
-    assert(!result.ok && result.error->code == "invalid_command");
+    assert(!result.ok && result.error->code == "missing_field");
 
     message.input_dir = "./data/scan/session_001";
     message.output_dir = "";
@@ -745,6 +765,15 @@ void testScanMapper()
     assert(mono.board_corners_y == 7);
     assert(mono.square_size_mm == 12.5);
 
+    auto default_mono_message = messageWithId();
+    default_mono_message.board_corners_x = 10; default_mono_message.board_corners_y = 7;
+    default_mono_message.square_size_mm = 12.5;
+    auto default_mono_result = mapper.mapMonoCalibrate(default_mono_message);
+    assert(default_mono_result.ok);
+    const auto default_mono = std::get<cmd::CmdCalibrate>(*default_mono_result.command);
+    assert(default_mono.image_folder == "data/calib/mono_left" &&
+           default_mono.output_file == "data/calib/mono_left.yml");
+
     message = messageWithId();
     message.left_dir = "./data/calib/stereo_left";
     message.right_dir = "./data/calib/stereo_right";
@@ -759,6 +788,49 @@ void testScanMapper()
     assert(!stereo.apply_to_camera);
     assert(stereo.left_calibration_file == "./data/calib/mono_left.yml");
     assert(stereo.right_calibration_file == "./data/calib/mono_right.yml");
+
+    const auto default_stereo_result = mapper.mapStereoCalibrate(messageWithId());
+    assert(default_stereo_result.ok);
+    const auto default_stereo = std::get<cmd::CmdStereoCalibrate>(*default_stereo_result.command);
+    assert(default_stereo.left_dir == "data/calib/stereo/left" &&
+           default_stereo.right_dir == "data/calib/stereo/right" &&
+           default_stereo.output_file == "data/calib/stereo.yml");
+}
+
+void testStereoScanMapper()
+{
+    video::CameraManager cameras;
+    video::CameraService service{cameras};
+    headless::HeadlessCommandMapper mapper{service};
+    auto message = messageWithId();
+    message.monitor_index = 1;
+    auto mapped = mapper.mapStereoScan(message);
+    requireCameraProjector(mapped.ok, "minimal stereo_scan did not map");
+    const auto defaults = std::get<cmd::CmdStereoScan>(*mapped.command);
+    requireCameraProjector(defaults.left_camera_id == 0 && defaults.right_camera_id == 2,
+                           "stereo camera defaults differ");
+    requireCameraProjector(defaults.calibration_file == "data/calib/stereo.yml" &&
+                           defaults.sync_mode == "delay" && defaults.delay_ms == 100,
+                           "stereo_scan defaults differ");
+    requireCameraProjector(defaults.output_dir.parent_path() == std::filesystem::path{"data/scans"} &&
+                           defaults.ply_file == defaults.output_dir / "cloud.ply",
+                           "generated output contract differs");
+
+    message.left_camera_id = 4; message.right_camera_id = 5;
+    message.calibration_file = "custom/stereo.yml"; message.output_dir = "custom/scan";
+    message.ply_file = "custom/cloud.ply"; message.sync_mode = "photodiode";
+    message.guard_ms = 77; message.decode_threshold = 21;
+    mapped = mapper.mapStereoScan(message);
+    requireCameraProjector(mapped.ok, "explicit stereo_scan did not map");
+    const auto explicit_config = std::get<cmd::CmdStereoScan>(*mapped.command);
+    requireCameraProjector(explicit_config.left_camera_id == 4 && explicit_config.right_camera_id == 5 &&
+                           explicit_config.guard_ms == 77 && explicit_config.decode_threshold == 21 &&
+                           explicit_config.output_dir == "custom/scan", "explicit stereo_scan values differ");
+
+    message.guard_ms = -1;
+    requireCameraProjector(!mapper.mapStereoScan(message).ok, "negative guard_ms was accepted");
+    message.guard_ms = 1; message.sync_mode = "bad";
+    requireCameraProjector(!mapper.mapStereoScan(message).ok, "invalid sync_mode was accepted");
 }
 
 void testWindowHandler()
@@ -909,6 +981,27 @@ void testWindowServiceValidation()
                      });
     assert(!service.resolveWindowId("one"));
     assert(!service.resolveWindowId("two"));
+}
+
+void testWindowPostOpenAction()
+{
+    FakeWindowBackend backend;
+    win::WindowService service{backend};
+    auto unsupported = service.openWindow({"unsupported", "", 640, 480, std::nullopt, false,
+                                           "Super+Shift+Right", std::nullopt});
+    requireCameraProjector(!unsupported.ok && unsupported.error->code == "window_post_open_action_unsupported",
+                           "unsupported post-open action was ignored");
+    FakeWindowActionExecutor actions;
+    service.setWindowActionExecutor(&actions);
+    auto success = service.openWindow({"success", "", 640, 480, std::nullopt, false,
+                                       "Super+Shift+Right", std::nullopt});
+    requireCameraProjector(success.ok && actions.called && actions.last_key == "Super+Shift+Right",
+                           "post-open key was not executed");
+    actions.succeed = false; actions.called = false;
+    auto failed = service.openWindow({"failed", "", 640, 480, std::nullopt, false,
+                                      std::nullopt, "move-to-output-right"});
+    requireCameraProjector(!failed.ok && actions.called && failed.error->code == "window_post_open_action_failed",
+                           "post-open action failure was not propagated");
 }
 
 void testProjectorServiceValidation()
@@ -1897,8 +1990,11 @@ void testPhotodiodeScanConfigValidation()
     config.output_dir = testTempDir("photodiode_scan_validation");
     config.photodiode_device.clear();
     auto result = scan_service.startScan(config);
-    assert(!result.ok && result.error->code == "invalid_scan_config");
+    assert(!result.ok && result.error->code == "projector_not_open");
 
+    config.sync_mode = scan::ScanSyncMode::photodiode;
+    result = scan_service.startScan(config);
+    assert(!result.ok && result.error->code == "invalid_scan_config");
     config.photodiode_device = "/dev/ttyUSB0";
     result = scan_service.startScan(config);
     assert(!result.ok && result.error->code == "projector_not_open");
@@ -2022,6 +2118,7 @@ int main()
     testMonitorService();
     testMonitorFallbackAcrossServices();
     testScanMapper();
+    testStereoScanMapper();
     testHandler();
     testWindowHandler();
     testProjectorLogicalResolutionSeparateFromDisplay();
@@ -2043,6 +2140,7 @@ int main()
     testProjectorSurfaceConfiguration();
     testServiceValidation();
     testWindowServiceValidation();
+    testWindowPostOpenAction();
     testProjectorServiceValidation();
     testScanDatasetValidator();
     testDecodeServiceSyntheticDataset();

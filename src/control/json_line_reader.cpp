@@ -126,6 +126,9 @@ ReadResult JsonLineReader::read() {
         !readBool(root, "allow_partial", message.allow_partial, error_message) ||
         !readBool(root, "apply_to_camera", message.apply_to_camera, error_message) ||
         !readString(root, "photodiode_device", message.photodiode_device, error_message) ||
+        !readString(root, "sync_mode", message.sync_mode, error_message) ||
+        !readInteger(root, "delay_ms", message.delay_ms, error_message) ||
+        !readInteger(root, "guard_ms", message.guard_ms, error_message) ||
         !readInteger(root, "photodiode_baud", message.photodiode_baud, error_message) ||
         !readInteger(root, "sync_timeout_ms", message.sync_timeout_ms, error_message) ||
         !readInteger(root, "sync_guard_ms", message.sync_guard_ms, error_message) ||
@@ -135,6 +138,8 @@ ReadResult JsonLineReader::read() {
         !readInteger(root, "projector_height", message.projector_height, error_message) ||
         !readInteger(root, "pattern_count", message.pattern_count, error_message) ||
         !readInteger(root, "camera_id", message.camera_id, error_message) ||
+        !readInteger(root, "left_camera_id", message.left_camera_id, error_message) ||
+        !readInteger(root, "right_camera_id", message.right_camera_id, error_message) ||
         !readString(root, "window_role", message.window_role, error_message) ||
         !readString(root, "title", message.title, error_message) ||
         !readInteger(root, "width", message.width, error_message) ||
@@ -144,9 +149,17 @@ ReadResult JsonLineReader::read() {
         !readInteger(root, "y", message.y, error_message) ||
         !readString(root, "placement", message.placement, error_message) ||
         !readBool(root, "fullscreen", message.fullscreen, error_message) ||
+        !readString(root, "post_open_key", message.post_open_key, error_message) ||
+        !readString(root, "post_open_action", message.post_open_action, error_message) ||
         !readString(root, "projector_role", message.projector_role, error_message) ||
         !readInteger(root, "index", message.index, error_message) ||
         !readString(root, "decode_dir", message.decode_dir, error_message) ||
+        !readInteger(root, "code_width", message.code_width, error_message) ||
+        !readInteger(root, "code_height", message.code_height, error_message) ||
+        !readInteger(root, "display_width", message.display_width, error_message) ||
+        !readInteger(root, "display_height", message.display_height, error_message) ||
+        !readString(root, "ply_file", message.ply_file, error_message) ||
+        !readInteger(root, "decode_threshold", message.decode_threshold, error_message) ||
         !readString(root, "calibration_file", message.calibration_file, error_message) ||
         !readNumber(root, "max_epipolar_error_px", message.max_epipolar_error_px, error_message) ||
         !readNumber(root, "min_depth_mm", message.min_depth_mm, error_message) ||

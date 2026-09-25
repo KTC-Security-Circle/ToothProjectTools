@@ -12,7 +12,7 @@ returnは受付結果である。
 ### args(JSONL)
 
 ```json
-{"id":"70","cmd":"scan_start","scan_id":"session_001","left_role":"left","right_role":"right","projector_role":"projector","output_dir":"./data/scan/session_001","photodiode_device":"/dev/ttyUSB0","photodiode_baud":115200,"sync_timeout_ms":1000,"sync_guard_ms":30}
+{"id":"70","cmd":"scan_start","scan_id":"session_001","left_role":"left","right_role":"right","projector_role":"projector","output_dir":"./data/scan/session_001","sync_mode":"delay","delay_ms":100}
 ```
 
 | field | 必須 | 説明 |
@@ -24,10 +24,13 @@ returnは受付結果である。
 | `right_role` | 任意 | stereo時のright camera role。 |
 | `projector_role` | 必須 | projector role。 |
 | `output_dir` | 必須 | scan dataset出力directory。 |
+| `sync_mode` | 任意 | `delay`（default）または `photodiode`。 |
+| `delay_ms` | 任意 | delay modeで表示要求時刻から待つ時間。default `100`。左右で同じ `selected_at` を使う。 |
 | `photodiode_device` | 任意 | serial device。default `/dev/ttyUSB0`。 |
 | `photodiode_baud` | 任意 | serial baud。default `115200`。 |
 | `sync_timeout_ms` | 任意 | event/frame待機timeout。default `1000`。 |
-| `sync_guard_ms` | 任意 | Photodiode event後のCamera選択guard。default `30`。 |
+| `guard_ms` | 任意 | Photodiodeの光学transition検出後のguard。default `30`。 |
+| `sync_guard_ms` | 任意 | `guard_ms` の旧互換alias。両方あれば `guard_ms` が優先。 |
 | `max_patterns` | 任意 | 診断用のpattern取得上限。`0`または省略時は全pattern、正数は先頭N patternのみ。 |
 
 ### return
@@ -72,9 +75,11 @@ scan dataset。`metadata.json` にはDecode用の `projector_width` / `projector
 open済みleft camera。
 stereo時はopen済みright camera。
 open済みprojector。
-`0`/`1` eventを出力するPhotodiode serial device。
+`sync_mode=photodiode` の場合だけ、`0`/`1` eventを出力するPhotodiode serial device。
 生成済みpattern。`scan_start` は生成済みpattern列を使用し、surface設定を使って暗黙に再生成しない。表示時だけdisplay regionへnearest-neighborで拡大する。
 Scan worker。
+
+Delay modeはserial deviceをopenせず、Photodiode marker marginも要求しない。`show_timestamp + delay_ms` 以降の最初のframeを左右共通時刻でring bufferから選ぶ。Photodiode modeはtransition時刻 + `guard_ms` を左右共通時刻にする。`metadata.json` は `sync_mode` とmode固有fieldを保存する。
 
 ### error code
 

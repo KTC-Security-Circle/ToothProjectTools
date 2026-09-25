@@ -41,6 +41,24 @@ struct WindowOpenConfig
 
     /// fullscreen <bool>: fullscreen windowとして開くか。
     bool fullscreen{false};
+    std::optional<std::string> post_open_key;
+    std::optional<std::string> post_open_action;
+};
+
+struct WindowActionResult
+{
+    bool ok{false};
+    std::string error_code;
+    std::string error_message;
+};
+
+class WindowActionExecutor
+{
+  public:
+    virtual ~WindowActionExecutor() = default;
+    virtual WindowActionResult execute(win::WindowId window_id,
+                                       const std::optional<std::string>& key,
+                                       const std::optional<std::string>& action) = 0;
 };
 
 struct WindowSurfaceConfig
@@ -148,6 +166,7 @@ class WindowService
     ///   <WindowService>: backend参照を保持するwindow service。
     explicit WindowService(WindowBackend& backend);
     WindowService(WindowBackend& backend, win::MonitorService& monitor_service);
+    void setWindowActionExecutor(WindowActionExecutor* executor);
 
     /// @brief WindowServiceを破棄する。
     ///
@@ -339,6 +358,7 @@ class WindowService
 
     std::unique_ptr<win::MonitorService> owned_monitor_service_;
     win::MonitorService& monitor_service_;
+    WindowActionExecutor* action_executor_{nullptr};
 
     /// gui_thread_id_ <std::thread::id>: HighGUI操作を実行するprocess main thread id。
     std::thread::id gui_thread_id_;
