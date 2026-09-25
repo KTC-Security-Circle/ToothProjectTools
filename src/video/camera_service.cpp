@@ -68,6 +68,13 @@ std::optional<video::CameraId> CameraService::resolveCameraId(const std::string&
     return it == role_to_camera_id_.end() ? std::nullopt : std::optional<video::CameraId>{it->second};
 }
 
+std::optional<int> CameraService::resolveDeviceIndex(const std::string& role) const
+{
+    std::lock_guard lock(mutex_);
+    const auto it = role_to_device_index_.find(role);
+    return it == role_to_device_index_.end() ? std::nullopt : std::optional<int>{it->second};
+}
+
 std::optional<video::FrameSample> CameraService::latestFrame(video::CameraId camera_id) const
 {
     auto* camera = cameras_.get(camera_id);

@@ -28,7 +28,7 @@ SidecarResult SidecarResult::failure(SidecarErrorCode code, std::string message)
 
 SidecarService::SidecarService(std::string mjpeg_host, int mjpeg_port, stream::StreamRegistry& streams)
     : mjpeg_host_(std::move(mjpeg_host)), mjpeg_port_(mjpeg_port), streams_(streams),
-      stereo_scan_service_(camera_service_, window_service_, projector_service_, scan_service_, decode_service_,
+      stereo_scan_service_(camera_service_, window_service_, monitor_service_, projector_service_, scan_service_, decode_service_,
           reconstruction_service_, scan_event_queue_,
           [this](const std::string& role) {
               const auto result = startStream(role);
@@ -39,8 +39,10 @@ SidecarService::SidecarService(std::string mjpeg_host, int mjpeg_port, stream::S
               const auto result = stopStream(role);
               return result.ok ? common::success()
                                : common::failure(std::string(toString(result.error->code)), result.error->message);
-          })
+          },
+          [this](const std::string& role) { return runningStreamUrl(role); })
 {
+    window_service_.setWindowActionExecutor(&window_action_executor_);
 }
 
 SidecarService::~SidecarService()
@@ -134,6 +136,13 @@ SidecarResult SidecarService::stopStream(const std::string& role)
                ? SidecarResult::success()
                : SidecarResult::failure(SidecarErrorCode::CameraNotOpen,
                                         toString(SidecarErrorCode::CameraNotOpen).data());
+}
+
+std::optional<std::string> SidecarService::runningStreamUrl(const std::string& role) const
+{
+    const auto it = bindings_.find(role);
+    if (it == bindings_.end() || !it->second.publisher || !it->second.publisher->running()) return std::nullopt;
+    return streamUrl(role);
 }
 
 void SidecarService::stopStreamIfRunning(const std::string& role)
