@@ -140,6 +140,7 @@ class HeadlessCommandMapper
 
     /// @brief scan_start用ControlMessageをCmdStartScanへ変換する。
     CommandMapResult mapStartScan(const control::ControlMessage& message);
+    CommandMapResult mapStereoScan(const control::ControlMessage& message);
 
     /// @brief scan_status用ControlMessageをCmdScanStatusへ変換する。
     CommandMapResult mapScanStatus(const control::ControlMessage& message);

@@ -29,6 +29,7 @@ target_link_libraries(headless_command_execution
     cmd_commands
     capture
     common
+    stereo_scan_service
   PRIVATE
     video
     calibration_service

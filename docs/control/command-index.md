@@ -1,6 +1,6 @@
 # コマンド一覧
 
-public JSONL commandは31件（既存30件 + `calib_detect_corners`）である。
+public JSONL commandは32件である。低レベルcommandは維持し、`stereo_scan` がFacadeとして追加されている。
 
 | command | 分類 | args(JSONL) | return | event | 読むArtifact | 書くArtifact | 必要なruntime resource | 実装状態 | 詳細docs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -29,6 +29,7 @@ public JSONL commandは31件（既存30件 + `calib_detect_corners`）である�
 | `next_pattern` | プロジェクタ表示 | `id`, `cmd`, `projector_role` | `pattern_index` | `pattern_shown` | runtime pattern | なし | open済みprojector role、Window | 実装済み | [projector.md](./commands/projector.md#next_pattern) |
 | `prev_pattern` | プロジェクタ表示 | `id`, `cmd`, `projector_role` | `pattern_index` | `pattern_shown` | runtime pattern | なし | open済みprojector role、Window | 実装済み | [projector.md](./commands/projector.md#prev_pattern) |
 | `scan_start` | 状態管理 | `id`, `cmd`, `projector_role`, `left_role`, `right_role`, `output_dir` | scan status | scan events | runtime pattern | scan dataset | camera roles、projector role、Window | 実装済み | [scan.md](./commands/scan.md#scan_start) |
+| `stereo_scan` | Facade | `id`, `cmd`, `monitor_index`（他は任意） | stream URL、予定PLY path | `stereo_scan_*` | stereo calibration | scan/decode/PLY | cameras、Window、Projector | 実装済み | [stereo-scan.md](./commands/stereo-scan.md) |
 | `scan_status` | 状態管理 | `id`, `cmd` | scan status | なし | なし | なし | ScanService state | 実装済み | [scan.md](./commands/scan.md#scan_status) |
 | `scan_stop` | 状態管理 | `id`, `cmd` | scan status | `scan_stopping`, `scan_stopped` | なし | なし | ScanService worker | 実装済み | [scan.md](./commands/scan.md#scan_stop) |
 | `scan_validate` | ファイル処理 | `id`, `cmd`, `input_dir`, `allow_partial` | validation fields | なし | scan dataset | なし | なし | 実装済み | [scan-dataset.md](./commands/scan-dataset.md#scan_validate) |

@@ -10,7 +10,8 @@ common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdOpenWi
 {
     return result_adapter::window(
         window_service_.openWindow({command.window_role, command.title, command.width, command.height,
-                                    command.monitor_index, command.fullscreen}), true);
+                                    command.monitor_index, command.fullscreen,
+                                    command.post_open_key, command.post_open_action}), true);
 }
 
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdCloseWindow& command)

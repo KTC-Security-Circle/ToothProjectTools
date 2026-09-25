@@ -43,6 +43,9 @@ struct CmdOpenWindow
 
     /// fullscreen <bool>: fullscreenで開くか。
     bool fullscreen{false};
+
+    std::optional<std::string> post_open_key;
+    std::optional<std::string> post_open_action;
 };
 
 /// @brief runtime上のwindowをcloseするcommand。
@@ -176,6 +179,9 @@ struct CmdStartScan
     /// output_dir <std::string>: scan dataset保存先directory。
     std::string output_dir;
 
+    /// sync_mode: "delay" (default) or "photodiode".
+    std::string sync_mode{"delay"};
+    int delay_ms{100};
     std::string photodiode_device{"/dev/ttyUSB0"};
     int photodiode_baud{115200};
     int sync_timeout_ms{1000};
@@ -319,6 +325,38 @@ struct ReconstructionGeometryConfig { double max_epipolar_error_px{2.0}; std::op
 struct CmdValidateReconstruction { std::filesystem::path decode_dir; std::filesystem::path calibration_file; ReconstructionGeometryConfig config; };
 struct CmdReconstructPointCloud { std::filesystem::path decode_dir; std::filesystem::path calibration_file; std::filesystem::path output_file; ReconstructionGeometryConfig config; bool overwrite{false}; };
 
+struct CmdStereoScan
+{
+  video::CameraId left_camera_id{0};
+  video::CameraId right_camera_id{2};
+  std::string left_role{"left"};
+  std::string right_role{"right"};
+  std::string window_role{"projector"};
+  std::string projector_role{"projector"};
+  int monitor_index{0};
+  int code_width{480};
+  int code_height{270};
+  std::optional<int> display_width;
+  std::optional<int> display_height;
+  std::string placement{"center"};
+  std::optional<int> x;
+  std::optional<int> y;
+  std::filesystem::path calibration_file{"data/calib/stereo.yml"};
+  std::string sync_mode{"delay"};
+  int delay_ms{100};
+  std::string photodiode_device{"/dev/ttyUSB0"};
+  int photodiode_baud{115200};
+  int sync_timeout_ms{1000};
+  int guard_ms{99};
+  int decode_threshold{15};
+  double max_epipolar_error_px{2.0};
+  std::string scan_id;
+  std::filesystem::path output_dir;
+  std::filesystem::path ply_file;
+  std::optional<std::string> post_open_key;
+  std::optional<std::string> post_open_action;
+};
+
 struct CmdCameraProjectorCalibrate
 {
   std::filesystem::path observations_dir;
@@ -358,6 +396,7 @@ using Command = std::variant<
   CmdStereoCalibrate,
   CmdValidateReconstruction,
   CmdReconstructPointCloud,
+  CmdStereoScan,
   CmdCameraProjectorCalibrate
 >;
 

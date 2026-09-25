@@ -74,6 +74,10 @@ struct ControlMessage {
   std::optional<bool> allow_partial;
 
   std::optional<std::string> photodiode_device;
+  std::optional<std::string> sync_mode;
+  std::optional<int> delay_ms;
+  /// Public canonical name. sync_guard_ms remains a compatibility alias.
+  std::optional<int> guard_ms;
   std::optional<int> photodiode_baud;
   std::optional<int> sync_timeout_ms;
   std::optional<int> sync_guard_ms;
@@ -93,6 +97,8 @@ struct ControlMessage {
 
   /// camera_id <std::optional<int>>: open_cameraで使用するcamera識別子。
   std::optional<int> camera_id;
+  std::optional<int> left_camera_id;
+  std::optional<int> right_camera_id;
 
   /// window_role <std::optional<std::string>>: open/close対象のwindow role名。
   std::optional<std::string> window_role;
@@ -120,6 +126,8 @@ struct ControlMessage {
 
   /// fullscreen <std::optional<bool>>: fullscreenでwindowを開くか。
   std::optional<bool> fullscreen;
+  std::optional<std::string> post_open_key;
+  std::optional<std::string> post_open_action;
 
   /// projector_role <std::optional<std::string>>: 操作対象projector role名。
   std::optional<std::string> projector_role;
@@ -128,6 +136,12 @@ struct ControlMessage {
   std::optional<int> index;
 
   std::optional<std::string> decode_dir;
+  std::optional<int> code_width;
+  std::optional<int> code_height;
+  std::optional<int> display_width;
+  std::optional<int> display_height;
+  std::optional<std::string> ply_file;
+  std::optional<int> decode_threshold;
   std::optional<std::string> calibration_file;
   std::optional<double> max_epipolar_error_px;
   std::optional<double> min_depth_mm;

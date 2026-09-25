@@ -24,8 +24,12 @@ Windowを作成し、window roleへbindする。
 | `height` | 必須 | window高さ。 |
 | `monitor_index` | 任意 | 0-based monitor index。省略時はprimary、範囲外はprimaryへfallbackする。 |
 | `fullscreen` | 任意 | fullscreen指定。 |
+| `post_open_key` | 任意 | 作成直後に `WindowActionExecutor` へ渡すkey表現。未設定なら何もしない。 |
+| `post_open_action` | 任意 | OS/window-manager固有executorへ渡す意味ベース配置action。 |
 
 ### return
+
+post-open指定時に対応executorがない環境（Waylandを含む）では黙って無視せず `window_post_open_action_unsupported` を返す。実行失敗は `window_post_open_action_failed`（またはexecutor固有code）になる。HighGUI自体へkey injectionは実装しない。
 
 ```json
 {"id":"40","ok":true,"window_role":"projector","window_id":"1","width":"1920","height":"1080"}
