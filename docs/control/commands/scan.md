@@ -1,5 +1,30 @@
 # スキャンcommand
 
+## measure_sync_delay
+
+production scanと同じruntime resourceを使い、Photodiode eventからCameraが新しい表示状態を観測した
+最初のframeまでのhost-side遅延を同期的に測定する。
+
+```json
+{"id":"sync-delay","cmd":"measure_sync_delay","projector_role":"projector","camera_role":"left","photodiode_device":"/dev/ttyUSB0","photodiode_baud":115200,"transitions":60,"sync_timeout_ms":1000,"safety_margin_ms":5,"minimum_contrast":30,"required_ratio":0.90,"output_csv":"data/photodiode_delay.csv"}
+```
+
+`projector_role` と `camera_role` は必須。その他の値は上の例がdefaultである。Cameraは事前に
+`open_camera`、ProjectorはWindow/surface設定とpattern生成まで完了している必要がある。
+command内でCameraやWindowを別途openしない。
+
+```json
+{"id":"sync-delay","ok":true,"count":"60","mean_ms":"18.200","median_ms":"17.800","p95_ms":"31.500","p99_ms":"34.100","max_ms":"35.000","recommended_guard_ms":"40","measurement_pixel_count":"82413","camera_timestamp_source":"current_frame_sample_host_timestamp","photodiode_timestamp_source":"serial_receive_host_timestamp","csv_path":"data/photodiode_delay.csv","csv_warning":""}
+```
+
+Camera timestampは `VideoCapture::read()` 成功直後、Photodiode timestampはvalid serial line read時の
+host `steady_clock` であり、いずれもhardware timestampではない。baseline contrast不足は
+`sync_delay_insufficient_contrast`、Cameraの状態遷移を観測できない場合は
+`camera_transition_timeout`、Photodiode event未着は `photodiode_timeout` を返す。
+
+進捗は `sync_delay_baseline_started`、`sync_delay_mask_ready`、`sync_delay_prearm_started`、
+`sync_delay_prearm_ready`、各transitionの `sync_delay_transition` eventで通知する。
+
 ## scan_start
 
 ### 役割

@@ -66,6 +66,34 @@ std::string nowIsoLike()
     return stream.str();
 }
 
+cv::Mat medianFrame(const std::vector<video::FrameSample>& frames)
+{
+    if (frames.size() < 3) return {};
+    const auto& a = frames[frames.size() - 3].image;
+    const auto& b = frames[frames.size() - 2].image;
+    const auto& c = frames[frames.size() - 1].image;
+    if (a.empty() || a.size() != b.size() || a.size() != c.size() || a.type() != b.type() || a.type() != c.type())
+        return {};
+    cv::Mat minimum_ab, maximum_ab, minimum_abc, maximum_abc, sum;
+    cv::min(a, b, minimum_ab);
+    cv::max(a, b, maximum_ab);
+    cv::min(minimum_ab, c, minimum_abc);
+    cv::max(maximum_ab, c, maximum_abc);
+    cv::add(a, b, sum, cv::noArray(), CV_16U);
+    cv::add(sum, c, sum, cv::noArray(), CV_16U);
+    cv::Mat extremes;
+    cv::add(minimum_abc, maximum_abc, extremes, cv::noArray(), CV_16U);
+    cv::subtract(sum, extremes, sum);
+    cv::Mat result;
+    sum.convertTo(result, a.type());
+    return result;
+}
+
+std::int64_t timestampNs(std::chrono::steady_clock::time_point value)
+{
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(value.time_since_epoch()).count();
+}
+
 } // namespace
 
 ScanService::ScanService(projector::ProjectorService& projector_service,
@@ -183,6 +211,161 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
 
     auto result = scanStatus(scan_id);
     result.ok = true;
+    return result;
+}
+
+SyncDelayResult ScanService::measureSyncDelay(const SyncDelayConfig& config)
+{
+    std::unique_lock measurement_lock(sync_delay_mutex_, std::try_to_lock);
+    if (!measurement_lock.owns_lock())
+        return {false, "sync_delay_already_running", "sync delay measurement is already running"};
+    if (config.projector_role.empty() || config.camera_role.empty() || config.photodiode_device.empty() ||
+        config.photodiode_baud <= 0 || config.transitions <= 0 || config.sync_timeout_ms <= 0 ||
+        config.safety_margin_ms < 0.0 || config.minimum_contrast <= 0.0 ||
+        config.required_ratio <= 0.0 || config.required_ratio > 1.0)
+        return {false, "invalid_sync_delay_config", "invalid sync delay measurement configuration"};
+    if (isScanActive())
+        return {false, "scan_resource_busy", "sync delay measurement conflicts with active scan"};
+
+    const auto snapshot = projector_service_.scanSnapshot(config.projector_role);
+    if (!snapshot) return {false, "projector_not_open", "projector role is not open: " + config.projector_role};
+    if (snapshot->patterns_dirty || snapshot->pattern_count < 2)
+        return {false, "pattern_not_generated", "BLACK/WHITE reference patterns are not generated"};
+    if (!projector::canPlacePhotodiodeMarker(snapshot->surface))
+        return {false, "photodiode_marker_margin_unavailable", "Photodiode marker cannot be placed"};
+    const auto camera_id = camera_service_.resolveCameraId(config.camera_role);
+    if (!camera_id) return {false, "camera_not_open", "camera role is not open: " + config.camera_role};
+    const auto initial_frame = camera_service_.latestFrame(*camera_id);
+    if (!initial_frame) return {false, "camera_frame_timeout", "camera has not produced a frame"};
+
+    const auto timeout = std::chrono::milliseconds(config.sync_timeout_ms);
+    auto show = [&](int index) -> std::optional<SyncDelayResult> {
+        const auto result = projector_service_.showPattern(config.projector_role, index,
+                                                            projector::PhotodiodeMarkerMode::sync);
+        if (!result.ok)
+            return SyncDelayResult{false,
+                                   result.error ? result.error->code : "pattern_show_failed",
+                                   result.error ? result.error->message : "failed to show pattern"};
+        return std::nullopt;
+    };
+    auto stableBaseline = [&](int index, const char* state) -> std::optional<cv::Mat> {
+        const auto latest = camera_service_.latestFrame(*camera_id);
+        if (!latest) return std::nullopt;
+        if (const auto failure = show(index)) return std::nullopt;
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        std::vector<video::FrameSample> frames;
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            frames = camera_service_.frameSamplesAfter(*camera_id, latest->sequence);
+            if (frames.size() >= 5) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        if (frames.size() < 5) return std::nullopt;
+        pushEvent("sync_delay_baseline", {{"state", state}, {"frame_sequence", std::to_string(frames.back().sequence)}});
+        return medianFrame(frames);
+    };
+
+    pushEvent("sync_delay_baseline_started", {});
+    const auto black = stableBaseline(0, "black");
+    if (!black) return {false, "camera_frame_timeout", "BLACK baseline frames did not arrive"};
+    const auto white = stableBaseline(1, "white");
+    if (!white) return {false, "camera_frame_timeout", "WHITE baseline frames did not arrive"};
+    const auto model = buildMeasurementModel(*black, *white, config.minimum_contrast);
+    if (!model)
+        return {false, "sync_delay_insufficient_contrast",
+                "BLACK/WHITE baselines do not contain enough contrasting pixels"};
+    pushEvent("sync_delay_mask_ready", {{"measurement_pixel_count", std::to_string(model->pixel_count)}});
+
+    std::unique_ptr<structured_light::sync::PhotodiodeTransport> transport;
+    try { transport = photodiode_factory_(config.photodiode_device, config.photodiode_baud); }
+    catch (const PhotodiodeTransportError& error)
+    { return {false, error.code(), error.what()}; }
+    catch (const std::exception& error)
+    { return {false, "photodiode_open_failed", error.what()}; }
+    structured_light::sync::PhotodiodeSyncSource source(*transport);
+
+    pushEvent("sync_delay_prearm_started", {});
+    const auto white_after = std::chrono::steady_clock::now();
+    if (const auto failure = show(1)) return *failure;
+    (void)source.waitForTransition(structured_light::sync::MarkerState::white, white_after,
+                                   std::chrono::milliseconds(std::min(200, config.sync_timeout_ms)));
+    const auto black_after = std::chrono::steady_clock::now();
+    if (const auto failure = show(0)) return *failure;
+    const auto ready = source.waitForTransition(structured_light::sync::MarkerState::black, black_after, timeout);
+    if (!ready) return {false, "photodiode_timeout", "Photodiode BLACK pre-arm event was not received"};
+    pushEvent("sync_delay_prearm_ready", {{"state", "black"}});
+
+    SyncDelayResult result;
+    result.measurement_pixel_count = model->pixel_count;
+    const auto states = measurementStateSequence(config.transitions);
+    for (std::size_t index = 0; index < states.size(); ++index)
+    {
+        const auto expected = states[index];
+        const int pattern_index = expected == structured_light::sync::MarkerState::white ? 1 : 0;
+        const auto shown_after = std::chrono::steady_clock::now();
+        if (const auto failure = show(pattern_index)) return *failure;
+        std::optional<structured_light::sync::SyncEvent> event;
+        try { event = source.waitForTransition(expected, shown_after, timeout); }
+        catch (const PhotodiodeTransportError& error) { return {false, error.code(), error.what()}; }
+        if (!event) return {false, "photodiode_timeout", "Photodiode transition event was not received"};
+
+        std::uint64_t cursor = 0;
+        if (const auto at_event = camera_service_.firstFrameAtOrAfter(*camera_id, event->timestamp))
+            cursor = at_event->sequence > 0 ? at_event->sequence - 1 : 0;
+        const auto deadline = std::chrono::steady_clock::now() + timeout;
+        std::optional<video::FrameSample> matched_frame;
+        double matched_ratio = 0.0;
+        while (std::chrono::steady_clock::now() < deadline && !matched_frame)
+        {
+            const auto frames = camera_service_.frameSamplesAfter(*camera_id, cursor);
+            for (const auto& frame : frames)
+            {
+                cursor = frame.sequence;
+                if (frame.timestamp < event->timestamp) continue;
+                double ratio = 0.0;
+                if (frameMatches(*model, frame.image, expected, config.required_ratio, &ratio))
+                {
+                    matched_frame = frame;
+                    matched_ratio = ratio;
+                    break;
+                }
+            }
+            if (!matched_frame) std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+        if (!matched_frame)
+            return {false, "camera_transition_timeout", "Camera did not observe the expected projector state"};
+        const double delay_ms = std::chrono::duration<double, std::milli>(
+                                    matched_frame->timestamp - event->timestamp).count();
+        result.measurements.push_back({static_cast<int>(index + 1), expected, event->timestamp,
+                                       matched_frame->timestamp, delay_ms, matched_frame->sequence,
+                                       matched_ratio});
+        pushEvent("sync_delay_transition",
+                  {{"sequence", std::to_string(index + 1)}, {"total", std::to_string(states.size())},
+                   {"state", structured_light::sync::toString(expected)}, {"delay_ms", std::to_string(delay_ms)},
+                   {"frame_sequence", std::to_string(matched_frame->sequence)},
+                   {"matched_ratio", std::to_string(matched_ratio)}});
+    }
+
+    std::vector<double> delays;
+    delays.reserve(result.measurements.size());
+    for (const auto& measurement : result.measurements) delays.push_back(measurement.delay_ms);
+    result.statistics = calculateSyncDelayStatistics(delays, config.safety_margin_ms);
+    result.ok = true;
+    result.csv_path = config.output_csv.string();
+    try
+    {
+        if (config.output_csv.has_parent_path()) std::filesystem::create_directories(config.output_csv.parent_path());
+        std::ofstream csv(config.output_csv);
+        if (!csv) throw std::runtime_error("failed to open CSV output");
+        csv << "sequence,state,photodiode_ns,camera_ns,delay_ms,frame_sequence,matched_ratio\n";
+        csv << std::fixed << std::setprecision(6);
+        for (const auto& item : result.measurements)
+            csv << item.sequence << ',' << structured_light::sync::toString(item.state) << ','
+                << timestampNs(item.photodiode_timestamp) << ',' << timestampNs(item.camera_timestamp) << ','
+                << item.delay_ms << ',' << item.frame_sequence << ',' << item.matched_ratio << '\n';
+        if (!csv) throw std::runtime_error("failed to write CSV output");
+    }
+    catch (const std::exception& error) { result.csv_warning = error.what(); }
     return result;
 }
 

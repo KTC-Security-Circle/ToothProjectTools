@@ -63,6 +63,7 @@ class HeadlessCommandExecutor
     common::CommandResult executeTyped(const cmd::CmdCaptureFrame& command);
     common::CommandResult executeTyped(const cmd::CmdCaptureStereo& command);
     common::CommandResult executeTyped(const cmd::CmdStartScan& command);
+    common::CommandResult executeTyped(const cmd::CmdMeasureSyncDelay& command);
     common::CommandResult executeTyped(const cmd::CmdScanStatus& command);
     common::CommandResult executeTyped(const cmd::CmdStopScan& command);
     common::CommandResult executeTyped(const cmd::CmdValidateScanDataset& command);

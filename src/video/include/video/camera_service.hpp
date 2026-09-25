@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace video
 {
@@ -49,6 +50,8 @@ class CameraService
     std::optional<video::FrameSample> latestFrame(video::CameraId camera_id) const;
     std::optional<video::FrameSample> firstFrameAtOrAfter(
         video::CameraId camera_id, std::chrono::steady_clock::time_point timestamp) const;
+    std::vector<video::FrameSample> frameSamplesAfter(
+        video::CameraId camera_id, std::uint64_t sequence) const;
 
   private:
     /// @brief camera roleとして使用可能な文字列か判定する。

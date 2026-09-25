@@ -1,12 +1,15 @@
 #include "scan/serial_photodiode_transport.hpp"
+#include "scan/sync_delay.hpp"
 #include "structured_light/pattern_sync.hpp"
 #include "video/video_types.hpp"
 
 #include <chrono>
+#include <algorithm>
 #include <deque>
 #include <opencv2/core.hpp>
 #include <stdexcept>
 #include <string>
+#include <cmath>
 
 namespace
 {
@@ -117,6 +120,66 @@ void testStereoUsesSameSelectionTimestamp()
     require(selected_right && selected_right->sequence == 21, "right camera selection failed");
 }
 
+void testAdaptiveMeasurementModelAndClassification()
+{
+    cv::Mat black(10, 10, CV_8UC1, cv::Scalar(40));
+    cv::Mat white(10, 10, CV_8UC1, cv::Scalar(210));
+    // 反転応答pixelも符号付きbaselineで正しく分類する。
+    black(cv::Rect(0, 0, 5, 10)).setTo(220);
+    white(cv::Rect(0, 0, 5, 10)).setTo(30);
+    const auto model = scan::buildMeasurementModel(black, white, 30.0);
+    require(model && model->pixel_count == 100, "baseline mask was not generated");
+    double ratio = 0.0;
+    require(scan::frameMatches(*model, white, MarkerState::white, 0.90, &ratio) && ratio == 1.0,
+            "white classification failed");
+    require(scan::frameMatches(*model, black, MarkerState::black, 0.90, &ratio) && ratio == 1.0,
+            "black classification failed");
+    cv::Mat partial = white.clone();
+    black(cv::Rect(0, 0, 2, 10)).copyTo(partial(cv::Rect(0, 0, 2, 10)));
+    require(!scan::frameMatches(*model, partial, MarkerState::white, 0.90, &ratio) && ratio < 0.90,
+            "required_ratio was not enforced");
+}
+
+void testInsufficientContrast()
+{
+    cv::Mat black(10, 10, CV_8UC1, cv::Scalar(100));
+    cv::Mat white(10, 10, CV_8UC1, cv::Scalar(110));
+    require(!scan::buildMeasurementModel(black, white, 30.0), "insufficient contrast was accepted");
+}
+
+void testDelayStatisticsAndAlternation()
+{
+    const auto stats = scan::calculateSyncDelayStatistics({10, 20, 30, 40, 50}, 5.0);
+    require(stats.count == 5 && stats.mean_ms == 30.0 && stats.median_ms == 30.0,
+            "mean or median is incorrect");
+    require(std::abs(stats.p95_ms - 48.0) < 0.001 && std::abs(stats.p99_ms - 49.6) < 0.001,
+            "percentiles are incorrect");
+    require(stats.max_ms == 50.0 && stats.recommended_guard_ms == 55,
+            "max or recommended guard is incorrect");
+    const auto states = scan::measurementStateSequence(60);
+    require(states.size() == 60, "transition count is incorrect");
+    for (std::size_t index = 0; index < states.size(); ++index)
+        require(states[index] == (index % 2 == 0 ? MarkerState::white : MarkerState::black),
+                "measurement states do not alternate");
+}
+
+void testPhotodiodeToCameraTransitionDelay()
+{
+    const auto timestamp = Clock::time_point{5s};
+    cv::Mat black(8, 8, CV_8UC1, cv::Scalar(0));
+    cv::Mat white(8, 8, CV_8UC1, cv::Scalar(255));
+    const auto model = scan::buildMeasurementModel(black, white, 30.0);
+    require(model.has_value(), "delay model creation failed");
+    const std::vector<video::FrameSample> frames{
+        {black, 1, timestamp + 5ms}, {black, 2, timestamp + 15ms}, {white, 3, timestamp + 25ms}};
+    const auto found = std::find_if(frames.begin(), frames.end(), [&](const auto& sample) {
+        return sample.timestamp >= timestamp && scan::frameMatches(*model, sample.image, MarkerState::white, 0.9);
+    });
+    require(found != frames.end() && found->sequence == 3, "first transitioned frame was not selected");
+    require(std::chrono::duration_cast<std::chrono::milliseconds>(found->timestamp - timestamp).count() == 25,
+            "Photodiode-to-Camera delay is incorrect");
+}
+
 } // namespace
 
 int main()
@@ -127,5 +190,9 @@ int main()
     testGuardAndFrameSelection();
     testStereoUsesSameSelectionTimestamp();
     testPreArmAndPatternParitySequence();
+    testAdaptiveMeasurementModelAndClassification();
+    testInsufficientContrast();
+    testDelayStatisticsAndAlternation();
+    testPhotodiodeToCameraTransitionDelay();
     return 0;
 }

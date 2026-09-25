@@ -130,6 +130,12 @@ ReadResult JsonLineReader::read() {
         !readInteger(root, "sync_timeout_ms", message.sync_timeout_ms, error_message) ||
         !readInteger(root, "sync_guard_ms", message.sync_guard_ms, error_message) ||
         !readInteger(root, "max_patterns", message.max_patterns, error_message) ||
+        !readString(root, "camera_role", message.camera_role, error_message) ||
+        !readInteger(root, "transitions", message.transitions, error_message) ||
+        !readNumber(root, "safety_margin_ms", message.safety_margin_ms, error_message) ||
+        !readNumber(root, "minimum_contrast", message.minimum_contrast, error_message) ||
+        !readNumber(root, "required_ratio", message.required_ratio, error_message) ||
+        !readString(root, "output_csv", message.output_csv, error_message) ||
         !readInteger(root, "threshold", message.threshold, error_message) ||
         !readInteger(root, "projector_width", message.projector_width, error_message) ||
         !readInteger(root, "projector_height", message.projector_height, error_message) ||

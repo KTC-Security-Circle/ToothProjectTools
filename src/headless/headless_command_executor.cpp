@@ -80,6 +80,9 @@ std::optional<common::CommandResult> HeadlessCommandExecutor::validateResourceAc
         return busyWindowResult(scan_service_, command.window_role);
     } else if constexpr (std::is_same_v<T, cmd::CmdOpenCamera> || std::is_same_v<T, cmd::CmdCloseCamera>) {
         return busyCameraResult(scan_service_, command.role);
+    } else if constexpr (std::is_same_v<T, cmd::CmdMeasureSyncDelay>) {
+        if (const auto busy = busyProjectorResult(scan_service_, command.projector_role)) return busy;
+        return busyCameraResult(scan_service_, command.camera_role);
     } else if constexpr (std::is_same_v<T, cmd::CmdCaptureFrame> ||
                          std::is_same_v<T, cmd::CmdCaptureStereo> ||
                          std::is_same_v<T, cmd::CmdCalibCapture>) {

@@ -18,22 +18,15 @@ namespace
 {
 constexpr int photodiode_marker_size = 32;
 
+cv::Rect locatorMarkerRect(const ProjectorSurface& surface);
+
 cv::Rect syncMarkerRect(const ProjectorSurface& surface)
 {
-    const std::array candidates{
-        cv::Rect{surface.pattern_x - photodiode_marker_size, surface.pattern_y, photodiode_marker_size, photodiode_marker_size},
-        cv::Rect{surface.pattern_x + surface.pattern_width, surface.pattern_y, photodiode_marker_size, photodiode_marker_size},
-        cv::Rect{surface.pattern_x, surface.pattern_y - photodiode_marker_size, photodiode_marker_size, photodiode_marker_size},
-        cv::Rect{surface.pattern_x, surface.pattern_y + surface.pattern_height, photodiode_marker_size, photodiode_marker_size}};
-    const cv::Rect bounds{0, 0, surface.surface_width, surface.surface_height};
-    for (const auto& candidate : candidates)
-    {
-        if ((candidate & bounds) == candidate)
-        {
-            return candidate;
-        }
-    }
-    return {};
+    const auto locator = locatorMarkerRect(surface);
+    if (locator.area() <= 0) return {};
+    return {locator.x + (locator.width - photodiode_marker_size) / 2,
+            locator.y + (locator.height - photodiode_marker_size) / 2,
+            photodiode_marker_size, photodiode_marker_size};
 }
 
 cv::Rect locatorMarkerRect(const ProjectorSurface& surface)

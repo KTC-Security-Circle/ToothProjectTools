@@ -78,6 +78,12 @@ struct ControlMessage {
   std::optional<int> sync_timeout_ms;
   std::optional<int> sync_guard_ms;
   std::optional<int> max_patterns;
+  std::optional<std::string> camera_role;
+  std::optional<int> transitions;
+  std::optional<double> safety_margin_ms;
+  std::optional<double> minimum_contrast;
+  std::optional<double> required_ratio;
+  std::optional<std::string> output_csv;
 
   /// threshold <std::optional<int>>: GrayCode decode threshold。
   std::optional<int> threshold;

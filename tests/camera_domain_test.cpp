@@ -641,6 +641,20 @@ void testScanMapper()
     assert(!result.ok && result.error->code == "invalid_command");
 
     message = messageWithId();
+    message.projector_role = "projector";
+    result = mapper.mapMeasureSyncDelay(message);
+    assert(!result.ok && result.error->code == "missing_field");
+    message.camera_role = "left";
+    result = mapper.mapMeasureSyncDelay(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdMeasureSyncDelay>(*result.command));
+    const auto measurement = std::get<cmd::CmdMeasureSyncDelay>(*result.command);
+    assert(measurement.transitions == 60 && measurement.minimum_contrast == 30.0 &&
+           measurement.required_ratio == 0.90 && measurement.safety_margin_ms == 5.0);
+    message.required_ratio = 1.1;
+    result = mapper.mapMeasureSyncDelay(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message = messageWithId();
     result = mapper.mapScanStatus(message);
     assert(result.ok && std::holds_alternative<cmd::CmdScanStatus>(*result.command));
 
@@ -1906,6 +1920,9 @@ void testPhotodiodeLocatorMarker()
 
     const auto sync = projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::sync);
     requireCameraProjector(sync.width == 32 && sync.height == 32, "sync marker was not 32x32");
+    requireCameraProjector(sync.x + sync.width / 2 == locator.x + locator.width / 2 &&
+                           sync.y + sync.height / 2 == locator.y + locator.height / 2,
+                           "locator and sync marker centers differ");
     projector::drawPhotodiodeMarker(canvas, surface, 0, PhotodiodeMarkerMode::sync);
     requireCameraProjector(canvas.at<cv::Vec3b>(sync.y, sync.x) == cv::Vec3b(0, 0, 0),
                            "even sync marker was not black");

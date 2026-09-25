@@ -2,6 +2,7 @@
 
 #include "scan/scan_event.hpp"
 #include "scan/scan_result.hpp"
+#include "scan/sync_delay.hpp"
 
 #include <filesystem>
 #include <functional>
@@ -83,6 +84,9 @@ class ScanService
     /// @brief 実行中scanへ停止要求を出す。
     ScanResult stopScan(std::optional<std::string> scan_id = std::nullopt);
 
+    /// @brief productionと同じruntime経路でPhotodiodeからCameraまでの遅延を測定する。
+    SyncDelayResult measureSyncDelay(const SyncDelayConfig& config);
+
     /// @brief shutdown時にscan workerを停止する。
     void shutdown();
 
@@ -116,6 +120,7 @@ class ScanService
 
     mutable std::mutex mutex_;
     std::mutex scan_capture_mutex_;
+    std::mutex sync_delay_mutex_;
     std::jthread worker_;
 
     ScanState state_{ScanState::idle};
