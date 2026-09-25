@@ -305,7 +305,13 @@ CommandMapResult HeadlessCommandMapper::mapProjectorShowPattern(const control::C
     }
     CommandMapResult result;
     result.ok = true;
-    result.command = cmd::CmdProjectorShowPattern{*message.projector_role, *message.index};
+    if (message.photodiode_marker_mode && *message.photodiode_marker_mode != "sync" &&
+        *message.photodiode_marker_mode != "locate")
+    {
+        return mapFailure("invalid_command", "photodiode_marker_mode must be sync or locate");
+    }
+    result.command = cmd::CmdProjectorShowPattern{*message.projector_role, *message.index,
+                                                  message.photodiode_marker_mode};
     return result;
 }
 
@@ -377,6 +383,29 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
                                        message.photodiode_baud.value_or(115200),
                                        message.sync_timeout_ms.value_or(1000), message.sync_guard_ms.value_or(30),
                                        message.max_patterns.value_or(0)};
+    return result;
+}
+
+CommandMapResult HeadlessCommandMapper::mapMeasureSyncDelay(const control::ControlMessage& message)
+{
+    if (auto failure = requireString(message.projector_role, "projector_role")) return *failure;
+    if (auto failure = requireString(message.camera_role, "camera_role")) return *failure;
+    if (message.photodiode_device && message.photodiode_device->empty())
+        return mapFailure("invalid_command", "photodiode_device must not be empty");
+    const int transitions = message.transitions.value_or(60);
+    const int timeout = message.sync_timeout_ms.value_or(1000);
+    const double margin = message.safety_margin_ms.value_or(5.0);
+    const double contrast = message.minimum_contrast.value_or(30.0);
+    const double ratio = message.required_ratio.value_or(0.90);
+    if (message.photodiode_baud.value_or(115200) <= 0 || transitions <= 0 || timeout <= 0 || margin < 0.0 ||
+        contrast <= 0.0 || ratio <= 0.0 || ratio > 1.0)
+        return mapFailure("invalid_command", "invalid measure_sync_delay configuration");
+    CommandMapResult result;
+    result.ok = true;
+    result.command = cmd::CmdMeasureSyncDelay{*message.projector_role, *message.camera_role,
+        message.photodiode_device.value_or("/dev/ttyUSB0"), message.photodiode_baud.value_or(115200),
+        transitions, timeout, margin, contrast, ratio,
+        std::filesystem::path{message.output_csv.value_or("data/photodiode_delay.csv")}};
     return result;
 }
 

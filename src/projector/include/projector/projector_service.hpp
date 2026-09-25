@@ -30,6 +30,12 @@ enum class ProjectorPlacement
     custom,
 };
 
+enum class PhotodiodeMarkerMode
+{
+    sync,
+    locate,
+};
+
 struct ProjectorSurface
 {
     int monitor_index{0};
@@ -60,6 +66,9 @@ struct ProjectorSurfaceRequest
 
 bool canPlacePhotodiodeMarker(const ProjectorSurface& surface);
 int photodiodeMarkerValue(std::size_t pattern_index);
+cv::Rect photodiodeMarkerRect(const ProjectorSurface& surface, PhotodiodeMarkerMode mode);
+void drawPhotodiodeMarker(cv::Mat& canvas, const ProjectorSurface& surface, std::size_t pattern_index,
+                          PhotodiodeMarkerMode mode);
 
 struct ProjectorScanSnapshot
 {
@@ -163,7 +172,11 @@ class ProjectorService
     ///
     /// Return:
     ///   <ProjectorResult>: pattern表示結果。
-    ProjectorResult showPattern(const std::string& projector_role, int index);
+    ProjectorResult showPattern(const std::string& projector_role, int index,
+                                std::optional<PhotodiodeMarkerMode> marker_mode = std::nullopt);
+
+    /// @brief production scan用にPhotodiode markerを同期modeへ固定する。
+    ProjectorResult setPhotodiodeMarkerMode(const std::string& projector_role, PhotodiodeMarkerMode mode);
 
     /// @brief 次のpatternへ進めて表示する。
     ///
@@ -221,6 +234,9 @@ class ProjectorService
 
         /// patterns_dirty <bool>: pattern未生成または生成済みpatternが無効ならtrue。
         bool patterns_dirty{true};
+
+        /// photodiode_marker_mode <PhotodiodeMarkerMode>: 人間向けlocatorまたは同期表示。
+        PhotodiodeMarkerMode photodiode_marker_mode{PhotodiodeMarkerMode::sync};
     };
 
     /// @brief projector role文字列を検証する。
@@ -255,8 +271,10 @@ class ProjectorService
     static ProjectorSurface computeSurface(const win::MonitorInfo& monitor, int requested_width,
                                            int requested_height, std::optional<int> requested_x,
                                            std::optional<int> requested_y, ProjectorPlacement placement);
-    ProjectorResult showPatternLocked(const std::string& projector_role, int index);
-    static cv::Mat composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface, int pattern_index);
+    ProjectorResult showPatternLocked(const std::string& projector_role, int index,
+                                      std::optional<PhotodiodeMarkerMode> marker_mode = std::nullopt);
+    static cv::Mat composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface, int pattern_index,
+                                        PhotodiodeMarkerMode marker_mode);
 
     /// window_service_ <win::WindowService&>: pattern表示先window service。
     win::WindowService& window_service_;

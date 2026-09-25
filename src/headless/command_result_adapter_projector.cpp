@@ -110,6 +110,11 @@ common::CommandResult projector(const ::projector::ProjectorResult& result, bool
         values.emplace("display_y", std::to_string(result.display_y));
         values.emplace("pattern_y", std::to_string(result.pattern_y));
         values.emplace("clamped", boolString(result.clamped));
+        values.emplace("marker_x", std::to_string(result.marker_x));
+        values.emplace("marker_y", std::to_string(result.marker_y));
+        values.emplace("marker_width", std::to_string(result.marker_width));
+        values.emplace("marker_height", std::to_string(result.marker_height));
+        values.emplace("photodiode_marker_mode", result.photodiode_marker_mode);
     }
     return common::success(std::move(values));
 }

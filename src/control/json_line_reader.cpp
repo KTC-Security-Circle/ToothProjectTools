@@ -130,6 +130,12 @@ ReadResult JsonLineReader::read() {
         !readInteger(root, "sync_timeout_ms", message.sync_timeout_ms, error_message) ||
         !readInteger(root, "sync_guard_ms", message.sync_guard_ms, error_message) ||
         !readInteger(root, "max_patterns", message.max_patterns, error_message) ||
+        !readString(root, "camera_role", message.camera_role, error_message) ||
+        !readInteger(root, "transitions", message.transitions, error_message) ||
+        !readNumber(root, "safety_margin_ms", message.safety_margin_ms, error_message) ||
+        !readNumber(root, "minimum_contrast", message.minimum_contrast, error_message) ||
+        !readNumber(root, "required_ratio", message.required_ratio, error_message) ||
+        !readString(root, "output_csv", message.output_csv, error_message) ||
         !readInteger(root, "threshold", message.threshold, error_message) ||
         !readInteger(root, "projector_width", message.projector_width, error_message) ||
         !readInteger(root, "projector_height", message.projector_height, error_message) ||
@@ -146,6 +152,7 @@ ReadResult JsonLineReader::read() {
         !readBool(root, "fullscreen", message.fullscreen, error_message) ||
         !readString(root, "projector_role", message.projector_role, error_message) ||
         !readInteger(root, "index", message.index, error_message) ||
+        !readString(root, "photodiode_marker_mode", message.photodiode_marker_mode, error_message) ||
         !readString(root, "decode_dir", message.decode_dir, error_message) ||
         !readString(root, "calibration_file", message.calibration_file, error_message) ||
         !readNumber(root, "max_epipolar_error_px", message.max_epipolar_error_px, error_message) ||

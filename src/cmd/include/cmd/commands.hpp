@@ -119,6 +119,9 @@ struct CmdProjectorShowPattern
 
     /// index <int>: 表示するpattern index。
     int index{0};
+
+    /// photodiode_marker_mode: 指定時にsessionのmarker modeを切り替える。
+    std::optional<std::string> photodiode_marker_mode;
 };
 
 /// @brief projector patternを次へ進めるcommand。
@@ -187,6 +190,20 @@ struct CmdScanStatus
 {
     /// scan_id <std::optional<std::string>>: status取得対象scan id。
     std::optional<std::string> scan_id;
+};
+
+struct CmdMeasureSyncDelay
+{
+    std::string projector_role;
+    std::string camera_role;
+    std::string photodiode_device{"/dev/ttyUSB0"};
+    int photodiode_baud{115200};
+    int transitions{60};
+    int sync_timeout_ms{1000};
+    double safety_margin_ms{5.0};
+    double minimum_contrast{30.0};
+    double required_ratio{0.90};
+    std::filesystem::path output_csv{"data/photodiode_delay.csv"};
 };
 
 struct CmdStopScan
@@ -348,6 +365,7 @@ using Command = std::variant<
   CmdCaptureFrame,
   CmdCaptureStereo,
   CmdStartScan,
+  CmdMeasureSyncDelay,
   CmdScanStatus,
   CmdStopScan,
   CmdValidateScanDataset,

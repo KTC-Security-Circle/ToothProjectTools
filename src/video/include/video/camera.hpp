@@ -12,6 +12,7 @@
 #include <atomic>
 #include <deque>
 #include <optional>
+#include <vector>
 
 #include "video_types.hpp"
 
@@ -43,6 +44,9 @@ public:
    * @param timestamp 比較対象のsteady_clock時刻。
    */
   std::optional<FrameSample> firstFrameAtOrAfter(std::chrono::steady_clock::time_point timestamp);
+
+  /** @brief 指定sequenceより新しいframeをsequence順にcopyして返す。 */
+  std::vector<FrameSample> frameSamplesAfter(std::uint64_t sequence);
 
   /** @brief Cameraが保持するring bufferの最大frame数を設定する。 */
   void setFrameRingCapacity(std::size_t capacity);

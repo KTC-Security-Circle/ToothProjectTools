@@ -6,6 +6,8 @@
 #include "scan/scan_service.hpp"
 
 #include <filesystem>
+#include <iomanip>
+#include <sstream>
 
 namespace headless
 {
@@ -15,6 +17,24 @@ common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdStartS
         command.scan_id, command.projector_role, command.left_role, command.right_role,
         std::filesystem::path{command.output_dir}, command.photodiode_device, command.photodiode_baud,
         command.sync_timeout_ms, command.sync_guard_ms, command.max_patterns}));
+}
+
+common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdMeasureSyncDelay& command)
+{
+    const auto result = scan_service_.measureSyncDelay({command.projector_role, command.camera_role,
+        command.photodiode_device, command.photodiode_baud, command.transitions, command.sync_timeout_ms,
+        command.safety_margin_ms, command.minimum_contrast, command.required_ratio, command.output_csv});
+    if (!result.ok) return common::failure(result.error_code, result.error_message);
+    auto number = [](double value) { std::ostringstream out; out << std::fixed << std::setprecision(3) << value; return out.str(); };
+    return common::success({
+        {"count", std::to_string(result.statistics.count)}, {"mean_ms", number(result.statistics.mean_ms)},
+        {"median_ms", number(result.statistics.median_ms)}, {"p95_ms", number(result.statistics.p95_ms)},
+        {"p99_ms", number(result.statistics.p99_ms)}, {"max_ms", number(result.statistics.max_ms)},
+        {"recommended_guard_ms", std::to_string(result.statistics.recommended_guard_ms)},
+        {"measurement_pixel_count", std::to_string(result.measurement_pixel_count)},
+        {"camera_timestamp_source", "current_frame_sample_host_timestamp"},
+        {"photodiode_timestamp_source", "serial_receive_host_timestamp"},
+        {"csv_path", result.csv_path}, {"csv_warning", result.csv_warning}});
 }
 
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdScanStatus& command)

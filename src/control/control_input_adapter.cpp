@@ -137,6 +137,14 @@ AdapterResult ControlInputAdapter::handle(const ControlMessage& message)
         return handleScanCommand(id, message, ScanCommandKind::start);
     }
 
+    if (*message.cmd == "measure_sync_delay")
+    {
+        const auto mapped = headless_mapper_.mapMeasureSyncDelay(message);
+        if (!mapped.ok) { writeHeadlessFailure(id, *mapped.error); return AdapterResult::continue_running; }
+        writer_.writeResponse(toControlResponse(id, command_executor_.execute(*mapped.command)));
+        return AdapterResult::continue_running;
+    }
+
     if (*message.cmd == "scan_status")
     {
         return handleScanCommand(id, message, ScanCommandKind::status);

@@ -81,6 +81,13 @@ std::optional<video::FrameSample> CameraService::firstFrameAtOrAfter(
     return camera ? camera->firstFrameAtOrAfter(timestamp) : std::nullopt;
 }
 
+std::vector<video::FrameSample> CameraService::frameSamplesAfter(
+    video::CameraId camera_id, std::uint64_t sequence) const
+{
+    auto* camera = cameras_.get(camera_id);
+    return camera ? camera->frameSamplesAfter(sequence) : std::vector<video::FrameSample>{};
+}
+
 bool CameraService::validRole(const std::string& role)
 {
     return !role.empty() &&

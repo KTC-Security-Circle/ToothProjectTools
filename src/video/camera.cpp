@@ -230,6 +230,18 @@ std::optional<FrameSample> Camera::firstFrameAtOrAfter(
     return video::firstFrameAtOrAfter(frame_ring_, timestamp);
 }
 
+std::vector<FrameSample> Camera::frameSamplesAfter(std::uint64_t sequence) {
+    std::lock_guard<std::mutex> lock(frame_mutex_);
+    std::vector<FrameSample> result;
+    for (const auto& sample : frame_ring_) {
+        if (sample.sequence <= sequence) continue;
+        auto copy = sample;
+        copy.image = sample.image.clone();
+        result.push_back(std::move(copy));
+    }
+    return result;
+}
+
 void Camera::setFrameRingCapacity(std::size_t capacity) {
     if (capacity == 0) capacity = 1;
     std::lock_guard<std::mutex> lock(frame_mutex_);
