@@ -201,9 +201,10 @@ struct CommandRuntime
     reconstruction::ReconstructionService reconstruction_service;
     calib::projector::CameraProjectorCalibrationService camera_projector_calibration_service{scan_dataset_validator};
     stereo_scan::StereoScanService stereo_scan_service{
-        camera_service, window_service, projector_service, scan_service, decode_service, reconstruction_service,
+        camera_service, window_service, monitor_service, projector_service, scan_service, decode_service, reconstruction_service,
         scan_events, [](const std::string& role) { return common::success({{"url", role}}); },
-        [](const std::string&) { return common::success(); }};
+        [](const std::string&) { return common::success(); },
+        [](const std::string&) { return std::optional<std::string>{}; }};
     headless::HeadlessCommandExecutor executor{
         camera_service, window_service, projector_service, scan_service, scan_dataset_validator,
         decode_service, capture_service, cameras, &calibrator, &stereo_calibrator, stereo_data,
@@ -831,6 +832,10 @@ void testStereoScanMapper()
     requireCameraProjector(!mapper.mapStereoScan(message).ok, "negative guard_ms was accepted");
     message.guard_ms = 1; message.sync_mode = "bad";
     requireCameraProjector(!mapper.mapStereoScan(message).ok, "invalid sync_mode was accepted");
+    message.sync_mode = "delay"; message.display_width = 1728; message.display_height.reset();
+    const auto half_display = mapper.mapStereoScan(message);
+    requireCameraProjector(!half_display.ok && half_display.error->code == "missing_field",
+                           "one-sided display size was accepted");
 }
 
 void testWindowHandler()

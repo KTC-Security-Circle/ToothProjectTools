@@ -45,6 +45,9 @@ class CameraService
     ///   <std::optional<video::CameraId>>: roleがbind済みならCameraManager上のcamera_id。
     std::optional<video::CameraId> resolveCameraId(const std::string& role) const;
 
+    /// roleへ現在bindされているphysical device indexを返す。
+    std::optional<int> resolveDeviceIndex(const std::string& role) const;
+
     /** @brief roleに対応するCameraの最新timestamp付きframeを取得する。 */
     std::optional<video::FrameSample> latestFrame(video::CameraId camera_id) const;
     std::optional<video::FrameSample> firstFrameAtOrAfter(

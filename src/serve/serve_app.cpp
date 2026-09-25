@@ -61,6 +61,7 @@ int ServeApp::run() {
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
   }
 
+  service_.stereoScanService().requestShutdown();
   (void)service_.scanService().stopScan();
   for (int attempt = 0; attempt < 200; ++attempt) {
     service_.windowService().processPendingRequests();
@@ -68,9 +69,10 @@ int ServeApp::run() {
       writer_.writeEvent(toControlEvent(event));
     }
     const auto status = service_.scanService().scanStatus();
-    if (!status.ok || status.status == scan::ScanState::idle ||
+    const bool stereo_active = service_.stereoScanService().isActive();
+    if (!stereo_active && (!status.ok || status.status == scan::ScanState::idle ||
         status.status == scan::ScanState::completed || status.status == scan::ScanState::failed ||
-        status.status == scan::ScanState::stopped) {
+        status.status == scan::ScanState::stopped)) {
       break;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(5));

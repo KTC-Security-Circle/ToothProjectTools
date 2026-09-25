@@ -427,6 +427,11 @@ CommandMapResult HeadlessCommandMapper::mapStereoScan(const control::ControlMess
         return mapFailure("invalid_command", "placement must be center or custom");
     if (placement == "custom" && (!message.x || !message.y))
         return mapFailure("missing_field", "custom placement requires x and y");
+    if (message.display_width.has_value() != message.display_height.has_value())
+        return mapFailure("missing_field", "display_width and display_height must be specified together");
+    if ((message.display_width && *message.display_width <= 0) ||
+        (message.display_height && *message.display_height <= 0))
+        return mapFailure("invalid_command", "display_width and display_height must be positive");
     if (delay_ms < 0 || guard_ms < 0 || code_width <= 0 || code_height <= 0 || threshold < 0 ||
         !std::isfinite(epipolar) || epipolar < 0.0)
         return mapFailure("invalid_command", "invalid stereo_scan numeric configuration");

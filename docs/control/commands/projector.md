@@ -29,7 +29,9 @@ Windowを作成し、window roleへbindする。
 
 ### return
 
-post-open指定時に対応executorがない環境（Waylandを含む）では黙って無視せず `window_post_open_action_unsupported` を返す。実行失敗は `window_post_open_action_failed`（またはexecutor固有code）になる。HighGUI自体へkey injectionは実装しない。
+`post_open_key` は対応backendがある場合だけ利用可能で、production niri backendはraw key injectionを行わない。Wayland/niriでは `post_open_action` を推奨する。productionで許可する値は `move-to-monitor-left/right/up/down` のwhitelistだけで、それぞれ `niri msg action move-window-to-monitor-*` argvへ変換し、shellを介さず実行する。任意command文字列は受理しない。
+
+action未指定ならniri以外でも通常どおりwindowを作成する。action指定時にniri IPC/binaryが利用不能、またはactionが未対応なら、黙って無視せず `window_post_open_action_unsupported` を返す。実行失敗は `window_post_open_action_failed` になる。HighGUI `cv::waitKey()` をキー送信には使用しない。
 
 ```json
 {"id":"40","ok":true,"window_role":"projector","window_id":"1","width":"1920","height":"1080"}

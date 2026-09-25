@@ -14,6 +14,7 @@
 #include "scan/scan_event.hpp"
 #include "scan/scan_service.hpp"
 #include "window/window_service.hpp"
+#include "window/niri_window_action_executor.hpp"
 #include "video/camera_manager.hpp"
 #include "stereo_scan/stereo_scan_service.hpp"
 #include "window/window_manager.hpp"
@@ -112,6 +113,7 @@ class SidecarService
     /// Return:
     ///   <SidecarResult>: stream停止の成否。
     SidecarResult stopStream(const std::string& role);
+    std::optional<std::string> runningStreamUrl(const std::string& role) const;
 
     /// @brief 起動中ならsidecar roleに紐づくMJPEG streamを停止する。
     ///
@@ -274,6 +276,7 @@ class SidecarService
 
     /// window_manager_ <win::WindowManager>: sidecar window resourceを管理するmanager。
     win::WindowManager window_manager_;
+    win::NiriWindowActionExecutor window_action_executor_;
 
     /// camera_service_ <video::CameraService>: camera resourceとrole bindingを管理するdomain service。
     video::CameraService camera_service_{cameras_};
