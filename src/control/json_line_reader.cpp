@@ -146,6 +146,7 @@ ReadResult JsonLineReader::read() {
         !readBool(root, "fullscreen", message.fullscreen, error_message) ||
         !readString(root, "projector_role", message.projector_role, error_message) ||
         !readInteger(root, "index", message.index, error_message) ||
+        !readString(root, "photodiode_marker_mode", message.photodiode_marker_mode, error_message) ||
         !readString(root, "decode_dir", message.decode_dir, error_message) ||
         !readString(root, "calibration_file", message.calibration_file, error_message) ||
         !readNumber(root, "max_epipolar_error_px", message.max_epipolar_error_px, error_message) ||

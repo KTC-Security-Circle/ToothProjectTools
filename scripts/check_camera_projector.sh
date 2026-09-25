@@ -90,21 +90,55 @@ request '{"id":"stream","cmd":"start_stream","role":"left"}'
 echo "[STREAM] $(jq -r '.url' <<<"${RESPONSE}")"
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${window_width}" --argjson height "${window_height}" '{id:"window",cmd:"open_window",window_role:"projector",title:"Camera Projector Check",width:$width,height:$height,monitor_index:$monitor,fullscreen:true}')"
 request '{"id":"projector","cmd":"open_projector","projector_role":"projector","window_role":"projector","width":480,"height":270}'
-display_width=$((window_width - 64))
-(( display_width > 0 )) || { echo 'photodiode_marker_margin_unavailable' >&2; exit 2; }
+if (( window_width > 192 )); then marker_reserve=192
+elif (( window_width > 128 )); then marker_reserve=128
+elif (( window_width > 64 )); then marker_reserve=64
+else echo 'photodiode_marker_margin_unavailable' >&2; exit 2
+fi
+display_width=$((window_width - marker_reserve))
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${display_width}" --argjson height "${window_height}" '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,placement:"center"}')"
 request '{"id":"patterns","cmd":"generate_patterns","projector_role":"projector"}'
+request '{"id":"locator","cmd":"show_pattern","projector_role":"projector","index":0,"photodiode_marker_mode":"locate"}'
+echo
+echo 'Photodiode locator marker: RED'
+printf 'marker: x=%s y=%s width=%s height=%s\n' \
+  "$(jq -r '.marker_x' <<<"${RESPONSE}")" "$(jq -r '.marker_y' <<<"${RESPONSE}")" \
+  "$(jq -r '.marker_width' <<<"${RESPONSE}")" "$(jq -r '.marker_height' <<<"${RESPONSE}")"
+echo
+echo 'Place the photodiode on the red square.'
+echo
 echo "Photodiode ready: ${DEVICE} @ ${BAUD}"
 
 index=0
+marker_mode=locate
 while true; do
-  printf '\n[n] next [p] previous [t] Photodiode test [s] one-pattern synchronized capture [q] quit: '
+  printf '\n[n] next [p] previous [t] start Photodiode black/white test [s] one-pattern synchronized capture [q] quit: '
   IFS= read -rsn1 key </dev/tty; echo
   case "${key}" in
     n) request '{"id":"next","cmd":"next_pattern","projector_role":"projector"}' ;;
     p) request '{"id":"prev","cmd":"prev_pattern","projector_role":"projector"}' ;;
     t)
       open_serial
+      if [[ "${marker_mode}" == locate ]]; then
+        echo 'Switching marker: RED -> sync'
+        echo 'Photodiode pre-arm...'
+        while IFS= read -r -t 0.01 _stale <&4; do :; done
+        request '{"id":"prearm-black","cmd":"show_pattern","projector_role":"projector","index":0,"photodiode_marker_mode":"sync"}'
+        IFS= read -r -t 0.2 _stale <&4 || true
+        request '{"id":"prearm-white","cmd":"show_pattern","projector_role":"projector","index":1}'
+        if ! IFS= read -r -t 5 received <&4; then
+          echo 'photodiode timeout during white pre-arm' >&2
+          continue
+        fi
+        received="${received%$'\r'}"
+        if [[ "${received}" != 1 ]]; then
+          echo "photodiode pre-arm expected white, received: ${received}" >&2
+          continue
+        fi
+        echo 'Photodiode ready: white'
+        marker_mode=sync
+        index=1
+      fi
       index=$((1-index)); expected="${index}"
       request "$(jq -cn --argjson index "${index}" '{id:"transition",cmd:"show_pattern",projector_role:"projector",index:$index}')"
       shown_ns="$(date +%s%N)"
@@ -117,6 +151,12 @@ while true; do
       else echo 'photodiode timeout' >&2; fi ;;
     s)
       close_serial
+      if [[ "${marker_mode}" == locate ]]; then
+        echo 'Switching marker: RED -> sync'
+        request "$(jq -cn --argjson index "${index}" '{id:"sync-marker",cmd:"show_pattern",projector_role:"projector",index:$index,photodiode_marker_mode:"sync"}')"
+        marker_mode=sync
+      fi
+      echo 'Photodiode pre-arm...'
       mkdir -p -- "${OUTPUT_DIR}"
       request "$(jq -cn --arg out "${OUTPUT_DIR}" --arg dev "${DEVICE}" --argjson baud "${BAUD}" --argjson timeout "${TIMEOUT}" --argjson guard "${GUARD}" '{id:"scan",cmd:"scan_start",projector_role:"projector",left_role:"left",output_dir:$out,photodiode_device:$dev,photodiode_baud:$baud,sync_timeout_ms:$timeout,sync_guard_ms:$guard,max_patterns:1}')"
       wait_for_event scan_frame_captured

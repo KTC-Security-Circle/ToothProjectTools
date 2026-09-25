@@ -127,6 +127,9 @@ struct ControlMessage {
   /// index <std::optional<int>>: 表示するpattern index。
   std::optional<int> index;
 
+  /// photodiode_marker_mode: "sync" または人間の位置合わせ用 "locate"。
+  std::optional<std::string> photodiode_marker_mode;
+
   std::optional<std::string> decode_dir;
   std::optional<std::string> calibration_file;
   std::optional<double> max_epipolar_error_px;

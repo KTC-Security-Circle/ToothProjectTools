@@ -119,6 +119,9 @@ struct CmdProjectorShowPattern
 
     /// index <int>: 表示するpattern index。
     int index{0};
+
+    /// photodiode_marker_mode: 指定時にsessionのmarker modeを切り替える。
+    std::optional<std::string> photodiode_marker_mode;
 };
 
 /// @brief projector patternを次へ進めるcommand。

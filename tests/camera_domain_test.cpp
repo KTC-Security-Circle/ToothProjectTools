@@ -1442,7 +1442,8 @@ void testProjectorHandler()
     result = runWindowRequest(
         window_service,
         [&] {
-            return runtime.executor.execute(cmd::Command{cmd::CmdProjectorShowPattern{"projector", 0}});
+            return runtime.executor.execute(
+                cmd::Command{cmd::CmdProjectorShowPattern{"projector", 0, std::nullopt}});
         });
     assert(result.handled && result.ok);
 
@@ -1878,6 +1879,58 @@ void testPhotodiodeMarkerRequiresProjectorMargin()
     assert(!projector::canPlacePhotodiodeMarker(surface));
 }
 
+void testPhotodiodeLocatorMarker()
+{
+    using projector::PhotodiodeMarkerMode;
+    projector::ProjectorSurface surface;
+    surface.surface_width = 300;
+    surface.surface_height = 200;
+    surface.pattern_x = 100;
+    surface.pattern_y = 20;
+    surface.pattern_width = 180;
+    surface.pattern_height = 160;
+
+    const auto active = cv::Rect{surface.pattern_x, surface.pattern_y,
+                                 surface.pattern_width, surface.pattern_height};
+    const auto locator = projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::locate);
+    requireCameraProjector(locator.width == 96 && locator.height == 96, "locator did not use 96x96");
+    requireCameraProjector(locator.x == surface.pattern_x - locator.width, "locator was not placed left");
+    requireCameraProjector(locator.y == surface.pattern_y + (surface.pattern_height - locator.height) / 2,
+                           "left locator was not vertically centered");
+    requireCameraProjector((locator & active).area() == 0, "locator overlaps active pattern");
+
+    cv::Mat canvas(surface.surface_height, surface.surface_width, CV_8UC3, cv::Scalar::all(0));
+    projector::drawPhotodiodeMarker(canvas, surface, 0, PhotodiodeMarkerMode::locate);
+    requireCameraProjector(canvas.at<cv::Vec3b>(locator.y, locator.x) == cv::Vec3b(0, 0, 255),
+                           "locator pixel was not BGR red");
+
+    const auto sync = projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::sync);
+    requireCameraProjector(sync.width == 32 && sync.height == 32, "sync marker was not 32x32");
+    projector::drawPhotodiodeMarker(canvas, surface, 0, PhotodiodeMarkerMode::sync);
+    requireCameraProjector(canvas.at<cv::Vec3b>(sync.y, sync.x) == cv::Vec3b(0, 0, 0),
+                           "even sync marker was not black");
+    projector::drawPhotodiodeMarker(canvas, surface, 1, PhotodiodeMarkerMode::sync);
+    requireCameraProjector(canvas.at<cv::Vec3b>(sync.y, sync.x) == cv::Vec3b(255, 255, 255),
+                           "odd sync marker was not white");
+
+    surface.surface_width = 170;
+    surface.surface_height = 100;
+    surface.pattern_x = 70;
+    surface.pattern_y = 0;
+    surface.pattern_width = 100;
+    surface.pattern_height = 100;
+    requireCameraProjector(projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::locate).width == 64,
+                           "locator did not fall back to 64x64");
+    surface.surface_width = 140;
+    surface.pattern_x = 40;
+    requireCameraProjector(projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::locate).width == 32,
+                           "locator did not fall back to 32x32");
+    surface.surface_width = 131;
+    surface.pattern_x = 31;
+    requireCameraProjector(projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::locate).area() == 0,
+                           "locator should be unavailable without a 32px margin");
+}
+
 void testPhotodiodeScanConfigValidation()
 {
     FakeWindowBackend backend;
@@ -2047,6 +2100,7 @@ int main()
     testScanDatasetValidator();
     testDecodeServiceSyntheticDataset();
     testPhotodiodeMarkerRequiresProjectorMargin();
+    testPhotodiodeLocatorMarker();
     testPhotodiodeScanConfigValidation();
     testDecodeServiceFailures();
     return 0;

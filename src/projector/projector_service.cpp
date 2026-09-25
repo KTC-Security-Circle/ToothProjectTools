@@ -35,6 +35,26 @@ cv::Rect syncMarkerRect(const ProjectorSurface& surface)
     }
     return {};
 }
+
+cv::Rect locatorMarkerRect(const ProjectorSurface& surface)
+{
+    const cv::Rect bounds{0, 0, surface.surface_width, surface.surface_height};
+    for (const int size : {96, 64, 32})
+    {
+        const int centered_y = surface.pattern_y + (surface.pattern_height - size) / 2;
+        const int centered_x = surface.pattern_x + (surface.pattern_width - size) / 2;
+        const std::array candidates{
+            cv::Rect{surface.pattern_x - size, centered_y, size, size},
+            cv::Rect{surface.pattern_x + surface.pattern_width, centered_y, size, size},
+            cv::Rect{centered_x, surface.pattern_y - size, size, size},
+            cv::Rect{centered_x, surface.pattern_y + surface.pattern_height, size, size}};
+        for (const auto& candidate : candidates)
+        {
+            if ((candidate & bounds) == candidate) return candidate;
+        }
+    }
+    return {};
+}
 } // namespace
 
 bool canPlacePhotodiodeMarker(const ProjectorSurface& surface)
@@ -45,6 +65,22 @@ bool canPlacePhotodiodeMarker(const ProjectorSurface& surface)
 int photodiodeMarkerValue(std::size_t pattern_index)
 {
     return (pattern_index % 2) == 0 ? 0 : 255;
+}
+
+cv::Rect photodiodeMarkerRect(const ProjectorSurface& surface, PhotodiodeMarkerMode mode)
+{
+    return mode == PhotodiodeMarkerMode::locate ? locatorMarkerRect(surface) : syncMarkerRect(surface);
+}
+
+void drawPhotodiodeMarker(cv::Mat& canvas, const ProjectorSurface& surface, std::size_t pattern_index,
+                          PhotodiodeMarkerMode mode)
+{
+    const auto marker = photodiodeMarkerRect(surface, mode);
+    if (marker.area() <= 0) return;
+    if (mode == PhotodiodeMarkerMode::locate)
+        canvas(marker).setTo(cv::Scalar(0, 0, 255));
+    else
+        canvas(marker).setTo(cv::Scalar::all(photodiodeMarkerValue(pattern_index)));
 }
 namespace
 {
@@ -235,13 +271,26 @@ ProjectorResult ProjectorService::generatePatterns(const std::string& projector_
     }
 }
 
-ProjectorResult ProjectorService::showPattern(const std::string& projector_role, int index)
+ProjectorResult ProjectorService::showPattern(const std::string& projector_role, int index,
+                                               std::optional<PhotodiodeMarkerMode> marker_mode)
 {
     std::lock_guard lock(mutex_);
-    return showPatternLocked(projector_role, index);
+    return showPatternLocked(projector_role, index, marker_mode);
 }
 
-ProjectorResult ProjectorService::showPatternLocked(const std::string& projector_role, int index)
+ProjectorResult ProjectorService::setPhotodiodeMarkerMode(const std::string& projector_role,
+                                                          PhotodiodeMarkerMode mode)
+{
+    std::lock_guard lock(mutex_);
+    auto* session = findSession(projector_role);
+    if (!session)
+        return ProjectorResult::failure(projector_role, "projector_not_open", "projector role is not open");
+    session->photodiode_marker_mode = mode;
+    return successFromSession(*session);
+}
+
+ProjectorResult ProjectorService::showPatternLocked(const std::string& projector_role, int index,
+                                                     std::optional<PhotodiodeMarkerMode> marker_mode)
 {
     auto* session = findSession(projector_role);
     if (!session)
@@ -260,10 +309,15 @@ ProjectorResult ProjectorService::showPatternLocked(const std::string& projector
         return ProjectorResult::failure(projector_role, "pattern_index_out_of_range", "pattern index is out of range");
     }
 
+    const auto effective_mode = marker_mode.value_or(session->photodiode_marker_mode);
+    if (photodiodeMarkerRect(session->surface, effective_mode).area() <= 0)
+        return ProjectorResult::failure(projector_role, "photodiode_marker_margin_unavailable",
+                                        "active pattern外にPhotodiode markerを配置できません");
+
     try
     {
         const auto pattern = session->structured_light->getPattern(static_cast<size_t>(index)).clone();
-        const auto canvas = composePatternCanvas(pattern, session->surface, index);
+        const auto canvas = composePatternCanvas(pattern, session->surface, index, effective_mode);
         const auto shown = window_service_.showImage(session->window_role, canvas);
         if (!shown.ok)
         {
@@ -271,6 +325,7 @@ ProjectorResult ProjectorService::showPatternLocked(const std::string& projector
                                             windowErrorMessage(shown, "failed to show pattern"));
         }
         session->current_index = index;
+        session->photodiode_marker_mode = effective_mode;
         return successFromSession(*session);
     }
     catch (const std::exception& error)
@@ -387,6 +442,12 @@ ProjectorResult ProjectorService::successFromSession(const ProjectorSession& ses
     result.pattern_x = session.surface.pattern_x;
     result.pattern_y = session.surface.pattern_y;
     result.clamped = session.surface.clamped;
+    const auto marker = photodiodeMarkerRect(session.surface, session.photodiode_marker_mode);
+    result.marker_x = marker.x;
+    result.marker_y = marker.y;
+    result.marker_width = marker.width;
+    result.marker_height = marker.height;
+    result.photodiode_marker_mode = session.photodiode_marker_mode == PhotodiodeMarkerMode::locate ? "locate" : "sync";
     return result;
 }
 
@@ -447,7 +508,8 @@ ProjectorSurface ProjectorService::computeSurface(const win::MonitorInfo& monito
     return surface;
 }
 
-cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface, int pattern_index)
+cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface,
+                                               int pattern_index, PhotodiodeMarkerMode marker_mode)
 {
     if (surface.surface_width <= 0 || surface.surface_height <= 0 || surface.pattern_width <= 0 ||
         surface.pattern_height <= 0 || surface.pattern_x < 0 || surface.pattern_y < 0 ||
@@ -480,9 +542,7 @@ cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const Pro
     display_pattern.copyTo(canvas(roi));
     // Gray Code領域外の余白へPhotodiode markerを置く。余白がない場合は
     // active patternを壊さないためmarkerを描画しない。
-    const auto marker = syncMarkerRect(surface);
-    if (marker.area() > 0)
-        canvas(marker).setTo(cv::Scalar::all(photodiodeMarkerValue(pattern_index)));
+    drawPhotodiodeMarker(canvas, surface, static_cast<std::size_t>(pattern_index), marker_mode);
     return canvas;
 }
 

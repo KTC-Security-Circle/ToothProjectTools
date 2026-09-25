@@ -332,6 +332,20 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
     }
     structured_light::sync::PhotodiodeSyncSource photodiode_source(*photodiode_transport);
 
+    // Locatorは実機配置専用。production scanは常に従来の32x32 black/white契約を使う。
+    const auto sync_mode_result = projector_service_.setPhotodiodeMarkerMode(
+        config.projector_role, projector::PhotodiodeMarkerMode::sync);
+    if (!sync_mode_result.ok)
+    {
+        std::lock_guard lock(mutex_);
+        state_ = ScanState::failed;
+        last_error_code_ = "pattern_show_failed";
+        last_error_message_ = "failed to select Photodiode sync marker mode";
+        pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                  {"error_message", last_error_message_}});
+        return;
+    }
+
     // MCUは状態変化時だけeventを送る。scan開始前にmarkerをwhiteへ確立し、
     // pattern 0 (black)が必ずtransitionになるようpre-armする。
     try

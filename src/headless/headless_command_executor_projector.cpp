@@ -55,8 +55,13 @@ common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdGenera
 
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdProjectorShowPattern& command)
 {
+    std::optional<projector::PhotodiodeMarkerMode> marker_mode;
+    if (command.photodiode_marker_mode)
+        marker_mode = *command.photodiode_marker_mode == "locate"
+                          ? projector::PhotodiodeMarkerMode::locate
+                          : projector::PhotodiodeMarkerMode::sync;
     return result_adapter::projector(
-        projector_service_.showPattern(command.projector_role, command.index), false, false, false, true);
+        projector_service_.showPattern(command.projector_role, command.index, marker_mode), false, false, false, true);
 }
 
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdProjectorNextPattern& command)

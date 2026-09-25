@@ -1,6 +1,7 @@
 # Photodiode / Camera–Projector実機確認
 
 Photodiode eventはMCUからUSB serialへ `0\n`（black）または`1\n`（white）として送る。
+赤いmarkerは人間がPhotodiodeを物理配置するためだけのlocatorであり、Serial protocolには含まれない。
 PCはvalid line受信時のhost `steady_clock`をevent timestampとする。Camera timestampも現行の
 `current_frame_sample_host_timestamp`であり、hardware timestamp精度は保証しない。
 
@@ -63,7 +64,22 @@ CAMERA_ID=0 \
 
 CameraとProjectorは固定し、既存27 poseのcheckerboardだけを移動する。
 `reference_before`と`reference_after`はいずれもFULL WHITE active patternで撮影する。
-Photodiode markerは32x32で、Gray Code active area外の余白へ配置される。
+同期中のPhotodiode markerは32x32で、Gray Code active area外の余白へ配置される。
+
+実機確認は次の順で行う。
+
+1. `scripts/check_camera_projector.sh` を起動する。
+2. 起動直後に表示される赤いlocator markerを探す。
+3. 赤いmarker上へPhotodiodeを固定する。
+4. `t` を押し、赤が消えてBLACK/WHITE transitionを検出できることを確認する。
+5. `s` を押し、Photodiode同期captureを実行する。
+
+locatorは余白に応じて96x96、64x64、32x32の順に選ばれ、active Gray Code ROIとは重ならない。
+左側余白へ置ける場合はactive area左側の縦中央を優先する。`t` または `s` の開始時に
+locator modeからsync modeへ切り替わり、pre-arm後は従来どおり偶数indexがblack、奇数indexがwhiteとなる。
+
+> **責務分離:** REDは人間向けの位置確認専用表示である。Photodiode同期とMCU/host Serial protocolは
+> `0 = black`、`1 = white` のみであり、RED用eventは存在しない。
 
 ## 7. Camera–Projector calibration
 

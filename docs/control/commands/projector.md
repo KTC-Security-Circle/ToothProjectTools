@@ -403,7 +403,7 @@ show_pattern はプロジェクタ表示commandである。
 ### args(JSONL)
 
 ```json
-{"id":"52","cmd":"show_pattern","projector_role":"projector","index":0}
+{"id":"52","cmd":"show_pattern","projector_role":"projector","index":0,"photodiode_marker_mode":"sync"}
 ```
 
 | field | 必須 | 説明 |
@@ -412,11 +412,12 @@ show_pattern はプロジェクタ表示commandである。
 | `cmd` | 必須 | `show_pattern`。 |
 | `projector_role` | 必須 | projector role。 |
 | `index` | 必須 | pattern index。 |
+| `photodiode_marker_mode` | 任意 | `sync`（偶数black、奇数white、32x32）または `locate`（赤、96/64/32px）。省略時は現在のmodeを維持する。 |
 
 ### return
 
 ```json
-{"id":"52","ok":true,"projector_role":"projector","pattern_index":"0"}
+{"id":"52","ok":true,"projector_role":"projector","pattern_index":"0","photodiode_marker_mode":"sync","marker_x":"944","marker_y":"534","marker_width":"32","marker_height":"32"}
 ```
 
 ### event

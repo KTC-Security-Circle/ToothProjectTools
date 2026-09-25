@@ -305,7 +305,13 @@ CommandMapResult HeadlessCommandMapper::mapProjectorShowPattern(const control::C
     }
     CommandMapResult result;
     result.ok = true;
-    result.command = cmd::CmdProjectorShowPattern{*message.projector_role, *message.index};
+    if (message.photodiode_marker_mode && *message.photodiode_marker_mode != "sync" &&
+        *message.photodiode_marker_mode != "locate")
+    {
+        return mapFailure("invalid_command", "photodiode_marker_mode must be sync or locate");
+    }
+    result.command = cmd::CmdProjectorShowPattern{*message.projector_role, *message.index,
+                                                  message.photodiode_marker_mode};
     return result;
 }
 
