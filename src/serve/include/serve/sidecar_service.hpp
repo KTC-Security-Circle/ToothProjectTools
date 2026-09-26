@@ -1,23 +1,23 @@
 #pragma once
 
 #include "calibration/calibrator.hpp"
+#include "calibration/camera_projector_calibration_service.hpp"
 #include "calibration/stereo_calibrator.hpp"
 #include "calibration/stereo_data.hpp"
-#include "calibration/camera_projector_calibration_service.hpp"
 #include "capture/capture_service.hpp"
-#include "reconstruction/reconstruction_service.hpp"
-#include "video/camera_service.hpp"
 #include "decode/decode_service.hpp"
-#include "window/monitor_service.hpp"
 #include "projector/projector_service.hpp"
+#include "reconstruction/reconstruction_service.hpp"
 #include "scan/scan_dataset_validator.hpp"
 #include "scan/scan_event.hpp"
 #include "scan/scan_service.hpp"
-#include "window/window_service.hpp"
-#include "window/niri_window_action_executor.hpp"
-#include "video/camera_manager.hpp"
 #include "stereo_scan/stereo_scan_service.hpp"
+#include "video/camera_manager.hpp"
+#include "video/camera_service.hpp"
+#include "window/monitor_service.hpp"
 #include "window/window_manager.hpp"
+#include "window/window_placement_service.hpp"
+#include "window/window_service.hpp"
 
 #include <map>
 #include <memory>
@@ -276,7 +276,6 @@ class SidecarService
 
     /// window_manager_ <win::WindowManager>: sidecar window resourceを管理するmanager。
     win::WindowManager window_manager_;
-    win::NiriWindowActionExecutor window_action_executor_;
 
     /// camera_service_ <video::CameraService>: camera resourceとrole bindingを管理するdomain service。
     video::CameraService camera_service_{cameras_};
@@ -284,8 +283,11 @@ class SidecarService
     /// monitor_service_ <win::MonitorService>: monitor情報を取得するdomain service。
     win::MonitorService monitor_service_;
 
+    std::unique_ptr<win::WindowPlacementBackend> window_placement_backend_{win::createWindowPlacementBackend()};
+    win::WindowPlacementService window_placement_service_{*window_placement_backend_, monitor_service_};
+
     /// window_service_ <win::WindowService>: window resourceとrole bindingを管理するdomain service。
-    win::WindowService window_service_{window_manager_, monitor_service_};
+    win::WindowService window_service_{window_manager_, monitor_service_, window_placement_service_};
 
     /// projector_service_ <projector::ProjectorService>: projector roleとpattern表示を管理するdomain service。
     projector::ProjectorService projector_service_{window_service_, monitor_service_};

@@ -10,6 +10,8 @@ Stereo Camera + Projector Structured-Light scanの非同期Facadeである。既
 
 defaultはcamera `0/2`、role `left/right`、projector/window role `projector`、Gray Code論理解像度 `480x270`、calibration `data/calib/stereo.yml`、delay `100 ms`、decode threshold `15`、epipolar error `2.0 px`。物理displayは選択したmonitorの実解像度全体を使用する。例えばmonitor 1が1920x1080なら、codeは480x270のままdisplayだけ1920x1080となり、既存nearest-neighbor表示を使う。物理解像度はhard-codeしない。`output_dir` は衝突しにくい `data/scans/scan_<generated>`、PLYはその直下の `cloud.ply` になる。
 
+`stereo_scan` はOSやwindow managerを判定しない。`monitor_index` を `WindowService` へ渡し、`WindowPlacementService` がX11/niri等のbackendを選んで配置する。追加のplatform固有fieldは不要である。配置未対応sessionでは推測で別monitorへ置かず、window stageが `window_placement_unsupported` で失敗する。
+
 初期応答はcamera/stream開始後に返り、`scan_id`、`left_stream_url`、`right_stream_url`、`output_dir`、予定 `ply_file` を含む。Calibration fileは毎scanで生成せず再利用し、K1/D1/K2/D2、R/T、image sizeを開始前に検証する。未存在は `stereo_calibration_file_not_found`、不正fileは `stereo_calibration_file_invalid`。
 
 ## Sync

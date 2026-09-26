@@ -1,26 +1,30 @@
 // src/cmd/include/cmd/commands.hpp
 #pragma once
-#include <filesystem>
-#include <variant>
-#include <optional>
-#include <string>
 #include "video/video_types.hpp"
 
-namespace cmd {
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <variant>
+
+namespace cmd
+{
 
 /// @brief camera deviceをopenし、runtime上のcamera roleへbindするcommand。
-struct CmdOpenCamera {
-  /// camera_id <video::CameraId>: OpenCVへ渡すcamera device index。
-  video::CameraId camera_id{video::kInvalidCameraId};
+struct CmdOpenCamera
+{
+    /// camera_id <video::CameraId>: OpenCVへ渡すcamera device index。
+    video::CameraId camera_id{video::kInvalidCameraId};
 
-  /// role <std::string>: sidecar / runtime内でcameraを参照するrole名。
-  std::string role;
+    /// role <std::string>: sidecar / runtime内でcameraを参照するrole名。
+    std::string role;
 };
 
 /// @brief runtime上のcamera roleに紐づくcameraをcloseするcommand。
-struct CmdCloseCamera {
-  /// role <std::string>: close対象のcamera role名。
-  std::string role;
+struct CmdCloseCamera
+{
+    /// role <std::string>: close対象のcamera role名。
+    std::string role;
 };
 
 /// @brief runtime上にwindowを作成するcommand。
@@ -43,9 +47,6 @@ struct CmdOpenWindow
 
     /// fullscreen <bool>: fullscreenで開くか。
     bool fullscreen{false};
-
-    std::optional<std::string> post_open_key;
-    std::optional<std::string> post_open_action;
 };
 
 /// @brief runtime上のwindowをcloseするcommand。
@@ -54,7 +55,6 @@ struct CmdCloseWindow
     /// window_role <std::string>: close対象window role名。
     std::string window_role;
 };
-
 
 struct CmdListMonitors
 {
@@ -139,27 +139,29 @@ struct CmdProjectorPrevPattern
 };
 
 /// @brief 指定cameraからframeを取得して画像ファイルに保存するcommand。
-struct CmdCaptureFrame {
-  /// camera_id <video::CameraId>: Capture対象のcamera識別子。
-  video::CameraId camera_id{video::kInvalidCameraId};
+struct CmdCaptureFrame
+{
+    /// camera_id <video::CameraId>: Capture対象のcamera識別子。
+    video::CameraId camera_id{video::kInvalidCameraId};
 
-  /// output_path <std::filesystem::path>: 保存先画像ファイルのpath。
-  std::filesystem::path output_path;
+    /// output_path <std::filesystem::path>: 保存先画像ファイルのpath。
+    std::filesystem::path output_path;
 };
 
 /// @brief 左右cameraから近いタイミングでframeを取得して画像ファイルに保存するcommand。
-struct CmdCaptureStereo {
-  /// left_camera_id <video::CameraId>: 左側Capture対象のcamera識別子。
-  video::CameraId left_camera_id{video::kInvalidCameraId};
+struct CmdCaptureStereo
+{
+    /// left_camera_id <video::CameraId>: 左側Capture対象のcamera識別子。
+    video::CameraId left_camera_id{video::kInvalidCameraId};
 
-  /// right_camera_id <video::CameraId>: 右側Capture対象のcamera識別子。
-  video::CameraId right_camera_id{video::kInvalidCameraId};
+    /// right_camera_id <video::CameraId>: 右側Capture対象のcamera識別子。
+    video::CameraId right_camera_id{video::kInvalidCameraId};
 
-  /// left_output_path <std::filesystem::path>: 左camera画像ファイルの保存先path。
-  std::filesystem::path left_output_path;
+    /// left_output_path <std::filesystem::path>: 左camera画像ファイルの保存先path。
+    std::filesystem::path left_output_path;
 
-  /// right_output_path <std::filesystem::path>: 右camera画像ファイルの保存先path。
-  std::filesystem::path right_output_path;
+    /// right_output_path <std::filesystem::path>: 右camera画像ファイルの保存先path。
+    std::filesystem::path right_output_path;
 };
 
 struct CmdStartScan
@@ -252,44 +254,48 @@ struct CmdDecodePatterns
     std::optional<int> pattern_count;
 };
 
-struct CmdCalibrate {
-  /// target_camera_id <video::CameraId>: mono calibration結果を適用するcamera識別子。
-  video::CameraId target_camera_id;
+struct CmdCalibrate
+{
+    /// target_camera_id <video::CameraId>: mono calibration結果を適用するcamera識別子。
+    video::CameraId target_camera_id;
 
-  /// image_folder <std::string>: mono calibration画像が入っているdirectory path。
-  std::string image_folder;
+    /// image_folder <std::string>: mono calibration画像が入っているdirectory path。
+    std::string image_folder;
 
-  /// output_file <std::string>: mono calibration結果の保存先file path。
-  std::string output_file;
+    /// output_file <std::string>: mono calibration結果の保存先file path。
+    std::string output_file;
 
-  /// role <std::string>: sidecar response/eventへ返すcamera role名。
-  std::string role;
+    /// role <std::string>: sidecar response/eventへ返すcamera role名。
+    std::string role;
 
-  /// apply_to_camera <bool>: trueの場合のみopen済みcameraへ結果を反映する。
-  bool apply_to_camera{false};
+    /// apply_to_camera <bool>: trueの場合のみopen済みcameraへ結果を反映する。
+    bool apply_to_camera{false};
 
-  int board_corners_x{0};
-  int board_corners_y{0};
-  double square_size_mm{0.0};
+    int board_corners_x{0};
+    int board_corners_y{0};
+    double square_size_mm{0.0};
 };
 
-struct CmdDetectCalibrationCorners {
-  video::CameraId camera_id{video::kInvalidCameraId};
-  std::string role;
-  std::filesystem::path output_path;
-  int board_corners_x{0};
-  int board_corners_y{0};
-  double square_size_mm{0.0};
+struct CmdDetectCalibrationCorners
+{
+    video::CameraId camera_id{video::kInvalidCameraId};
+    std::string role;
+    std::filesystem::path output_path;
+    int board_corners_x{0};
+    int board_corners_y{0};
+    double square_size_mm{0.0};
 };
 
 // キャリブレーション画像の撮影と保存
-struct CmdCalibCapture {
+struct CmdCalibCapture
+{
     video::CameraId camera_id;
-    std::string     target_directory;
-    std::string     prefix = ""; // ファイル名プレフィックス (任意)
+    std::string target_directory;
+    std::string prefix = ""; // ファイル名プレフィックス (任意)
 };
 
-struct CmdStereoCalibrate {
+struct CmdStereoCalibrate
+{
     /// left_cam_id <video::CameraId>: 左camera識別子。
     video::CameraId left_cam_id;
 
@@ -321,83 +327,76 @@ struct CmdStereoCalibrate {
     bool apply_to_camera{false};
 };
 
-struct ReconstructionGeometryConfig { double max_epipolar_error_px{2.0}; std::optional<double> min_depth_mm; std::optional<double> max_depth_mm; };
-struct CmdValidateReconstruction { std::filesystem::path decode_dir; std::filesystem::path calibration_file; ReconstructionGeometryConfig config; };
-struct CmdReconstructPointCloud { std::filesystem::path decode_dir; std::filesystem::path calibration_file; std::filesystem::path output_file; ReconstructionGeometryConfig config; bool overwrite{false}; };
+struct ReconstructionGeometryConfig
+{
+    double max_epipolar_error_px{2.0};
+    std::optional<double> min_depth_mm;
+    std::optional<double> max_depth_mm;
+};
+struct CmdValidateReconstruction
+{
+    std::filesystem::path decode_dir;
+    std::filesystem::path calibration_file;
+    ReconstructionGeometryConfig config;
+};
+struct CmdReconstructPointCloud
+{
+    std::filesystem::path decode_dir;
+    std::filesystem::path calibration_file;
+    std::filesystem::path output_file;
+    ReconstructionGeometryConfig config;
+    bool overwrite{false};
+};
 
 struct CmdStereoScan
 {
-  video::CameraId left_camera_id{0};
-  video::CameraId right_camera_id{2};
-  std::string left_role{"left"};
-  std::string right_role{"right"};
-  std::string window_role{"projector"};
-  std::string projector_role{"projector"};
-  int monitor_index{0};
-  int code_width{480};
-  int code_height{270};
-  std::optional<int> display_width;
-  std::optional<int> display_height;
-  std::string placement{"center"};
-  std::optional<int> x;
-  std::optional<int> y;
-  std::filesystem::path calibration_file{"data/calib/stereo.yml"};
-  std::string sync_mode{"delay"};
-  int delay_ms{100};
-  std::string photodiode_device{"/dev/ttyUSB0"};
-  int photodiode_baud{115200};
-  int sync_timeout_ms{1000};
-  int guard_ms{99};
-  int decode_threshold{15};
-  double max_epipolar_error_px{2.0};
-  std::string scan_id;
-  std::filesystem::path output_dir;
-  std::filesystem::path ply_file;
-  std::optional<std::string> post_open_key;
-  std::optional<std::string> post_open_action;
+    video::CameraId left_camera_id{0};
+    video::CameraId right_camera_id{2};
+    std::string left_role{"left"};
+    std::string right_role{"right"};
+    std::string window_role{"projector"};
+    std::string projector_role{"projector"};
+    int monitor_index{0};
+    int code_width{480};
+    int code_height{270};
+    std::optional<int> display_width;
+    std::optional<int> display_height;
+    std::string placement{"center"};
+    std::optional<int> x;
+    std::optional<int> y;
+    std::filesystem::path calibration_file{"data/calib/stereo.yml"};
+    std::string sync_mode{"delay"};
+    int delay_ms{100};
+    std::string photodiode_device{"/dev/ttyUSB0"};
+    int photodiode_baud{115200};
+    int sync_timeout_ms{1000};
+    int guard_ms{99};
+    int decode_threshold{15};
+    double max_epipolar_error_px{2.0};
+    std::string scan_id;
+    std::filesystem::path output_dir;
+    std::filesystem::path ply_file;
 };
 
 struct CmdCameraProjectorCalibrate
 {
-  std::filesystem::path observations_dir;
-  std::filesystem::path camera_calibration_file;
-  std::filesystem::path output_file;
-  int board_corners_x{0};
-  int board_corners_y{0};
-  double square_size_mm{0.0};
-  double max_mean_displacement_px{0.0};
-  double max_corner_displacement_px{0.0};
-  bool overwrite{false};
+    std::filesystem::path observations_dir;
+    std::filesystem::path camera_calibration_file;
+    std::filesystem::path output_file;
+    int board_corners_x{0};
+    int board_corners_y{0};
+    double square_size_mm{0.0};
+    double max_mean_displacement_px{0.0};
+    double max_corner_displacement_px{0.0};
+    bool overwrite{false};
 };
 
-using Command = std::variant<
-  CmdOpenCamera,
-  CmdCloseCamera,
-  CmdOpenWindow,
-  CmdCloseWindow,
-  CmdListMonitors,
-  CmdConfigureProjectorSurface,
-  CmdOpenProjector,
-  CmdCloseProjector,
-  CmdGeneratePatterns,
-  CmdProjectorShowPattern,
-  CmdProjectorNextPattern,
-  CmdProjectorPrevPattern,
-  CmdCaptureFrame,
-  CmdCaptureStereo,
-  CmdStartScan,
-  CmdScanStatus,
-  CmdStopScan,
-  CmdValidateScanDataset,
-  CmdDecodePatterns,
-  CmdCalibrate,
-  CmdCalibCapture,
-  CmdDetectCalibrationCorners,
-  CmdStereoCalibrate,
-  CmdValidateReconstruction,
-  CmdReconstructPointCloud,
-  CmdStereoScan,
-  CmdCameraProjectorCalibrate
->;
+using Command =
+    std::variant<CmdOpenCamera, CmdCloseCamera, CmdOpenWindow, CmdCloseWindow, CmdListMonitors,
+                 CmdConfigureProjectorSurface, CmdOpenProjector, CmdCloseProjector, CmdGeneratePatterns,
+                 CmdProjectorShowPattern, CmdProjectorNextPattern, CmdProjectorPrevPattern, CmdCaptureFrame,
+                 CmdCaptureStereo, CmdStartScan, CmdScanStatus, CmdStopScan, CmdValidateScanDataset, CmdDecodePatterns,
+                 CmdCalibrate, CmdCalibCapture, CmdDetectCalibrationCorners, CmdStereoCalibrate,
+                 CmdValidateReconstruction, CmdReconstructPointCloud, CmdStereoScan, CmdCameraProjectorCalibrate>;
 
 } // namespace cmd
