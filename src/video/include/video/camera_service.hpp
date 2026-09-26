@@ -1,10 +1,11 @@
 #pragma once
 
-#include "video/camera_result.hpp"
 #include "video/camera_manager.hpp"
+#include "video/camera_result.hpp"
 
-#include <mutex>
 #include <chrono>
+#include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -16,12 +17,16 @@ namespace video
 class CameraService
 {
   public:
+    using CameraCreator = std::function<video::CameraId(const video::CameraOptions&, const std::string&)>;
+    using CameraRemover = std::function<bool(video::CameraId)>;
     /// @brief CameraServiceを構築する。
     /// Args:
     ///   cameras <video::CameraManager&>: camera deviceを管理するmanager。
     /// Return:
     ///   <CameraService>: CameraManagerを参照するcamera service。
     explicit CameraService(video::CameraManager& cameras);
+    CameraService(video::CameraManager& cameras, CameraCreator creator, CameraRemover remover);
+    void setRoleActivePredicate(std::function<bool(const std::string&)> predicate);
 
     /// @brief camera deviceをopenし、roleへbindする。
     /// Args:
@@ -50,8 +55,8 @@ class CameraService
 
     /** @brief roleに対応するCameraの最新timestamp付きframeを取得する。 */
     std::optional<video::FrameSample> latestFrame(video::CameraId camera_id) const;
-    std::optional<video::FrameSample> firstFrameAtOrAfter(
-        video::CameraId camera_id, std::chrono::steady_clock::time_point timestamp) const;
+    std::optional<video::FrameSample> firstFrameAtOrAfter(video::CameraId camera_id,
+                                                          std::chrono::steady_clock::time_point timestamp) const;
 
   private:
     /// @brief camera roleとして使用可能な文字列か判定する。
@@ -71,6 +76,9 @@ class CameraService
     std::unordered_map<std::string, video::CameraId> role_to_camera_id_;
     /// role_to_device_index_ <std::unordered_map<std::string, video::CameraId>>: role名からdevice indexへのbinding。
     std::unordered_map<std::string, video::CameraId> role_to_device_index_;
+    std::function<bool(const std::string&)> role_active_predicate_;
+    CameraCreator create_camera_;
+    CameraRemover remove_camera_;
 };
 
 } // namespace video

@@ -3,8 +3,8 @@
 #include "control/control_message.hpp"
 #include "video/camera_service.hpp"
 
-#include <cmath>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -75,24 +75,22 @@ std::filesystem::path normalizeOutputPathForCompare(const std::filesystem::path&
 
 std::string generatedStereoScanId()
 {
-    const auto value = std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    const auto value =
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
     const auto base = "scan_" + std::to_string(value);
-    for (int suffix = 0; ; ++suffix)
+    for (int suffix = 0;; ++suffix)
     {
         const auto candidate = suffix == 0 ? base : base + "_" + std::to_string(suffix);
         std::error_code error;
-        if (!std::filesystem::exists(std::filesystem::path{"data/scans"} / candidate, error) || error) return candidate;
+        if (!std::filesystem::exists(std::filesystem::path{"data/scans"} / candidate, error) || error)
+            return candidate;
     }
 }
 
-
 } // namespace
 
-HeadlessCommandMapper::HeadlessCommandMapper(video::CameraService& camera_service)
-    : camera_service_(camera_service)
-{
-}
+HeadlessCommandMapper::HeadlessCommandMapper(video::CameraService& camera_service) : camera_service_(camera_service) {}
 
 CommandMapResult HeadlessCommandMapper::mapOpenCamera(const control::ControlMessage& message)
 {
@@ -158,14 +156,8 @@ CommandMapResult HeadlessCommandMapper::mapOpenWindow(const control::ControlMess
     CommandMapResult result;
     result.ok = true;
     result.command = cmd::CmdOpenWindow{
-        *message.window_role,
-        message.title.value_or(*message.window_role),
-        *message.width,
-        *message.height,
-        message.monitor_index,
-        message.fullscreen.value_or(false),
-        message.post_open_key,
-        message.post_open_action,
+        *message.window_role,  message.title.value_or(*message.window_role), *message.width, *message.height,
+        message.monitor_index, message.fullscreen.value_or(false),
     };
     return result;
 }
@@ -182,8 +174,6 @@ CommandMapResult HeadlessCommandMapper::mapCloseWindow(const control::ControlMes
     result.command = cmd::CmdCloseWindow{*message.window_role};
     return result;
 }
-
-
 
 CommandMapResult HeadlessCommandMapper::mapListMonitors(const control::ControlMessage& message)
 {
@@ -241,8 +231,12 @@ CommandMapResult HeadlessCommandMapper::mapConfigureProjectorSurface(const contr
 
     CommandMapResult result;
     result.ok = true;
-    result.command = cmd::CmdConfigureProjectorSurface{*message.projector_role, *message.monitor_index,
-                                                       *message.width, *message.height, message.x, message.y,
+    result.command = cmd::CmdConfigureProjectorSurface{*message.projector_role,
+                                                       *message.monitor_index,
+                                                       *message.width,
+                                                       *message.height,
+                                                       message.x,
+                                                       message.y,
                                                        placement};
     return result;
 }
@@ -276,8 +270,8 @@ CommandMapResult HeadlessCommandMapper::mapOpenProjector(const control::ControlM
 
     CommandMapResult result;
     result.ok = true;
-    result.command = cmd::CmdOpenProjector{*message.projector_role, *message.window_role, *message.width,
-                                           *message.height};
+    result.command =
+        cmd::CmdOpenProjector{*message.projector_role, *message.window_role, *message.width, *message.height};
     return result;
 }
 
@@ -349,7 +343,6 @@ CommandMapResult HeadlessCommandMapper::mapProjectorPrevPattern(const control::C
     return result;
 }
 
-
 CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessage& message)
 {
     if (auto failure = requireString(message.projector_role, "projector_role"))
@@ -384,9 +377,8 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
         (sync_mode == "photodiode" && message.sync_guard_ms && *message.sync_guard_ms < 0) ||
         (message.max_patterns && *message.max_patterns < 0))
     {
-        return mapFailure("invalid_command",
-                          "delay_ms, guard_ms, sync_guard_ms and max_patterns must be non-negative; "
-                          "photodiode_baud and sync_timeout_ms must be positive");
+        return mapFailure("invalid_command", "delay_ms, guard_ms, sync_guard_ms and max_patterns must be non-negative; "
+                                             "photodiode_baud and sync_timeout_ms must be positive");
     }
 
     CommandMapResult result;
@@ -408,7 +400,8 @@ CommandMapResult HeadlessCommandMapper::mapStartScan(const control::ControlMessa
 
 CommandMapResult HeadlessCommandMapper::mapStereoScan(const control::ControlMessage& message)
 {
-    if (!message.monitor_index) return mapFailure("missing_field", "missing required field: monitor_index");
+    if (!message.monitor_index)
+        return mapFailure("missing_field", "missing required field: monitor_index");
     const auto left_id = message.left_camera_id.value_or(0);
     const auto right_id = message.right_camera_id.value_or(2);
     const auto sync_mode = message.sync_mode.value_or("delay");
@@ -441,27 +434,42 @@ CommandMapResult HeadlessCommandMapper::mapStereoScan(const control::ControlMess
         (message.sync_timeout_ms && *message.sync_timeout_ms <= 0))
         return mapFailure("invalid_command", "photodiode_baud and sync_timeout_ms must be positive");
     const auto scan_id = message.scan_id.value_or(generatedStereoScanId());
-    if (scan_id.empty()) return mapFailure("invalid_command", "scan_id must not be empty");
-    const auto output_dir = message.output_dir
-        ? std::filesystem::path{*message.output_dir}
-        : std::filesystem::path{"data/scans"} / scan_id;
-    const auto ply_file = message.ply_file
-        ? std::filesystem::path{*message.ply_file}
-        : output_dir / "cloud.ply";
-    if (output_dir.empty() || ply_file.empty()) return mapFailure("invalid_output_path", "output paths must not be empty");
+    if (scan_id.empty())
+        return mapFailure("invalid_command", "scan_id must not be empty");
+    const auto output_dir =
+        message.output_dir ? std::filesystem::path{*message.output_dir} : std::filesystem::path{"data/scans"} / scan_id;
+    const auto ply_file = message.ply_file ? std::filesystem::path{*message.ply_file} : output_dir / "cloud.ply";
+    if (output_dir.empty() || ply_file.empty())
+        return mapFailure("invalid_output_path", "output paths must not be empty");
 
     CommandMapResult result;
     result.ok = true;
-    result.command = cmd::CmdStereoScan{
-        static_cast<video::CameraId>(left_id), static_cast<video::CameraId>(right_id),
-        message.left_role.value_or("left"), message.right_role.value_or("right"),
-        message.window_role.value_or("projector"), message.projector_role.value_or("projector"),
-        *message.monitor_index, code_width, code_height, message.display_width, message.display_height,
-        placement, message.x, message.y,
-        message.calibration_file.value_or("data/calib/stereo.yml"), sync_mode, delay_ms,
-        message.photodiode_device.value_or("/dev/ttyUSB0"), message.photodiode_baud.value_or(115200),
-        message.sync_timeout_ms.value_or(1000), guard_ms, threshold, epipolar, scan_id,
-        output_dir, ply_file, message.post_open_key, message.post_open_action};
+    result.command = cmd::CmdStereoScan{static_cast<video::CameraId>(left_id),
+                                        static_cast<video::CameraId>(right_id),
+                                        message.left_role.value_or("left"),
+                                        message.right_role.value_or("right"),
+                                        message.window_role.value_or("projector"),
+                                        message.projector_role.value_or("projector"),
+                                        *message.monitor_index,
+                                        code_width,
+                                        code_height,
+                                        message.display_width,
+                                        message.display_height,
+                                        placement,
+                                        message.x,
+                                        message.y,
+                                        message.calibration_file.value_or("data/calib/stereo.yml"),
+                                        sync_mode,
+                                        delay_ms,
+                                        message.photodiode_device.value_or("/dev/ttyUSB0"),
+                                        message.photodiode_baud.value_or(115200),
+                                        message.sync_timeout_ms.value_or(1000),
+                                        guard_ms,
+                                        threshold,
+                                        epipolar,
+                                        scan_id,
+                                        output_dir,
+                                        ply_file};
     return result;
 }
 
@@ -497,16 +505,15 @@ CommandMapResult HeadlessCommandMapper::mapValidateScanDataset(const control::Co
     }
     if (has_left_dir != has_right_dir)
     {
-        return mapFailure("missing_field", has_left_dir ? "missing required field: right_dir" : "missing required field: left_dir");
+        return mapFailure("missing_field",
+                          has_left_dir ? "missing required field: right_dir" : "missing required field: left_dir");
     }
 
     CommandMapResult result;
     result.ok = true;
     result.command = cmd::CmdValidateScanDataset{
-        message.input_dir.value_or(std::string{}),
-        message.allow_partial.value_or(false),
-        message.left_dir.value_or(std::string{}),
-        message.right_dir.value_or(std::string{}),
+        message.input_dir.value_or(std::string{}),     message.allow_partial.value_or(false),
+        message.left_dir.value_or(std::string{}),      message.right_dir.value_or(std::string{}),
         message.metadata_file.value_or(std::string{}),
     };
     return result;
@@ -532,7 +539,8 @@ CommandMapResult HeadlessCommandMapper::mapDecodePatterns(const control::Control
     }
     if (has_left_dir != has_right_dir)
     {
-        return mapFailure("missing_field", has_left_dir ? "missing required field: right_dir" : "missing required field: left_dir");
+        return mapFailure("missing_field",
+                          has_left_dir ? "missing required field: right_dir" : "missing required field: left_dir");
     }
     if (message.threshold && *message.threshold < 0)
     {
@@ -666,13 +674,18 @@ CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlM
 {
     const bool right = message.role && *message.role == "right";
     const auto image_folder = message.image_folder.value_or(right ? "data/calib/mono_right" : "data/calib/mono_left");
-    const auto output_file = message.output_file.value_or(right ? "data/calib/mono_right.yml" : "data/calib/mono_left.yml");
-    if (image_folder.empty() || output_file.empty()) return mapFailure("invalid_command", "calibration paths must not be empty");
-    if (!message.board_corners_x) return mapFailure("missing_field", "missing required field: board_corners_x");
-    if (!message.board_corners_y) return mapFailure("missing_field", "missing required field: board_corners_y");
-    if (!message.square_size_mm) return mapFailure("missing_field", "missing required field: square_size_mm");
-    if (*message.board_corners_x <= 0 || *message.board_corners_y <= 0 ||
-        !std::isfinite(*message.square_size_mm) || *message.square_size_mm <= 0.0)
+    const auto output_file =
+        message.output_file.value_or(right ? "data/calib/mono_right.yml" : "data/calib/mono_left.yml");
+    if (image_folder.empty() || output_file.empty())
+        return mapFailure("invalid_command", "calibration paths must not be empty");
+    if (!message.board_corners_x)
+        return mapFailure("missing_field", "missing required field: board_corners_x");
+    if (!message.board_corners_y)
+        return mapFailure("missing_field", "missing required field: board_corners_y");
+    if (!message.square_size_mm)
+        return mapFailure("missing_field", "missing required field: square_size_mm");
+    if (*message.board_corners_x <= 0 || *message.board_corners_y <= 0 || !std::isfinite(*message.square_size_mm) ||
+        *message.square_size_mm <= 0.0)
         return mapFailure("invalid_command", "board dimensions and square_size_mm must be positive");
 
     const bool apply_to_camera = message.apply_to_camera.value_or(false);
@@ -708,20 +721,30 @@ CommandMapResult HeadlessCommandMapper::mapMonoCalibrate(const control::ControlM
 
 CommandMapResult HeadlessCommandMapper::mapDetectCalibrationCorners(const control::ControlMessage& message)
 {
-    if (auto failure = requireString(message.role, "role")) return *failure;
-    if (auto failure = requireString(message.output, "output")) return *failure;
-    if (!message.board_corners_x) return mapFailure("missing_field", "missing required field: board_corners_x");
-    if (!message.board_corners_y) return mapFailure("missing_field", "missing required field: board_corners_y");
-    if (!message.square_size_mm) return mapFailure("missing_field", "missing required field: square_size_mm");
-    if (*message.board_corners_x <= 0 || *message.board_corners_y <= 0 ||
-        !std::isfinite(*message.square_size_mm) || *message.square_size_mm <= 0.0)
+    if (auto failure = requireString(message.role, "role"))
+        return *failure;
+    if (auto failure = requireString(message.output, "output"))
+        return *failure;
+    if (!message.board_corners_x)
+        return mapFailure("missing_field", "missing required field: board_corners_x");
+    if (!message.board_corners_y)
+        return mapFailure("missing_field", "missing required field: board_corners_y");
+    if (!message.square_size_mm)
+        return mapFailure("missing_field", "missing required field: square_size_mm");
+    if (*message.board_corners_x <= 0 || *message.board_corners_y <= 0 || !std::isfinite(*message.square_size_mm) ||
+        *message.square_size_mm <= 0.0)
         return mapFailure("invalid_command", "board dimensions and square_size_mm must be positive");
     const auto camera_id = resolveCameraId(camera_service_, *message.role);
-    if (!camera_id) return mapFailure("camera_not_open", "role is not opened: " + *message.role);
+    if (!camera_id)
+        return mapFailure("camera_not_open", "role is not opened: " + *message.role);
     CommandMapResult result;
     result.ok = true;
-    result.command = cmd::CmdDetectCalibrationCorners{*camera_id, *message.role, *message.output,
-        *message.board_corners_x, *message.board_corners_y, *message.square_size_mm};
+    result.command = cmd::CmdDetectCalibrationCorners{*camera_id,
+                                                      *message.role,
+                                                      *message.output,
+                                                      *message.board_corners_x,
+                                                      *message.board_corners_y,
+                                                      *message.square_size_mm};
     return result;
 }
 
@@ -732,7 +755,8 @@ CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::Contro
     const auto left_calibration = message.left_calibration_file.value_or("data/calib/mono_left.yml");
     const auto right_calibration = message.right_calibration_file.value_or("data/calib/mono_right.yml");
     const auto output_value = message.output_file.value_or("data/calib/stereo.yml");
-    if (left_value.empty() || right_value.empty() || left_calibration.empty() || right_calibration.empty() || output_value.empty())
+    if (left_value.empty() || right_value.empty() || left_calibration.empty() || right_calibration.empty() ||
+        output_value.empty())
         return mapFailure("invalid_command", "calibration paths must not be empty");
 
     const auto left_dir = std::filesystem::path{left_value};
@@ -792,27 +816,75 @@ CommandMapResult HeadlessCommandMapper::mapStereoCalibrate(const control::Contro
 
 } // namespace headless
 
-namespace headless {
-CommandMapResult HeadlessCommandMapper::mapValidateReconstruction(const control::ControlMessage& m) { if(!m.decode_dir||m.decode_dir->empty()) return mapFailure("missing_field","missing required field: decode_dir"); if(!m.calibration_file||m.calibration_file->empty()) return mapFailure("missing_field","missing required field: calibration_file"); const double e=m.max_epipolar_error_px.value_or(2.0); if(!(e>0.0)) return mapFailure("invalid_command","max_epipolar_error_px must be positive"); if(m.min_depth_mm&&*m.min_depth_mm<=0) return mapFailure("invalid_command","min_depth_mm must be positive"); if(m.max_depth_mm&&*m.max_depth_mm<=0) return mapFailure("invalid_command","max_depth_mm must be positive"); if(m.min_depth_mm&&m.max_depth_mm&&*m.min_depth_mm>=*m.max_depth_mm) return mapFailure("invalid_command","min_depth_mm must be less than max_depth_mm"); CommandMapResult r;r.ok=true;r.command=cmd::CmdValidateReconstruction{*m.decode_dir,*m.calibration_file,{e,m.min_depth_mm,m.max_depth_mm}};return r; }
-CommandMapResult HeadlessCommandMapper::mapReconstructPointCloud(const control::ControlMessage& m) { auto r=mapValidateReconstruction(m); if(!r.ok)return r; if(!m.output_file||m.output_file->empty())return mapFailure("missing_field","missing required field: output_file");auto v=std::get<cmd::CmdValidateReconstruction>(*r.command);r.command=cmd::CmdReconstructPointCloud{v.decode_dir,v.calibration_file,*m.output_file,v.config,m.overwrite.value_or(false)};return r; }
-CommandMapResult HeadlessCommandMapper::mapCameraProjectorCalibrate(const control::ControlMessage& m)
+namespace headless
 {
-    if (auto f=requireString(m.observations_dir,"observations_dir")) return *f;
-    if (auto f=requireString(m.camera_calibration_file,"camera_calibration_file")) return *f;
-    if (auto f=requireString(m.output_file,"output_file")) return *f;
-    if (!m.board_corners_x) return mapFailure("missing_field","missing required field: board_corners_x");
-    if (!m.board_corners_y) return mapFailure("missing_field","missing required field: board_corners_y");
-    if (!m.square_size_mm) return mapFailure("missing_field","missing required field: square_size_mm");
-    if (!m.max_mean_displacement_px) return mapFailure("missing_field","missing required field: max_mean_displacement_px");
-    if (!m.max_corner_displacement_px) return mapFailure("missing_field","missing required field: max_corner_displacement_px");
-    if (*m.board_corners_x<=0 || *m.board_corners_y<=0 ||
-        static_cast<long long>(*m.board_corners_x) * *m.board_corners_y < 10 || *m.square_size_mm<=0.0 ||
-        *m.max_mean_displacement_px<0.0 || *m.max_corner_displacement_px<0.0)
-        return mapFailure("invalid_command","board dimensions must provide at least 10 positive corners, square_size_mm must be positive, and displacement thresholds must be non-negative");
-    CommandMapResult r; r.ok=true;
-    r.command=cmd::CmdCameraProjectorCalibrate{*m.observations_dir,*m.camera_calibration_file,*m.output_file,
-        *m.board_corners_x,*m.board_corners_y,*m.square_size_mm,*m.max_mean_displacement_px,
-        *m.max_corner_displacement_px,m.overwrite.value_or(false)};
+CommandMapResult HeadlessCommandMapper::mapValidateReconstruction(const control::ControlMessage& m)
+{
+    if (!m.decode_dir || m.decode_dir->empty())
+        return mapFailure("missing_field", "missing required field: decode_dir");
+    if (!m.calibration_file || m.calibration_file->empty())
+        return mapFailure("missing_field", "missing required field: calibration_file");
+    const double e = m.max_epipolar_error_px.value_or(2.0);
+    if (!(e > 0.0))
+        return mapFailure("invalid_command", "max_epipolar_error_px must be positive");
+    if (m.min_depth_mm && *m.min_depth_mm <= 0)
+        return mapFailure("invalid_command", "min_depth_mm must be positive");
+    if (m.max_depth_mm && *m.max_depth_mm <= 0)
+        return mapFailure("invalid_command", "max_depth_mm must be positive");
+    if (m.min_depth_mm && m.max_depth_mm && *m.min_depth_mm >= *m.max_depth_mm)
+        return mapFailure("invalid_command", "min_depth_mm must be less than max_depth_mm");
+    CommandMapResult r;
+    r.ok = true;
+    r.command = cmd::CmdValidateReconstruction{*m.decode_dir, *m.calibration_file, {e, m.min_depth_mm, m.max_depth_mm}};
     return r;
 }
+CommandMapResult HeadlessCommandMapper::mapReconstructPointCloud(const control::ControlMessage& m)
+{
+    auto r = mapValidateReconstruction(m);
+    if (!r.ok)
+        return r;
+    if (!m.output_file || m.output_file->empty())
+        return mapFailure("missing_field", "missing required field: output_file");
+    auto v = std::get<cmd::CmdValidateReconstruction>(*r.command);
+    r.command = cmd::CmdReconstructPointCloud{v.decode_dir, v.calibration_file, *m.output_file, v.config,
+                                              m.overwrite.value_or(false)};
+    return r;
 }
+CommandMapResult HeadlessCommandMapper::mapCameraProjectorCalibrate(const control::ControlMessage& m)
+{
+    if (auto f = requireString(m.observations_dir, "observations_dir"))
+        return *f;
+    if (auto f = requireString(m.camera_calibration_file, "camera_calibration_file"))
+        return *f;
+    if (auto f = requireString(m.output_file, "output_file"))
+        return *f;
+    if (!m.board_corners_x)
+        return mapFailure("missing_field", "missing required field: board_corners_x");
+    if (!m.board_corners_y)
+        return mapFailure("missing_field", "missing required field: board_corners_y");
+    if (!m.square_size_mm)
+        return mapFailure("missing_field", "missing required field: square_size_mm");
+    if (!m.max_mean_displacement_px)
+        return mapFailure("missing_field", "missing required field: max_mean_displacement_px");
+    if (!m.max_corner_displacement_px)
+        return mapFailure("missing_field", "missing required field: max_corner_displacement_px");
+    if (*m.board_corners_x <= 0 || *m.board_corners_y <= 0 ||
+        static_cast<long long>(*m.board_corners_x) * *m.board_corners_y < 10 || *m.square_size_mm <= 0.0 ||
+        *m.max_mean_displacement_px < 0.0 || *m.max_corner_displacement_px < 0.0)
+        return mapFailure("invalid_command",
+                          "board dimensions must provide at least 10 positive corners, square_size_mm must be "
+                          "positive, and displacement thresholds must be non-negative");
+    CommandMapResult r;
+    r.ok = true;
+    r.command = cmd::CmdCameraProjectorCalibrate{*m.observations_dir,
+                                                 *m.camera_calibration_file,
+                                                 *m.output_file,
+                                                 *m.board_corners_x,
+                                                 *m.board_corners_y,
+                                                 *m.square_size_mm,
+                                                 *m.max_mean_displacement_px,
+                                                 *m.max_corner_displacement_px,
+                                                 m.overwrite.value_or(false)};
+    return r;
+}
+} // namespace headless

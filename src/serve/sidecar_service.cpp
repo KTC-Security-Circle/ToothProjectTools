@@ -28,21 +28,29 @@ SidecarResult SidecarResult::failure(SidecarErrorCode code, std::string message)
 
 SidecarService::SidecarService(std::string mjpeg_host, int mjpeg_port, stream::StreamRegistry& streams)
     : mjpeg_host_(std::move(mjpeg_host)), mjpeg_port_(mjpeg_port), streams_(streams),
-      stereo_scan_service_(camera_service_, window_service_, monitor_service_, projector_service_, scan_service_, decode_service_,
+      stereo_scan_service_(
+          camera_service_, window_service_, monitor_service_, projector_service_, scan_service_, decode_service_,
           reconstruction_service_, scan_event_queue_,
-          [this](const std::string& role) {
+          [this](const std::string& role)
+          {
               const auto result = startStream(role);
               return result.ok ? common::success({{"url", result.value}})
                                : common::failure(std::string(toString(result.error->code)), result.error->message);
           },
-          [this](const std::string& role) {
+          [this](const std::string& role)
+          {
               const auto result = stopStream(role);
               return result.ok ? common::success()
                                : common::failure(std::string(toString(result.error->code)), result.error->message);
           },
           [this](const std::string& role) { return runningStreamUrl(role); })
 {
-    window_service_.setWindowActionExecutor(&window_action_executor_);
+    camera_service_.setRoleActivePredicate(
+        [this](const std::string& role)
+        {
+            const auto it = bindings_.find(role);
+            return it != bindings_.end() && it->second.publisher && it->second.publisher->running();
+        });
 }
 
 SidecarService::~SidecarService()
@@ -141,7 +149,8 @@ SidecarResult SidecarService::stopStream(const std::string& role)
 std::optional<std::string> SidecarService::runningStreamUrl(const std::string& role) const
 {
     const auto it = bindings_.find(role);
-    if (it == bindings_.end() || !it->second.publisher || !it->second.publisher->running()) return std::nullopt;
+    if (it == bindings_.end() || !it->second.publisher || !it->second.publisher->running())
+        return std::nullopt;
     return streamUrl(role);
 }
 
@@ -268,10 +277,18 @@ calib::StereoCalibrator* SidecarService::stereoCalibrator()
     return &stereo_calibrator_;
 }
 
-reconstruction::ReconstructionService& SidecarService::reconstructionService() { return reconstruction_service_; }
+reconstruction::ReconstructionService& SidecarService::reconstructionService()
+{
+    return reconstruction_service_;
+}
 calib::projector::CameraProjectorCalibrationService& SidecarService::cameraProjectorCalibrationService()
-{ return camera_projector_calibration_service_; }
-stereo_scan::StereoScanService& SidecarService::stereoScanService() { return stereo_scan_service_; }
+{
+    return camera_projector_calibration_service_;
+}
+stereo_scan::StereoScanService& SidecarService::stereoScanService()
+{
+    return stereo_scan_service_;
+}
 
 calib::StereoData& SidecarService::stereoData()
 {

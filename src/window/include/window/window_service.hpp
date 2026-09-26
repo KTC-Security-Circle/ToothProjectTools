@@ -1,6 +1,7 @@
 #pragma once
 
 #include "window/monitor_service.hpp"
+#include "window/window_placement_service.hpp"
 #include "window/window_result.hpp"
 
 #include <condition_variable>
@@ -41,24 +42,6 @@ struct WindowOpenConfig
 
     /// fullscreen <bool>: fullscreen windowとして開くか。
     bool fullscreen{false};
-    std::optional<std::string> post_open_key;
-    std::optional<std::string> post_open_action;
-};
-
-struct WindowActionResult
-{
-    bool ok{false};
-    std::string error_code;
-    std::string error_message;
-};
-
-class WindowActionExecutor
-{
-  public:
-    virtual ~WindowActionExecutor() = default;
-    virtual WindowActionResult execute(win::WindowId window_id,
-                                       const std::optional<std::string>& key,
-                                       const std::optional<std::string>& action) = 0;
 };
 
 struct WindowSurfaceConfig
@@ -108,8 +91,7 @@ class WindowBackend
     ///
     /// Return:
     ///   <win::WindowId>: 作成されたwindow id。
-    virtual win::WindowId openWindow(const std::string& title, int width, int height, std::optional<int> monitor_index,
-                                     bool fullscreen) = 0;
+    virtual win::WindowId openWindow(const std::string& title, int width, int height) = 0;
 
     /// @brief windowをcloseする。
     ///
@@ -156,6 +138,8 @@ class WindowService
     ///   <WindowService>: WindowManagerを参照するwindow service。
     explicit WindowService(win::WindowManager& windows);
     WindowService(win::WindowManager& windows, win::MonitorService& monitor_service);
+    WindowService(win::WindowManager& windows, win::MonitorService& monitor_service,
+                  win::WindowPlacementService& placement_service);
 
     /// @brief test用backendを利用するWindowServiceを構築する。
     ///
@@ -166,7 +150,8 @@ class WindowService
     ///   <WindowService>: backend参照を保持するwindow service。
     explicit WindowService(WindowBackend& backend);
     WindowService(WindowBackend& backend, win::MonitorService& monitor_service);
-    void setWindowActionExecutor(WindowActionExecutor* executor);
+    WindowService(WindowBackend& backend, win::MonitorService& monitor_service,
+                  win::WindowPlacementService& placement_service);
 
     /// @brief WindowServiceを破棄する。
     ///
@@ -280,6 +265,7 @@ class WindowService
     struct ConfigureWindowSurfaceRequest;
     struct CheckWindowOpenRequest;
     class WindowManagerBackend;
+    class BackendPlacementAdapter;
 
     /// @brief main thread専用API呼び出し元を検証する。
     ///
@@ -358,7 +344,9 @@ class WindowService
 
     std::unique_ptr<win::MonitorService> owned_monitor_service_;
     win::MonitorService& monitor_service_;
-    WindowActionExecutor* action_executor_{nullptr};
+    std::unique_ptr<BackendPlacementAdapter> owned_placement_backend_;
+    std::unique_ptr<win::WindowPlacementService> owned_placement_service_;
+    win::WindowPlacementService& placement_service_;
 
     /// gui_thread_id_ <std::thread::id>: HighGUI操作を実行するprocess main thread id。
     std::thread::id gui_thread_id_;
