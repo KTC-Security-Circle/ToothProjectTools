@@ -3,7 +3,6 @@
 #include "window/monitor_service.hpp"
 #include "window/window_types.hpp"
 
-#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -18,7 +17,6 @@ struct WindowIdentity
     std::string role;
     std::string title;
     int process_id{0};
-    std::optional<std::string> native_id;
 };
 
 struct WindowPlacementRequest
@@ -45,7 +43,6 @@ class WindowPlacementBackend
   public:
     virtual ~WindowPlacementBackend() = default;
     virtual WindowPlacementResult place(const WindowPlacementRequest& request) = 0;
-    virtual void forget(WindowId) {}
 };
 
 class WindowPlacementService
@@ -54,7 +51,6 @@ class WindowPlacementService
     WindowPlacementService(WindowPlacementBackend& backend, MonitorService& monitors);
     WindowPlacementResult place(const WindowIdentity& window, int monitor_index, bool fullscreen, int width,
                                 int height);
-    void forget(WindowId window_id);
 
   private:
     WindowPlacementBackend& backend_;
@@ -65,13 +61,11 @@ enum class WindowPlacementBackendKind
 {
     Niri,
     X11,
-    Win32,
     Unsupported
 };
 
 struct WindowEnvironment
 {
-    bool windows{false};
     std::string session_type;
     bool niri_socket{false};
     bool display{false};

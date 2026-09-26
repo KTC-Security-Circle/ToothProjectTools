@@ -299,11 +299,11 @@ void testNiriIdentityAndFactoryMapping()
     ambiguous.push_back({"9", "Projector", 123});
     require(win::resolveNiriWindow(ambiguous, 123, "Projector", id).error_code == "window_native_identity_ambiguous",
             "ambiguous niri identity was accepted");
-    require(win::selectWindowPlacementBackend({false, "wayland", true, false}) == win::WindowPlacementBackendKind::Niri,
+    require(win::selectWindowPlacementBackend({"wayland", true, false}) == win::WindowPlacementBackendKind::Niri,
             "niri factory selection failed");
-    require(win::selectWindowPlacementBackend({false, "x11", false, true}) == win::WindowPlacementBackendKind::X11,
+    require(win::selectWindowPlacementBackend({"x11", false, true}) == win::WindowPlacementBackendKind::X11,
             "X11 factory selection failed");
-    require(win::selectWindowPlacementBackend({false, "wayland", false, false}) ==
+    require(win::selectWindowPlacementBackend({"wayland", false, false}) ==
                 win::WindowPlacementBackendKind::Unsupported,
             "unknown Wayland selection failed");
     const auto monitors = win::parseNiriMonitorOutput(
