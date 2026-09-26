@@ -1,11 +1,9 @@
 #include "window/window_placement_service.hpp"
 
-#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
-#include <fcntl.h>
 #include <regex>
 #include <spawn.h>
 #include <sys/wait.h>
@@ -13,10 +11,8 @@
 #include <unistd.h>
 #include <utility>
 
-#ifndef _WIN32
 #include <X11/Xatom.h>
 #include <X11/Xlib.h>
-#endif
 
 extern char** environ;
 
@@ -104,7 +100,6 @@ class NiriWindowPlacementBackend final : public WindowPlacementBackend
     }
 };
 
-#ifndef _WIN32
 std::optional<unsigned long> findX11Window(Display* display, ::Window root, int pid, const std::string& title)
 {
     Atom pid_atom = XInternAtom(display, "_NET_WM_PID", True);
@@ -186,7 +181,6 @@ class X11WindowPlacementBackend final : public WindowPlacementBackend
         return WindowPlacementResult::success();
     }
 };
-#endif
 } // namespace
 
 WindowPlacementResult WindowPlacementResult::success()
@@ -212,29 +206,18 @@ WindowPlacementResult WindowPlacementService::place(const WindowIdentity& window
     return backend_.place({window, *monitor, fullscreen, width, height});
 }
 
-void WindowPlacementService::forget(WindowId window_id)
-{
-    backend_.forget(window_id);
-}
-
 WindowEnvironment detectWindowEnvironment()
 {
     WindowEnvironment result;
-#ifdef _WIN32
-    result.windows = true;
-#else
     if (const char* value = std::getenv("XDG_SESSION_TYPE"))
         result.session_type = value;
     result.niri_socket = std::getenv("NIRI_SOCKET") != nullptr;
     result.display = std::getenv("DISPLAY") != nullptr;
-#endif
     return result;
 }
 
 WindowPlacementBackendKind selectWindowPlacementBackend(const WindowEnvironment& environment)
 {
-    if (environment.windows)
-        return WindowPlacementBackendKind::Win32;
     if (environment.session_type == "wayland" && environment.niri_socket)
         return WindowPlacementBackendKind::Niri;
     if (environment.session_type == "x11" || (environment.session_type.empty() && environment.display))
@@ -248,10 +231,8 @@ std::unique_ptr<WindowPlacementBackend> createWindowPlacementBackend()
     {
     case WindowPlacementBackendKind::Niri:
         return std::make_unique<NiriWindowPlacementBackend>();
-#ifndef _WIN32
     case WindowPlacementBackendKind::X11:
         return std::make_unique<X11WindowPlacementBackend>();
-#endif
     default:
         return std::make_unique<UnsupportedWindowPlacementBackend>();
     }

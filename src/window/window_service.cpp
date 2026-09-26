@@ -620,7 +620,6 @@ void WindowService::closeAllOnMainThread()
     {
         (void)role;
         (void)backend_.closeWindow(window_id);
-        placement_service_.forget(window_id);
     }
     role_to_window_id_.clear();
     role_to_window_title_.clear();
@@ -680,12 +679,11 @@ WindowResult WindowService::executeOpenWindow(OpenWindowRequest& request)
             return WindowResult::failure(config.role, "window_open_failed", "window backend returned invalid id");
         }
         const auto placement = placement_service_.place(
-            WindowIdentity{window_id, config.role, title, static_cast<int>(getpid()), std::nullopt},
+            WindowIdentity{window_id, config.role, title, static_cast<int>(getpid())},
             resolved_monitor->monitor.monitor_index, config.fullscreen, config.width, config.height);
         if (!placement.ok)
         {
             (void)backend_.closeWindow(window_id);
-            placement_service_.forget(window_id);
             return WindowResult::failure(
                 config.role, placement.error_code.empty() ? "window_placement_failed" : placement.error_code,
                 placement.error_message.empty() ? "window placement failed" : placement.error_message);
@@ -721,7 +719,6 @@ WindowResult WindowService::executeCloseWindow(CloseWindowRequest& request)
             return WindowResult::failure(request.role, "window_close_failed",
                                          "window backend could not close id: " + std::to_string(window_id));
         }
-        placement_service_.forget(window_id);
         if (const auto title_it = role_to_window_title_.find(request.role); title_it != role_to_window_title_.end())
         {
             title_to_window_role_.erase(title_it->second);

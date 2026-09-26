@@ -35,8 +35,7 @@ Windowを作成し、window roleへbindする。
 | --- | --- |
 | Linux + X11 | 対応。PIDとtitleでnative Windowを一意解決し、X11座標へ配置する。 |
 | Wayland + niri | 対応。niri IPCでPIDとtitleから対象を一意解決し、window IDとoutput名を指定して配置する。 |
-| Windows | backend interface/factory分岐のみ。Win32実装は未実装。 |
-| その他Wayland compositor | 未対応。`window_placement_unsupported` を返す。 |
+| その他の環境 | 未対応。`window_placement_unsupported` を返す。 |
 
 ```json
 {"id":"40","ok":true,"window_role":"projector","window_id":"1","width":"1920","height":"1080"}
