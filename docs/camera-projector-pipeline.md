@@ -18,7 +18,7 @@ reprojection error超過点はPLYへ出力しない。
 
 ## 同期
 
-Projector canvasに余白がある場合、active Gray Code領域外の8x8 markerを表示する。
+Projector canvasに余白がある場合、active Gray Code領域から32px離れた位置に96x96 markerを表示する。
 markerはpattern indexを符号化せず、index parityに応じて黒白を交互に切り替え、
 光学的な切替edgeの検出にのみ使う。余白がない場合はmarkerを表示せず、active
 patternを破壊しない。

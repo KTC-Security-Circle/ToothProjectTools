@@ -34,7 +34,7 @@ MONITOR_INDEX=1 \
 
 scriptはbackendを起動し、monitor列挙、Camera/Window/Projector open、surface設定、pattern生成、
 赤locator表示まで行う。Waylandでもmonitor indexを既存runtimeへ渡すためdesktop absolute座標は不要である。
-locator（96x96、余白に応じて64/32へfallback）とproduction sync marker（32x32）は中心が一致し、
+locator（96x96）とproduction sync marker（96x96）は位置と中心が一致し、active patternとの間に32px gapを持つ。
 配置後にPhotodiodeを動かす必要はない。
 
 ENTER後はBLACK/WHITE baselineをCamera workerの実frame進行で取得する。baseline差が

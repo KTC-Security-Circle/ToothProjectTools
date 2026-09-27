@@ -13,6 +13,8 @@ WINDOW_WIDTH="${WINDOW_WIDTH:-}"
 WINDOW_HEIGHT="${WINDOW_HEIGHT:-}"
 DISPLAY_WIDTH="${DISPLAY_WIDTH:-}"
 DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-}"
+MARKER_SIZE=96
+MARKER_GAP=32
 
 PROJECTOR_ROLE="${PROJECTOR_ROLE:-projector}"
 WINDOW_ROLE="${WINDOW_ROLE:-projector}"
@@ -351,7 +353,7 @@ capture_pose() {
 
 initialize_runtime() {
   local id json monitor_count monitors_json
-  local pattern_count white_index horizontal_margin vertical_margin
+  local pattern_count white_index horizontal_margin vertical_margin marker_margin
 
   id="init-ping"
   request "${id}" "$(jq -cn --arg id "${id}" '{id:$id,cmd:"ping"}')" ||
@@ -375,7 +377,8 @@ initialize_runtime() {
     WINDOW_HEIGHT="$(jq -r --argjson i "${MONITOR_INDEX}" '.[$i].height' <<<"${monitors_json}")"
   fi
   if [[ -z "${DISPLAY_WIDTH}" ]]; then
-    DISPLAY_WIDTH=$((WINDOW_WIDTH - 64))
+    marker_margin=$((MARKER_SIZE + MARKER_GAP))
+    DISPLAY_WIDTH=$((WINDOW_WIDTH - 2 * marker_margin))
   fi
   if [[ -z "${DISPLAY_HEIGHT}" ]]; then
     DISPLAY_HEIGHT="${WINDOW_HEIGHT}"
@@ -385,11 +388,13 @@ initialize_runtime() {
     die "invalid display dimensions: ${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}"
   horizontal_margin=$((WINDOW_WIDTH - DISPLAY_WIDTH))
   vertical_margin=$((WINDOW_HEIGHT - DISPLAY_HEIGHT))
-  if (( horizontal_margin < 64 && vertical_margin < 64 )); then
-    die "Photodiode marker用の32x32余白がありません (center配置では横または縦に64px必要です)"
+  if (( horizontal_margin < 2 * (MARKER_SIZE + MARKER_GAP) &&
+        vertical_margin < 2 * (MARKER_SIZE + MARKER_GAP) )); then
+    die "Photodiode marker用の${MARKER_SIZE}px marker + ${MARKER_GAP}px gap余白がありません"
   fi
 
-  log "camera=${CAMERA_ID}, monitor=${MONITOR_INDEX}, window=${WINDOW_WIDTH}x${WINDOW_HEIGHT}, code=${CODE_WIDTH}x${CODE_HEIGHT}, display=${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}"
+  log "camera=${CAMERA_ID}, monitor=${MONITOR_INDEX}, window=${WINDOW_WIDTH}x${WINDOW_HEIGHT}, code=${CODE_WIDTH}x${CODE_HEIGHT}"
+  log "marker=${MARKER_SIZE}x${MARKER_SIZE}, marker_gap=${MARKER_GAP}, pattern=${DISPLAY_WIDTH}x${DISPLAY_HEIGHT}"
 
   id="init-camera"
   json="$(
@@ -472,10 +477,13 @@ initialize_runtime() {
   pattern_height="$(jq -r '(.pattern_height // "0") | tonumber' <<<"${LAST_RESPONSE}")"
   pattern_x="$(jq -r '(.pattern_x // "0") | tonumber' <<<"${LAST_RESPONSE}")"
   pattern_y="$(jq -r '(.pattern_y // "0") | tonumber' <<<"${LAST_RESPONSE}")"
-  if (( pattern_x < 32 && surface_width - pattern_x - pattern_width < 32 &&
-        pattern_y < 32 && surface_height - pattern_y - pattern_height < 32 )); then
-    die "Photodiode marker用の32x32余白がありません"
+  if (( pattern_x < MARKER_SIZE + MARKER_GAP &&
+        surface_width - pattern_x - pattern_width < MARKER_SIZE + MARKER_GAP &&
+        pattern_y < MARKER_SIZE + MARKER_GAP &&
+        surface_height - pattern_y - pattern_height < MARKER_SIZE + MARKER_GAP )); then
+    die "Photodiode marker用の${MARKER_SIZE}px marker + ${MARKER_GAP}px gap余白がありません"
   fi
+  log "marker_rect=$(jq -r '[.marker_x,.marker_y,.marker_width,.marker_height] | join(",")' <<<"${LAST_RESPONSE}"), pattern_rect=${pattern_x},${pattern_y},${pattern_width},${pattern_height}"
 
   id="init-patterns"
   json="$(

@@ -8,6 +8,7 @@ DEVICE="${PHOTODIODE_DEVICE:-/dev/ttyUSB0}"; BAUD="${PHOTODIODE_BAUD:-115200}"
 CAMERA_ID="${CAMERA_ID:-0}"; GUARD="${SYNC_GUARD_MS:-30}"; TIMEOUT="${SYNC_TIMEOUT_MS:-1000}"
 MJPEG_PORT="${MJPEG_PORT:-39010}"; OUTPUT_DIR="${OUTPUT_DIR:-${REPO_ROOT}/data/check_camera_projector}"
 MONITOR_INDEX="${MONITOR_INDEX:-0}"
+MARKER_SIZE=96; MARKER_GAP=32
 PROJECTOR_ROLE=projector; WINDOW_ROLE=projector; CAMERA_ROLE=left
 PENDING_EVENTS=()
 
@@ -90,13 +91,18 @@ request '{"id":"stream","cmd":"start_stream","role":"left"}'
 echo "[STREAM] $(jq -r '.url' <<<"${RESPONSE}")"
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${window_width}" --argjson height "${window_height}" '{id:"window",cmd:"open_window",window_role:"projector",title:"Camera Projector Check",width:$width,height:$height,monitor_index:$monitor,fullscreen:true}')"
 request '{"id":"projector","cmd":"open_projector","projector_role":"projector","window_role":"projector","width":480,"height":270}'
-if (( window_width > 192 )); then marker_reserve=192
-elif (( window_width > 128 )); then marker_reserve=128
-elif (( window_width > 64 )); then marker_reserve=64
-else echo 'photodiode_marker_margin_unavailable' >&2; exit 2
-fi
-display_width=$((window_width - marker_reserve))
+marker_margin=$((MARKER_SIZE + MARKER_GAP))
+display_width=$((window_width - 2 * marker_margin))
+(( display_width > 0 )) || { echo 'photodiode_marker_margin_unavailable' >&2; exit 2; }
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${display_width}" --argjson height "${window_height}" '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,placement:"center"}')"
+printf 'window=%sx%s\nmarker=%sx%s\nmarker_gap=%s\npattern=%sx%s\n' \
+  "${window_width}" "${window_height}" "${MARKER_SIZE}" "${MARKER_SIZE}" "${MARKER_GAP}" \
+  "$(jq -r '.pattern_width' <<<"${RESPONSE}")" "$(jq -r '.pattern_height' <<<"${RESPONSE}")"
+printf 'marker_rect=%s,%s,%s,%s\npattern_rect=%s,%s,%s,%s\n' \
+  "$(jq -r '.marker_x' <<<"${RESPONSE}")" "$(jq -r '.marker_y' <<<"${RESPONSE}")" \
+  "$(jq -r '.marker_width' <<<"${RESPONSE}")" "$(jq -r '.marker_height' <<<"${RESPONSE}")" \
+  "$(jq -r '.pattern_x' <<<"${RESPONSE}")" "$(jq -r '.pattern_y' <<<"${RESPONSE}")" \
+  "$(jq -r '.pattern_width' <<<"${RESPONSE}")" "$(jq -r '.pattern_height' <<<"${RESPONSE}")"
 request '{"id":"patterns","cmd":"generate_patterns","projector_role":"projector"}'
 request '{"id":"locator","cmd":"show_pattern","projector_role":"projector","index":0,"photodiode_marker_mode":"locate"}'
 echo

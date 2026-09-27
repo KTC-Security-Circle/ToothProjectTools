@@ -412,12 +412,12 @@ show_pattern はプロジェクタ表示commandである。
 | `cmd` | 必須 | `show_pattern`。 |
 | `projector_role` | 必須 | projector role。 |
 | `index` | 必須 | pattern index。 |
-| `photodiode_marker_mode` | 任意 | `sync`（偶数black、奇数white、32x32）または `locate`（赤、96/64/32px）。省略時は現在のmodeを維持する。 |
+| `photodiode_marker_mode` | 任意 | `sync`（偶数black、奇数white、96x96）または `locate`（赤、96x96）。両modeは同じ位置を使い、active patternとのgapは32px。省略時は現在のmodeを維持する。 |
 
 ### return
 
 ```json
-{"id":"52","ok":true,"projector_role":"projector","pattern_index":"0","photodiode_marker_mode":"sync","marker_x":"944","marker_y":"534","marker_width":"32","marker_height":"32"}
+{"id":"52","ok":true,"projector_role":"projector","pattern_index":"0","photodiode_marker_mode":"sync","marker_x":"0","marker_y":"492","marker_width":"96","marker_height":"96"}
 ```
 
 ### event
@@ -447,6 +447,7 @@ Window backend。
 | `invalid_command` | indexが負である。 |
 | `pattern_not_generated` | patternが生成されていない。 |
 | `pattern_index_out_of_range` | indexが範囲外である。 |
+| `photodiode_marker_margin_unavailable` | surface内に96x96 markerをactive patternから32px離して配置できない。 |
 | `pattern_show_failed` | 表示に失敗した。 |
 | `scan_resource_busy` | scanが対象projector roleを使用中である。 |
 

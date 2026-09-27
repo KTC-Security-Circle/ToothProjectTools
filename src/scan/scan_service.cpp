@@ -156,7 +156,7 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     if (!projector::canPlacePhotodiodeMarker(snapshot->surface))
     {
         return ScanResult::failure(scan_id, "photodiode_marker_margin_unavailable",
-                                   "photodiode synchronization requires a 32x32 projector margin outside the active pattern");
+                                   "photodiode synchronization requires a 96x96 marker and 32px gap outside the active pattern");
     }
 
     const auto left_id = camera_service_.resolveCameraId(config.left_role);
@@ -515,7 +515,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
     }
     structured_light::sync::PhotodiodeSyncSource photodiode_source(*photodiode_transport);
 
-    // Locatorは実機配置専用。production scanは常に従来の32x32 black/white契約を使う。
+    // Locatorとproduction scanは同じ96x96位置を使い、black/white値だけを切り替える。
     const auto sync_mode_result = projector_service_.setPhotodiodeMarkerMode(
         config.projector_role, projector::PhotodiodeMarkerMode::sync);
     if (!sync_mode_result.ok)

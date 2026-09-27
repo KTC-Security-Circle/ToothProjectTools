@@ -121,7 +121,7 @@ Scan worker。
 | `photodiode_open_failed` | serial open/configurationに失敗した。 |
 | `photodiode_timeout` | expected eventをtimeout内に受信できない。 |
 | `photodiode_invalid_event` | `0`/`1`以外を受信した。 |
-| `photodiode_marker_margin_unavailable` | active pattern外に32x32 markerを配置できない。 |
+| `photodiode_marker_margin_unavailable` | active patternから32px離した96x96 markerをsurface内に配置できない。 |
 | `camera_frame_timeout` | event timestamp + guard以降のframeを取得できない。 |
 | `capture_failed` | frame取得に失敗した。 |
 | `empty_frame` | captureしたframeが空である。 |

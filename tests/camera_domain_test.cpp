@@ -1871,16 +1871,25 @@ void testDecodeServiceSyntheticDataset()
 void testPhotodiodeMarkerRequiresProjectorMargin()
 {
     projector::ProjectorSurface surface;
-    surface.surface_width = 16;
-    surface.surface_height = 12;
-    surface.pattern_width = 16;
-    surface.pattern_height = 12;
-    assert(!projector::canPlacePhotodiodeMarker(surface));
-    surface.surface_width = 48;
-    assert(projector::canPlacePhotodiodeMarker(surface));
-    surface.surface_width = 80;
+    surface.surface_width = 1920;
+    surface.surface_height = 1080;
+    surface.pattern_x = 128;
+    surface.pattern_width = 1664;
+    surface.pattern_height = 1080;
+    requireCameraProjector(projector::canPlacePhotodiodeMarker(surface), "1664px pattern rejected valid margin");
+
+    const auto marker = projector::photodiodeMarkerRect(surface, projector::PhotodiodeMarkerMode::sync);
+    const cv::Rect bounds{0, 0, surface.surface_width, surface.surface_height};
+    const cv::Rect pattern{surface.pattern_x, surface.pattern_y, surface.pattern_width, surface.pattern_height};
+    requireCameraProjector(marker.width == 96 && marker.height == 96, "sync marker was not 96x96");
+    requireCameraProjector((marker & bounds) == marker, "sync marker was outside surface");
+    requireCameraProjector((marker & pattern).area() == 0, "sync marker overlaps active pattern");
+    requireCameraProjector(pattern.x - (marker.x + marker.width) >= 32, "sync marker gap was below 32px");
+
     surface.pattern_x = 32;
-    assert(projector::canPlacePhotodiodeMarker(surface));
+    surface.pattern_width = 1856;
+    requireCameraProjector(!projector::canPlacePhotodiodeMarker(surface),
+                           "1856px pattern unexpectedly accepted insufficient margin");
     assert(projector::photodiodeMarkerValue(0) == 0);
     assert(projector::photodiodeMarkerValue(1) == 255);
 
@@ -1897,18 +1906,17 @@ void testPhotodiodeLocatorMarker()
 {
     using projector::PhotodiodeMarkerMode;
     projector::ProjectorSurface surface;
-    surface.surface_width = 300;
-    surface.surface_height = 200;
-    surface.pattern_x = 100;
-    surface.pattern_y = 20;
-    surface.pattern_width = 180;
-    surface.pattern_height = 160;
+    surface.surface_width = 400;
+    surface.surface_height = 300;
+    surface.pattern_x = 128;
+    surface.pattern_width = 272;
+    surface.pattern_height = 300;
 
     const auto active = cv::Rect{surface.pattern_x, surface.pattern_y,
                                  surface.pattern_width, surface.pattern_height};
     const auto locator = projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::locate);
     requireCameraProjector(locator.width == 96 && locator.height == 96, "locator did not use 96x96");
-    requireCameraProjector(locator.x == surface.pattern_x - locator.width, "locator was not placed left");
+    requireCameraProjector(locator.x == surface.pattern_x - 32 - locator.width, "locator was not placed left");
     requireCameraProjector(locator.y == surface.pattern_y + (surface.pattern_height - locator.height) / 2,
                            "left locator was not vertically centered");
     requireCameraProjector((locator & active).area() == 0, "locator overlaps active pattern");
@@ -1919,10 +1927,7 @@ void testPhotodiodeLocatorMarker()
                            "locator pixel was not BGR red");
 
     const auto sync = projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::sync);
-    requireCameraProjector(sync.width == 32 && sync.height == 32, "sync marker was not 32x32");
-    requireCameraProjector(sync.x + sync.width / 2 == locator.x + locator.width / 2 &&
-                           sync.y + sync.height / 2 == locator.y + locator.height / 2,
-                           "locator and sync marker centers differ");
+    requireCameraProjector(sync == locator, "locator and sync marker positions differ");
     projector::drawPhotodiodeMarker(canvas, surface, 0, PhotodiodeMarkerMode::sync);
     requireCameraProjector(canvas.at<cv::Vec3b>(sync.y, sync.x) == cv::Vec3b(0, 0, 0),
                            "even sync marker was not black");
@@ -1930,22 +1935,35 @@ void testPhotodiodeLocatorMarker()
     requireCameraProjector(canvas.at<cv::Vec3b>(sync.y, sync.x) == cv::Vec3b(255, 255, 255),
                            "odd sync marker was not white");
 
-    surface.surface_width = 170;
-    surface.surface_height = 100;
-    surface.pattern_x = 70;
+    // Each out-of-surface candidate is rejected before the next placement is tried.
+    surface.surface_width = 500;
+    surface.surface_height = 500;
+    surface.pattern_x = 0;
+    surface.pattern_y = 128;
+    surface.pattern_width = 372;
+    surface.pattern_height = 372;
+    auto edge_marker = projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::sync);
+    requireCameraProjector(edge_marker.x == 404, "invalid left candidate was not rejected");
+    requireCameraProjector(edge_marker.x - (surface.pattern_x + surface.pattern_width) == 32,
+                           "right marker gap was not 32px");
+
+    surface.pattern_width = 500;
+    surface.pattern_height = 244;
+    edge_marker = projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::sync);
+    requireCameraProjector(edge_marker.y == 0, "invalid horizontal candidates were not rejected");
+    requireCameraProjector(surface.pattern_y - (edge_marker.y + edge_marker.height) == 32,
+                           "top marker gap was not 32px");
+
     surface.pattern_y = 0;
-    surface.pattern_width = 100;
-    surface.pattern_height = 100;
-    requireCameraProjector(projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::locate).width == 64,
-                           "locator did not fall back to 64x64");
-    surface.surface_width = 140;
-    surface.pattern_x = 40;
-    requireCameraProjector(projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::locate).width == 32,
-                           "locator did not fall back to 32x32");
-    surface.surface_width = 131;
-    surface.pattern_x = 31;
-    requireCameraProjector(projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::locate).area() == 0,
-                           "locator should be unavailable without a 32px margin");
+    edge_marker = projector::photodiodeMarkerRect(surface, PhotodiodeMarkerMode::sync);
+    requireCameraProjector(edge_marker.y == 276, "invalid top candidate was not rejected");
+    requireCameraProjector(edge_marker.y - (surface.pattern_y + surface.pattern_height) == 32,
+                           "bottom marker gap was not 32px");
+
+    surface.pattern_width = 500;
+    surface.pattern_height = 500;
+    requireCameraProjector(!projector::canPlacePhotodiodeMarker(surface),
+                           "marker unexpectedly fit without marker and gap margin");
 }
 
 void testPhotodiodeScanConfigValidation()
