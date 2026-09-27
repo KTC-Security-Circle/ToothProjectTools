@@ -22,8 +22,8 @@ mono_calibrate はファイル処理commandである。
 | --- | --- | --- |
 | `id` | 必須 | request ID。 |
 | `cmd` | 必須 | `mono_calibrate`。 |
-| `image_folder` | 必須 | calibration画像directory。 |
-| `output_file` | 必須 | 出力file。 |
+| `image_folder` | 任意 | defaultはleft用 `data/calib/mono_left`、`role=right` なら `data/calib/mono_right`。 |
+| `output_file` | 任意 | defaultはleft用 `data/calib/mono_left.yml`、`role=right` なら `data/calib/mono_right.yml`。 |
 | `board_corners_x` | 必須 | checkerboard横方向の内部corner数。正の整数。 |
 | `board_corners_y` | 必須 | checkerboard縦方向の内部corner数。正の整数。 |
 | `square_size_mm` | 必須 | 実測した1 squareの辺長(mm)。正数。暗黙defaultはない。 |
@@ -117,11 +117,11 @@ open済みcameraのK/Dではなく、`left_calibration_file` / `right_calibratio
 | --- | --- | --- |
 | `id` | 必須 | request ID。 |
 | `cmd` | 必須 | `stereo_calibrate`。 |
-| `left_dir` | 必須 | left calibration画像directory。 |
-| `right_dir` | 必須 | right calibration画像directory。 |
-| `left_calibration_file` | 必須 | left mono calibration file。 |
-| `right_calibration_file` | 必須 | right mono calibration file。 |
-| `output_file` | 必須 | stereo calibration file出力path。 |
+| `left_dir` | 任意 | default `data/calib/stereo/left`。 |
+| `right_dir` | 任意 | default `data/calib/stereo/right`。 |
+| `left_calibration_file` | 任意 | default `data/calib/mono_left.yml`。 |
+| `right_calibration_file` | 任意 | default `data/calib/mono_right.yml`。 |
+| `output_file` | 任意 | default `data/calib/stereo.yml`。 |
 | `left_role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
 | `right_role` | 任意 | `apply_to_camera=true` の場合のみ必須。 |
 | `apply_to_camera` | 任意 | trueの場合のみ、left/right roleのopen済みcameraを確認する。省略時はfalse。 |

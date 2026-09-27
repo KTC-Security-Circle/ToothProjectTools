@@ -1,14 +1,18 @@
 #pragma once
-#include <vector>
 #include <optional>
+#include <string>
+#include <vector>
 
-namespace win {
+namespace win
+{
 
-struct MonitorRect {
-  int x;
-  int y;
-  int width;
-  int height;
+struct MonitorRect
+{
+    int x;
+    int y;
+    int width;
+    int height;
+    std::string name;
 };
 
 // --- Low Level (OS依存) ---

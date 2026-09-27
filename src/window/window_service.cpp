@@ -13,6 +13,7 @@
 #include <opencv2/highgui.hpp>
 #include <sstream>
 #include <string>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -228,21 +229,12 @@ class WindowService::WindowManagerBackend final : public WindowBackend
     ///
     /// Return:
     ///   <win::WindowId>: 作成されたwindow id。
-    win::WindowId openWindow(const std::string& title, int width, int height, std::optional<int> monitor_index,
-                             bool fullscreen) override
+    win::WindowId openWindow(const std::string& title, int width, int height) override
     {
         const auto id = windows_.createWindow(title, cv::Size{width, height}, cv::Point{0, 0});
         if (auto* window = windows_.get(id))
         {
-            if (monitor_index)
-            {
-                window->setMonitorIndex(*monitor_index);
-            }
             window->resize(win::Size{width, height});
-            if (fullscreen)
-            {
-                window->setFullscreen(true);
-            }
         }
         return id;
     }
@@ -323,9 +315,31 @@ class WindowService::WindowManagerBackend final : public WindowBackend
     win::WindowManager& windows_;
 };
 
+class WindowService::BackendPlacementAdapter final : public WindowPlacementBackend
+{
+  public:
+    explicit BackendPlacementAdapter(WindowBackend& backend) : backend_(backend) {}
+    WindowPlacementResult place(const WindowPlacementRequest& request) override
+    {
+        const auto& monitor = request.monitor;
+        const int width = request.fullscreen ? monitor.width : request.width;
+        const int height = request.fullscreen ? monitor.height : request.height;
+        if (!backend_.configureWindowSurface(request.window.internal_id, monitor.monitor_index, monitor.x, monitor.y,
+                                             width, height, request.fullscreen))
+            return WindowPlacementResult::failure("window_placement_failed", "window backend placement failed");
+        return WindowPlacementResult::success();
+    }
+
+  private:
+    WindowBackend& backend_;
+};
+
 WindowService::WindowService(win::WindowManager& windows)
     : backend_(*(owned_backend_ = std::make_unique<WindowManagerBackend>(windows))),
       monitor_service_(*(owned_monitor_service_ = std::make_unique<win::MonitorService>())),
+      placement_service_(
+          *(owned_placement_service_ = std::make_unique<win::WindowPlacementService>(
+                *(owned_placement_backend_ = std::make_unique<BackendPlacementAdapter>(backend_)), monitor_service_))),
       gui_thread_id_(std::this_thread::get_id())
 {
     LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
@@ -334,11 +348,14 @@ WindowService::WindowService(win::WindowManager& windows)
 
 WindowService::WindowService(WindowBackend& backend)
     : backend_(backend),
-      monitor_service_(*(
-          owned_monitor_service_ = std::make_unique<win::MonitorService>(
-              [] {
-                  return std::vector<win::MonitorInfo>{{0, 0, 0, 1920, 1080, true, "test-monitor", false}};
-              }))),
+      monitor_service_(
+          *(owned_monitor_service_ = std::make_unique<win::MonitorService>(
+                [] {
+                    return std::vector<win::MonitorInfo>{{0, 0, 0, 1920, 1080, true, "test-monitor", false}};
+                }))),
+      placement_service_(
+          *(owned_placement_service_ = std::make_unique<win::WindowPlacementService>(
+                *(owned_placement_backend_ = std::make_unique<BackendPlacementAdapter>(backend_)), monitor_service_))),
       gui_thread_id_(std::this_thread::get_id())
 {
     LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
@@ -347,20 +364,45 @@ WindowService::WindowService(WindowBackend& backend)
 
 WindowService::WindowService(win::WindowManager& windows, win::MonitorService& monitor_service)
     : backend_(*(owned_backend_ = std::make_unique<WindowManagerBackend>(windows))), monitor_service_(monitor_service),
+      placement_service_(
+          *(owned_placement_service_ = std::make_unique<win::WindowPlacementService>(
+                *(owned_placement_backend_ = std::make_unique<BackendPlacementAdapter>(backend_)), monitor_service_))),
       gui_thread_id_(std::this_thread::get_id())
 {
     LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
     LOG_INFO("WindowService GUI thread={}", threadIdToString(gui_thread_id_));
 }
 
+WindowService::WindowService(win::WindowManager& windows, win::MonitorService& monitor_service,
+                             win::WindowPlacementService& placement_service)
+    : backend_(*(owned_backend_ = std::make_unique<WindowManagerBackend>(windows))), monitor_service_(monitor_service),
+      placement_service_(placement_service), gui_thread_id_(std::this_thread::get_id())
+{
+    LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
+    LOG_INFO("WindowService GUI thread={}", threadIdToString(gui_thread_id_));
+}
+
 WindowService::WindowService(WindowBackend& backend, win::MonitorService& monitor_service)
-    : backend_(backend), monitor_service_(monitor_service), gui_thread_id_(std::this_thread::get_id())
+    : backend_(backend), monitor_service_(monitor_service),
+      placement_service_(
+          *(owned_placement_service_ = std::make_unique<win::WindowPlacementService>(
+                *(owned_placement_backend_ = std::make_unique<BackendPlacementAdapter>(backend_)), monitor_service_))),
+      gui_thread_id_(std::this_thread::get_id())
 {
     LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
     LOG_INFO("WindowService GUI thread={}", threadIdToString(gui_thread_id_));
 }
 
 WindowService::~WindowService() = default;
+
+WindowService::WindowService(WindowBackend& backend, win::MonitorService& monitor_service,
+                             win::WindowPlacementService& placement_service)
+    : backend_(backend), monitor_service_(monitor_service), placement_service_(placement_service),
+      gui_thread_id_(std::this_thread::get_id())
+{
+    LOG_INFO("OpenCV HighGUI backend={}", highGuiBackendName());
+    LOG_INFO("WindowService GUI thread={}", threadIdToString(gui_thread_id_));
+}
 
 WindowResult WindowService::openWindow(const WindowOpenConfig& config)
 {
@@ -631,11 +673,20 @@ WindowResult WindowService::executeOpenWindow(OpenWindowRequest& request)
 
     try
     {
-        const auto window_id = backend_.openWindow(title, config.width, config.height,
-                                                   resolved_monitor->monitor.monitor_index, config.fullscreen);
+        const auto window_id = backend_.openWindow(title, config.width, config.height);
         if (window_id == win::kInvalidWindowId)
         {
             return WindowResult::failure(config.role, "window_open_failed", "window backend returned invalid id");
+        }
+        const auto placement = placement_service_.place(
+            WindowIdentity{window_id, config.role, title, static_cast<int>(getpid())},
+            resolved_monitor->monitor.monitor_index, config.fullscreen, config.width, config.height);
+        if (!placement.ok)
+        {
+            (void)backend_.closeWindow(window_id);
+            return WindowResult::failure(
+                config.role, placement.error_code.empty() ? "window_placement_failed" : placement.error_code,
+                placement.error_message.empty() ? "window placement failed" : placement.error_message);
         }
         role_to_window_id_[config.role] = window_id;
         role_to_window_title_[config.role] = title;

@@ -1,0 +1,4 @@
+add_library(stereo_scan_service STATIC stereo_scan_service.cpp)
+target_include_directories(stereo_scan_service PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(stereo_scan_service PUBLIC cmd_commands common PRIVATE camera_service window_service projector_service scan_service decode_service reconstruction cv_lib)
+target_compile_features(stereo_scan_service PUBLIC cxx_std_20)

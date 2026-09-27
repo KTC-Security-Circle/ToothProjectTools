@@ -43,6 +43,9 @@ struct ResolvedMonitor
     std::size_t detected_count{0};
 };
 
+/// niri `msg --json outputs` のpure parser。mapped outputを座標順で返す。
+std::vector<MonitorInfo> parseNiriMonitorOutput(const std::string& json);
+
 class MonitorService
 {
   public:

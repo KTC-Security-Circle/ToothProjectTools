@@ -6,7 +6,7 @@
 
 Windowを作成し、window roleへbindする。
 
-`monitor_index` は0-basedで、省略時はprimary monitorを使用する。範囲外はprimary monitorへfallbackし、monitorが存在しない場合は `monitor_not_found` を返す。既存schemaとの互換性のため、open response/eventには `monitor_index` を追加しない。
+`monitor_index` は0-basedで、省略時はprimary monitorを使用する。Window生成後、platform固有の `WindowPlacementBackend` が指定monitorへの配置とfullscreenを適用する。配置に失敗したWindowはcloseされ、role bindingも残らない。範囲外はprimary monitorへfallbackし、monitorが存在しない場合は `monitor_not_found` を返す。既存schemaとの互換性のため、open response/eventには `monitor_index` を追加しない。
 
 ### args(JSONL)
 
@@ -26,6 +26,16 @@ Windowを作成し、window roleへbindする。
 | `fullscreen` | 任意 | fullscreen指定。 |
 
 ### return
+
+呼び出し側が指定する配置情報は `monitor_index` と `fullscreen` だけである。OS、window manager、native window ID、相対方向やshortcutはpublic contractに含まれない。
+
+配置backendの実装状況:
+
+| platform/session | 状態 |
+| --- | --- |
+| Linux + X11 | 対応。PIDとtitleでnative Windowを一意解決し、X11座標へ配置する。 |
+| Wayland + niri | 対応。niri IPCでPIDとtitleから対象を一意解決し、window IDとoutput名を指定して配置する。 |
+| その他の環境 | 未対応。`window_placement_unsupported` を返す。 |
 
 ```json
 {"id":"40","ok":true,"window_role":"projector","window_id":"1","width":"1920","height":"1080"}
@@ -63,6 +73,10 @@ Window backend。
 | `missing_field` | 必須fieldがない。 |
 | `invalid_command` | sizeまたはmonitor_indexが不正である。 |
 | `window_open_failed` | Windowを作成できない。 |
+| `window_placement_failed` | Window生成後の配置に失敗した。生成済みWindowはcloseされる。 |
+| `window_placement_unsupported` | sessionに利用可能な配置backendがない。 |
+| `window_native_identity_not_found` | native Windowを一意に特定できない。 |
+| `window_native_identity_ambiguous` | native Window候補が複数あり安全に特定できない。 |
 | `window_already_open` | roleが既にopen済みである。 |
 | `scan_resource_busy` | scanが対象window roleを使用中である。 |
 

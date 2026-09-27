@@ -89,8 +89,9 @@ ScanService::~ScanService()
 
 ScanResult ScanService::startScan(const ScanStartConfig& config)
 {
-    if (config.projector_role.empty() || config.left_role.empty() || config.photodiode_device.empty() ||
-        config.photodiode_baud <= 0 || config.sync_timeout_ms <= 0 || config.sync_guard_ms < 0 ||
+    if (config.projector_role.empty() || config.left_role.empty() || config.delay_ms < 0 ||
+        (config.sync_mode == ScanSyncMode::photodiode && (config.photodiode_device.empty() ||
+         config.photodiode_baud <= 0 || config.sync_guard_ms < 0)) || config.sync_timeout_ms <= 0 ||
         config.max_patterns < 0)
     {
         return ScanResult::failure(config.scan_id.value_or(std::string{}), "invalid_scan_config",
@@ -125,7 +126,7 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
     {
         return ScanResult::failure(scan_id, "pattern_not_generated", "patterns are not generated");
     }
-    if (!projector::canPlacePhotodiodeMarker(snapshot->surface))
+    if (config.sync_mode == ScanSyncMode::photodiode && !projector::canPlacePhotodiodeMarker(snapshot->surface))
     {
         return ScanResult::failure(scan_id, "photodiode_marker_margin_unavailable",
                                    "photodiode synchronization requires a 32x32 projector margin outside the active pattern");
@@ -316,26 +317,31 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
     }
 
     std::unique_ptr<structured_light::sync::PhotodiodeTransport> photodiode_transport;
-    try
+    std::unique_ptr<structured_light::sync::PhotodiodeSyncSource> photodiode_source;
+    if (config.sync_mode == ScanSyncMode::photodiode)
     {
-        photodiode_transport = photodiode_factory_(config.photodiode_device, config.photodiode_baud);
+        try
+        {
+            photodiode_transport = photodiode_factory_(config.photodiode_device, config.photodiode_baud);
+            photodiode_source = std::make_unique<structured_light::sync::PhotodiodeSyncSource>(*photodiode_transport);
+        }
+        catch (const PhotodiodeTransportError& error)
+        {
+            std::lock_guard lock(mutex_);
+            state_ = ScanState::failed;
+            last_error_code_ = error.code();
+            last_error_message_ = error.what();
+            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                      {"error_message", last_error_message_}});
+            return;
+        }
     }
-    catch (const PhotodiodeTransportError& error)
-    {
-        std::lock_guard lock(mutex_);
-        state_ = ScanState::failed;
-        last_error_code_ = error.code();
-        last_error_message_ = error.what();
-        pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                  {"error_message", last_error_message_}});
-        return;
-    }
-    structured_light::sync::PhotodiodeSyncSource photodiode_source(*photodiode_transport);
 
     // MCUは状態変化時だけeventを送る。scan開始前にmarkerをwhiteへ確立し、
     // pattern 0 (black)が必ずtransitionになるようpre-armする。
     try
     {
+        if (!photodiode_source) throw std::logic_error("delay mode does not require photodiode pre-arm");
         const auto black_result = projector_service_.showPattern(config.projector_role, 0);
         if (!black_result.ok)
         {
@@ -344,7 +350,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         const auto black_shown_at = std::chrono::steady_clock::now();
         // 現在すでにblackならMCUはeventを送らないため、black確認timeoutは許容する。
         // 続くwhite eventだけを必須にし、pattern 0のblack transitionを保証する。
-        (void)photodiode_source.waitForTransition(
+        (void)photodiode_source->waitForTransition(
             structured_light::sync::MarkerState::black, black_shown_at,
             std::chrono::milliseconds(std::min(config.sync_timeout_ms, 200)));
 
@@ -354,7 +360,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             throw PhotodiodeTransportError("pattern_show_failed", "failed to show white pre-arm pattern");
         }
         const auto white_shown_at = std::chrono::steady_clock::now();
-        const auto white_event = photodiode_source.waitForTransition(
+        const auto white_event = photodiode_source->waitForTransition(
             structured_light::sync::MarkerState::white, white_shown_at,
             std::chrono::milliseconds(config.sync_timeout_ms));
         if (!white_event)
@@ -371,6 +377,10 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
                                   {"error_message", last_error_message_}});
         return;
+    }
+    catch (const std::logic_error&)
+    {
+        // Delay synchronization deliberately has no serial transport or pre-arm phase.
     }
 
     for (int index = 0; index < pattern_count; ++index)
@@ -422,37 +432,40 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         }
 
         const auto show_timestamp = std::chrono::steady_clock::now();
-        const auto expected = (index % 2 == 0) ? structured_light::sync::MarkerState::black
-                                               : structured_light::sync::MarkerState::white;
-        std::optional<structured_light::sync::SyncEvent> event;
-        try
+        auto selected_at = show_timestamp + std::chrono::milliseconds(config.delay_ms);
+        if (config.sync_mode == ScanSyncMode::photodiode)
         {
-            event = photodiode_source.waitForTransition(expected, show_timestamp,
-                                                        std::chrono::milliseconds(config.sync_timeout_ms));
+            const auto expected = (index % 2 == 0) ? structured_light::sync::MarkerState::black
+                                                   : structured_light::sync::MarkerState::white;
+            std::optional<structured_light::sync::SyncEvent> event;
+            try
+            {
+                event = photodiode_source->waitForTransition(expected, show_timestamp,
+                                                             std::chrono::milliseconds(config.sync_timeout_ms));
+            }
+            catch (const PhotodiodeTransportError& error)
+            {
+                std::lock_guard lock(mutex_);
+                state_ = ScanState::failed;
+                last_error_code_ = error.code();
+                last_error_message_ = error.what();
+                pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                           {"error_message", last_error_message_}});
+                return;
+            }
+            if (!event)
+            {
+                std::lock_guard lock(mutex_);
+                state_ = ScanState::failed;
+                last_error_code_ = "photodiode_timeout";
+                last_error_message_ = "Photodiode eventをtimeout内に受信できませんでした";
+                pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                           {"error_message", last_error_message_}});
+                return;
+            }
+            selected_at = structured_light::sync::selectionTime(
+                *event, std::chrono::milliseconds(config.sync_guard_ms));
         }
-        catch (const PhotodiodeTransportError& error)
-        {
-            std::lock_guard lock(mutex_);
-            state_ = ScanState::failed;
-            last_error_code_ = error.code();
-            last_error_message_ = error.what();
-            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                       {"error_message", last_error_message_}});
-            return;
-        }
-        if (!event)
-        {
-            std::lock_guard lock(mutex_);
-            state_ = ScanState::failed;
-            last_error_code_ = "photodiode_timeout";
-            last_error_message_ = "Photodiode eventをtimeout内に受信できませんでした";
-            pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                       {"error_message", last_error_message_}});
-            return;
-        }
-
-        const auto selected_at = structured_light::sync::selectionTime(
-            *event, std::chrono::milliseconds(config.sync_guard_ms));
         std::optional<video::FrameSample> selected_left;
         std::optional<video::FrameSample> selected_right;
         const auto selection_deadline = std::chrono::steady_clock::now() +
@@ -471,7 +484,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             std::lock_guard lock(mutex_);
             state_ = ScanState::failed;
             last_error_code_ = "camera_frame_timeout";
-            last_error_message_ = "Photodiode timestamp + guard以降のcamera frameを取得できませんでした";
+            last_error_message_ = "selected_at以降のcamera frameを取得できませんでした";
             pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
                                        {"error_message", last_error_message_}});
             return;
@@ -579,11 +592,20 @@ bool ScanService::writeMetadata(const ScanStartConfig& config, const std::string
                << "  \"projector_role\": \"" << jsonEscape(config.projector_role) << "\",\n"
                << "  \"left_role\": \"" << jsonEscape(config.left_role) << "\",\n"
                << "  \"right_role\": \"" << jsonEscape(config.right_role) << "\",\n"
-               << "  \"sync\": \"photodiode\",\n"
-               << "  \"photodiode_device\": \"" << jsonEscape(config.photodiode_device) << "\",\n"
-               << "  \"photodiode_baud\": " << config.photodiode_baud << ",\n"
-               << "  \"sync_timeout_ms\": " << config.sync_timeout_ms << ",\n"
-               << "  \"sync_guard_ms\": " << config.sync_guard_ms << ",\n"
+               << "  \"sync_mode\": \""
+               << (config.sync_mode == ScanSyncMode::delay ? "delay" : "photodiode") << "\",\n";
+        if (config.sync_mode == ScanSyncMode::delay)
+        {
+            output << "  \"delay_ms\": " << config.delay_ms << ",\n";
+        }
+        else
+        {
+            output << "  \"photodiode_device\": \"" << jsonEscape(config.photodiode_device) << "\",\n"
+                   << "  \"photodiode_baud\": " << config.photodiode_baud << ",\n"
+                   << "  \"sync_timeout_ms\": " << config.sync_timeout_ms << ",\n"
+                   << "  \"guard_ms\": " << config.sync_guard_ms << ",\n";
+        }
+        output
                << "  \"pattern_count\": " << pattern_count << ",\n"
                << "  \"projector_width\": " << code_width << ",\n"
                << "  \"projector_height\": " << code_height << ",\n"

@@ -36,6 +36,8 @@ class PhotodiodeTransport;
 namespace scan
 {
 
+enum class ScanSyncMode { delay, photodiode };
+
 struct ScanStartConfig
 {
     /// scan_id <std::optional<std::string>>: scan session識別子。未指定時は自動生成する。
@@ -53,6 +55,8 @@ struct ScanStartConfig
     /// output_dir <std::filesystem::path>: scan dataset保存先directory。
     std::filesystem::path output_dir;
 
+    ScanSyncMode sync_mode{ScanSyncMode::delay};
+    int delay_ms{100};
     std::string photodiode_device{"/dev/ttyUSB0"};
     int photodiode_baud{115200};
     int sync_timeout_ms{1000};

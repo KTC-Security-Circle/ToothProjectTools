@@ -1,6 +1,7 @@
 #include "headless/headless_command_executor.hpp"
 
 #include "scan/scan_service.hpp"
+#include "stereo_scan/stereo_scan_service.hpp"
 
 #include <string>
 #include <type_traits>
@@ -40,13 +41,15 @@ HeadlessCommandExecutor::HeadlessCommandExecutor(
     video::CameraManager& cameras, calib::Calibrator* calibrator,
     calib::StereoCalibrator* stereo_calibrator, calib::StereoData& stereo_data,
     reconstruction::ReconstructionService& reconstruction_service,
-    calib::projector::CameraProjectorCalibrationService& camera_projector_calibration_service)
+    calib::projector::CameraProjectorCalibrationService& camera_projector_calibration_service,
+    stereo_scan::StereoScanService& stereo_scan_service)
     : camera_service_(camera_service), window_service_(window_service), projector_service_(projector_service),
       scan_service_(scan_service), scan_dataset_validator_(scan_dataset_validator), decode_service_(decode_service),
       capture_service_(capture_service), cameras_(cameras), calibrator_(calibrator),
       stereo_calibrator_(stereo_calibrator), stereo_data_(stereo_data),
       reconstruction_service_(reconstruction_service),
-      camera_projector_calibration_service_(camera_projector_calibration_service)
+      camera_projector_calibration_service_(camera_projector_calibration_service),
+      stereo_scan_service_(stereo_scan_service)
 {
 }
 
@@ -92,5 +95,10 @@ std::optional<common::CommandResult> HeadlessCommandExecutor::validateResourceAc
 common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdCalibCapture&)
 {
     return common::notHandled();
+}
+
+common::CommandResult HeadlessCommandExecutor::executeTyped(const cmd::CmdStereoScan& command)
+{
+    return stereo_scan_service_.start(command);
 }
 } // namespace headless

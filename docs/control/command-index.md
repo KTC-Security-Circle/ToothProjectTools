@@ -1,6 +1,8 @@
 # コマンド一覧
 
-public JSONL commandは31件（既存30件 + `calib_detect_corners`）である。
+public JSONL commandは32件である。低レベルcommandは維持し、`stereo_scan` がFacadeとして追加されている。
+
+初めて利用する場合は[Stereo Scan Quickstart](./stereo-scan-quickstart.md)を参照する。
 
 | command | 分類 | args(JSONL) | return | event | 読むArtifact | 書くArtifact | 必要なruntime resource | 実装状態 | 詳細docs |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -18,7 +20,7 @@ public JSONL commandは31件（既存30件 + `calib_detect_corners`）である�
 | `mono_calibrate` | ファイル処理 | `id`, `cmd`, `image_folder`, `output_file`, board fields | `role`, `output_file`, `rms` | `mono_calibration_finished` | calibration images | mono calibration file | `apply_to_camera=true`時のみopen済みcamera role | 実装済み | [calibration.md](./commands/calibration.md#mono_calibrate) |
 | `stereo_calibrate` | ファイル処理 | `id`, `cmd`, `left_role`, `right_role`, `left_dir`, `right_dir`, `output_file` | `left_role`, `right_role`, `output_file`, `rms` | `stereo_calibration_finished` | calibration images | stereo calibration file | 現在はopen済みcamera roles | 一部実装 | [calibration.md](./commands/calibration.md#stereo_calibrate) |
 | `camera_projector_calibrate` | ファイル処理 | `id`, `cmd`, `observations_dir`, `camera_calibration_file`, `output_file`, board/movement fields | pose counts、RMS、projector size | なし | 保存済みscan/decode observation | Camera–Projector calibration file | なし | 実装済み | [calibration.md](./commands/calibration.md#camera_projector_calibrate) |
-| `open_window` | Window操作 | `id`, `cmd`, `window_role`, `width`, `height` | `window_role`, `window_id`, `width`, `height` | `window_opened` | なし | なし | Window backend | 実装済み | [projector.md](./commands/projector.md#open_window) |
+| `open_window` | Window操作 | `id`, `cmd`, `window_role`, `width`, `height`, optional `monitor_index`, `fullscreen` | `window_role`, `window_id`, `width`, `height` | `window_opened` | なし | なし | Window backend、Window placement backend | 実装済み（X11/niri） | [projector.md](./commands/projector.md#open_window) |
 | `close_window` | Window操作 | `id`, `cmd`, `window_role` | `window_role`, `window_id` | `window_closed` | なし | なし | open済みwindow role | 実装済み | [projector.md](./commands/projector.md#close_window) |
 | `list_monitors` | Window操作 | `id`, `cmd` | `monitor_count`, `monitors_json` | なし | なし | なし | monitor provider | 実装済み | [projector.md](./commands/projector.md#list_monitors) |
 | `configure_projector_surface` | プロジェクタ表示 | `id`, `cmd`, `projector_role`, `monitor_index`, `width`, `height` | surface fields | `projector_surface_configured` | なし | なし | open済みprojector role、monitor | 実装済み | [projector.md](./commands/projector.md#configure_projector_surface) |
@@ -29,6 +31,7 @@ public JSONL commandは31件（既存30件 + `calib_detect_corners`）である�
 | `next_pattern` | プロジェクタ表示 | `id`, `cmd`, `projector_role` | `pattern_index` | `pattern_shown` | runtime pattern | なし | open済みprojector role、Window | 実装済み | [projector.md](./commands/projector.md#next_pattern) |
 | `prev_pattern` | プロジェクタ表示 | `id`, `cmd`, `projector_role` | `pattern_index` | `pattern_shown` | runtime pattern | なし | open済みprojector role、Window | 実装済み | [projector.md](./commands/projector.md#prev_pattern) |
 | `scan_start` | 状態管理 | `id`, `cmd`, `projector_role`, `left_role`, `right_role`, `output_dir` | scan status | scan events | runtime pattern | scan dataset | camera roles、projector role、Window | 実装済み | [scan.md](./commands/scan.md#scan_start) |
+| `stereo_scan` | Facade | `id`, `cmd`, `monitor_index`（他は任意） | stream URL、予定PLY path | `stereo_scan_*` | stereo calibration | scan/decode/PLY | cameras、Window、Projector | 実装済み | [stereo-scan.md](./commands/stereo-scan.md) |
 | `scan_status` | 状態管理 | `id`, `cmd` | scan status | なし | なし | なし | ScanService state | 実装済み | [scan.md](./commands/scan.md#scan_status) |
 | `scan_stop` | 状態管理 | `id`, `cmd` | scan status | `scan_stopping`, `scan_stopped` | なし | なし | ScanService worker | 実装済み | [scan.md](./commands/scan.md#scan_stop) |
 | `scan_validate` | ファイル処理 | `id`, `cmd`, `input_dir`, `allow_partial` | validation fields | なし | scan dataset | なし | なし | 実装済み | [scan-dataset.md](./commands/scan-dataset.md#scan_validate) |
