@@ -43,6 +43,8 @@ BACKEND_ERR="${WORK_DIR}/backend.stderr.log"
 BACKEND_PID=""
 
 LAST_RESPONSE=""
+CAPTURE_ATTEMPT_SEQ=0
+CURRENT_ATTEMPT_PREFIX=""
 
 log()  { printf '[INFO] %s\n' "$*"; }
 ok()   { printf '[OK] %s\n' "$*"; }
@@ -225,34 +227,82 @@ show_reference_pattern() {
       --arg id "${id}" \
       --arg role "${PROJECTOR_ROLE}" \
       --argjson index "${white_index}" \
-      '{id:$id,cmd:"show_pattern",projector_role:$role,index:$index}'
+      '{
+        id:$id,
+        cmd:"show_pattern",
+        projector_role:$role,
+        index:$index,
+        photodiode_marker_mode:"sync"
+      }'
   )"
 
   request "${id}" "${json}"
+}
+
+show_locator_pattern() {
+  local id="$1"
+  local white_index="$2"
+  local json
+
+  json="$(
+    jq -cn \
+      --arg id "${id}" \
+      --arg role "${PROJECTOR_ROLE}" \
+      --argjson index "${white_index}" \
+      '{
+        id:$id,
+        cmd:"show_pattern",
+        projector_role:$role,
+        index:$index,
+        photodiode_marker_mode:"locate"
+      }'
+  )"
+
+  request "${id}" "${json}"
+}
+
+next_failed_dir() {
+  local pose_name="$1"
+  local timestamp candidate suffix=0
+
+  timestamp="$(date +%Y%m%d_%H%M%S)"
+  candidate="${OBSERVATIONS_DIR}/.${pose_name}.failed.${timestamp}"
+  while [[ -e "${candidate}" ]]; do
+    ((suffix += 1))
+    candidate="${OBSERVATIONS_DIR}/.${pose_name}.failed.${timestamp}.${suffix}"
+  done
+  printf '%s' "${candidate}"
 }
 
 capture_pose() {
   local pose_index="$1"
   local white_index="$2"
 
-  local pose_name tmp_dir final_dir failed_dir scan_id
+  local pose_name tmp_dir final_dir scan_id attempt_number attempt_serial attempt_prefix
   local id json
 
   printf -v pose_name 'pose_%03d' "${pose_index}"
+  ((CAPTURE_ATTEMPT_SEQ += 1))
+  attempt_number="${CAPTURE_ATTEMPT_SEQ}"
+  printf -v attempt_serial '%03d' "${attempt_number}"
+  attempt_prefix="${pose_name}-attempt_${attempt_serial}"
+  CURRENT_ATTEMPT_PREFIX="${attempt_prefix}"
+
   tmp_dir="${OBSERVATIONS_DIR}/.${pose_name}.tmp"
   final_dir="${OBSERVATIONS_DIR}/${pose_name}"
-  scan_id="cp_${pose_name}"
+  scan_id="cp_${pose_name}_attempt_${attempt_serial}"
 
   rm -rf -- "${tmp_dir}"
   mkdir -p -- "${tmp_dir}"
 
+  log "${pose_name} attempt=${attempt_number}"
   log "${pose_name}: reference_before"
 
-  id="${pose_name}-white-before"
+  id="${attempt_prefix}-white-before"
   show_reference_pattern "${id}" "${white_index}" || return 1
   sleep "${REFERENCE_SETTLE_SEC}"
 
-  id="${pose_name}-before"
+  id="${attempt_prefix}-before"
   json="$(
     jq -cn \
       --arg id "${id}" \
@@ -264,7 +314,7 @@ capture_pose() {
 
   log "${pose_name}: Gray Code scan"
 
-  id="${pose_name}-scan"
+  id="${attempt_prefix}-scan"
   json="$(
     jq -cn \
       --arg id "${id}" \
@@ -295,11 +345,11 @@ capture_pose() {
   log "${pose_name}: reference_after"
 
   # Chessboard corner検出用referenceは十分に明るいFULL WHITEで統一する。
-  id="${pose_name}-white-after"
+  id="${attempt_prefix}-white-after"
   show_reference_pattern "${id}" "${white_index}" || return 1
   sleep "${REFERENCE_SETTLE_SEC}"
 
-  id="${pose_name}-after"
+  id="${attempt_prefix}-after"
   json="$(
     jq -cn \
       --arg id "${id}" \
@@ -311,7 +361,7 @@ capture_pose() {
 
   log "${pose_name}: decode"
 
-  id="${pose_name}-decode"
+  id="${attempt_prefix}-decode"
   json="$(
     jq -cn \
       --arg id "${id}" \
@@ -498,7 +548,9 @@ initialize_runtime() {
   (( pattern_count >= 2 )) || die "invalid generated pattern_count: ${pattern_count}"
 
   white_index=$((pattern_count - 2))
-  show_reference_pattern "init-white" "${white_index}" || die "failed to show white reference pattern"
+  show_locator_pattern "init-locator" "${white_index}" || die "failed to show red Photodiode locator"
+  printf '[LOCATOR] RED marker displayed\n'
+  printf '[LOCATOR] Place the Photodiode at marker center before pressing SPACE\n'
 
   WHITE_INDEX="${white_index}"
 }
@@ -552,12 +604,17 @@ main() {
           ((pose_index += 1))
         else
           printf -v pose_name 'pose_%03d' "${pose_index}"
-          failed_dir="${OBSERVATIONS_DIR}/.${pose_name}.failed.$(date +%Y%m%d_%H%M%S)"
+          failed_dir="$(next_failed_dir "${pose_name}")"
           if [[ -d "${OBSERVATIONS_DIR}/.${pose_name}.tmp" ]]; then
             mv -- "${OBSERVATIONS_DIR}/.${pose_name}.tmp" "${failed_dir}"
             warn "failed pose kept outside calibration input: ${failed_dir}"
           fi
           warn "${pose_name} was not accepted. Press SPACE to retry the same pose number."
+        fi
+        if show_locator_pattern "${CURRENT_ATTEMPT_PREFIX}-locator-wait" "${white_index}"; then
+          printf '[LOCATOR] RED marker displayed\n'
+        else
+          warn "failed to restore red Photodiode locator"
         fi
         ;;
       *)
