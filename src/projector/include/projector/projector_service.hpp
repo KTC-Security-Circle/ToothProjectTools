@@ -66,6 +66,8 @@ struct ProjectorSurfaceRequest
 
 bool canPlacePhotodiodeMarker(const ProjectorSurface& surface);
 int photodiodeMarkerValue(std::size_t pattern_index);
+int photodiodeMarkerValue(std::size_t pattern_index, std::size_t pattern_count);
+std::string patternKind(std::size_t pattern_index, std::size_t pattern_count);
 cv::Rect photodiodeMarkerRect(const ProjectorSurface& surface, PhotodiodeMarkerMode mode);
 void drawPhotodiodeMarker(cv::Mat& canvas, const ProjectorSurface& surface, std::size_t pattern_index,
                           PhotodiodeMarkerMode mode);
@@ -274,7 +276,7 @@ class ProjectorService
     ProjectorResult showPatternLocked(const std::string& projector_role, int index,
                                       std::optional<PhotodiodeMarkerMode> marker_mode = std::nullopt);
     static cv::Mat composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface, int pattern_index,
-                                        PhotodiodeMarkerMode marker_mode);
+                                        int pattern_count, PhotodiodeMarkerMode marker_mode);
 
     /// window_service_ <win::WindowService&>: pattern表示先window service。
     win::WindowService& window_service_;

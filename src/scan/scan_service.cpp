@@ -206,8 +206,10 @@ ScanResult ScanService::startScan(const ScanStartConfig& config)
         worker_.request_stop();
         worker_ = std::jthread{};
     }
-    worker_ = std::jthread([this, worker_config, scan_id, pattern_count = scan_pattern_count](
-                               std::stop_token token) { workerLoop(token, worker_config, scan_id, pattern_count); });
+    worker_ = std::jthread([this, worker_config, scan_id, pattern_count = scan_pattern_count,
+                            generated_pattern_count = snapshot->pattern_count](std::stop_token token) {
+        workerLoop(token, worker_config, scan_id, pattern_count, generated_pattern_count);
+    });
 
     auto result = scanStatus(scan_id);
     result.ok = true;
@@ -463,7 +465,8 @@ bool ScanService::isWindowRoleBusy(const std::string& window_role) const
     return active_window_role_ == window_role;
 }
 
-void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config, std::string scan_id, int pattern_count)
+void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config, std::string scan_id,
+                             int pattern_count, int generated_pattern_count)
 {
     pushEvent("scan_started", {{"scan_id", scan_id},
                                {"projector_role", config.projector_role},
@@ -570,6 +573,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         return;
     }
 
+    auto previous_marker_state = structured_light::sync::MarkerState::white;
     for (int index = 0; index < pattern_count; ++index)
     {
         if (stop_token.stop_requested())
@@ -590,6 +594,64 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         {
             std::lock_guard lock(mutex_);
             current_index_ = index;
+        }
+
+        const auto marker_value = projector::photodiodeMarkerValue(
+            static_cast<std::size_t>(index), static_cast<std::size_t>(generated_pattern_count));
+        const auto expected = marker_value == 0 ? structured_light::sync::MarkerState::black
+                                                : structured_light::sync::MarkerState::white;
+        const auto expected_name = expected == structured_light::sync::MarkerState::black ? "black" : "white";
+        const auto pattern_kind = projector::patternKind(static_cast<std::size_t>(index),
+                                                         static_cast<std::size_t>(generated_pattern_count));
+
+        // FULL WHITE follows an odd Gray Code pattern, so WHITE would otherwise be displayed twice.
+        // Establish the opposite state first; the reference frame itself is still captured at its original index.
+        if (expected == previous_marker_state)
+        {
+            const int prearm_index = expected == structured_light::sync::MarkerState::white ? 0 : 1;
+            const auto prearm_expected = expected == structured_light::sync::MarkerState::white
+                                             ? structured_light::sync::MarkerState::black
+                                             : structured_light::sync::MarkerState::white;
+            const auto prearm_result = projector_service_.showPattern(config.projector_role, prearm_index);
+            const auto prearm_shown_at = std::chrono::steady_clock::now();
+            std::optional<structured_light::sync::SyncEvent> prearm_event;
+            try
+            {
+                if (prearm_result.ok)
+                    prearm_event = photodiode_source.waitForTransition(
+                        prearm_expected, prearm_shown_at, std::chrono::milliseconds(config.sync_timeout_ms));
+            }
+            catch (const PhotodiodeTransportError& error)
+            {
+                std::lock_guard lock(mutex_);
+                state_ = ScanState::failed;
+                last_error_code_ = error.code();
+                last_error_message_ = error.what();
+                pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                           {"error_message", last_error_message_},
+                                           {"pattern_index", std::to_string(index)},
+                                           {"pattern_kind", pattern_kind},
+                                           {"expected_marker_state", expected_name},
+                                           {"captured_count", std::to_string(captured_count_)},
+                                           {"pattern_count", std::to_string(pattern_count)}});
+                return;
+            }
+            if (!prearm_result.ok || !prearm_event)
+            {
+                std::lock_guard lock(mutex_);
+                state_ = ScanState::failed;
+                last_error_code_ = prearm_result.ok ? "photodiode_timeout" : "pattern_show_failed";
+                last_error_message_ = "Photodiode reference pre-arm transitionを確立できませんでした";
+                pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                                           {"error_message", last_error_message_},
+                                           {"pattern_index", std::to_string(index)},
+                                           {"pattern_kind", pattern_kind},
+                                           {"expected_marker_state", expected_name},
+                                           {"captured_count", std::to_string(captured_count_)},
+                                           {"pattern_count", std::to_string(pattern_count)}});
+                return;
+            }
+            previous_marker_state = prearm_expected;
         }
 
         const auto show_result = projector_service_.showPattern(config.projector_role, index);
@@ -613,14 +675,22 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             pushEvent("scan_failed", {{"scan_id", scan_id},
                                       {"error_code", error_code},
                                       {"error_message", error_message},
+                                      {"pattern_index", std::to_string(index)},
+                                      {"pattern_kind", pattern_kind},
+                                      {"expected_marker_state", expected_name},
                                       {"captured_count", std::to_string(captured)},
+                                      {"pattern_count", std::to_string(pattern_count)},
                                       {"current_index", std::to_string(current)}});
             return;
         }
 
         const auto show_timestamp = std::chrono::steady_clock::now();
-        const auto expected = (index % 2 == 0) ? structured_light::sync::MarkerState::black
-                                               : structured_light::sync::MarkerState::white;
+        pushEvent("scan_pattern_sync", {{"scan_id", scan_id},
+                                         {"pattern_index", std::to_string(index)},
+                                         {"pattern_kind", pattern_kind},
+                                         {"expected_marker_state", expected_name},
+                                         {"captured_count", std::to_string(captured_count_)},
+                                         {"pattern_count", std::to_string(pattern_count)}});
         std::optional<structured_light::sync::SyncEvent> event;
         try
         {
@@ -634,7 +704,12 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             last_error_code_ = error.code();
             last_error_message_ = error.what();
             pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                       {"error_message", last_error_message_}});
+                                       {"error_message", last_error_message_},
+                                       {"pattern_index", std::to_string(index)},
+                                       {"pattern_kind", pattern_kind},
+                                       {"expected_marker_state", expected_name},
+                                       {"captured_count", std::to_string(captured_count_)},
+                                       {"pattern_count", std::to_string(pattern_count)}});
             return;
         }
         if (!event)
@@ -644,9 +719,15 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             last_error_code_ = "photodiode_timeout";
             last_error_message_ = "Photodiode eventをtimeout内に受信できませんでした";
             pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                       {"error_message", last_error_message_}});
+                                       {"error_message", last_error_message_},
+                                       {"pattern_index", std::to_string(index)},
+                                       {"pattern_kind", pattern_kind},
+                                       {"expected_marker_state", expected_name},
+                                       {"captured_count", std::to_string(captured_count_)},
+                                       {"pattern_count", std::to_string(pattern_count)}});
             return;
         }
+        previous_marker_state = expected;
 
         const auto selected_at = structured_light::sync::selectionTime(
             *event, std::chrono::milliseconds(config.sync_guard_ms));
@@ -670,7 +751,12 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             last_error_code_ = "camera_frame_timeout";
             last_error_message_ = "Photodiode timestamp + guard以降のcamera frameを取得できませんでした";
             pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
-                                       {"error_message", last_error_message_}});
+                                       {"error_message", last_error_message_},
+                                       {"pattern_index", std::to_string(index)},
+                                       {"pattern_kind", pattern_kind},
+                                       {"expected_marker_state", expected_name},
+                                       {"captured_count", std::to_string(captured_count_)},
+                                       {"pattern_count", std::to_string(pattern_count)}});
             return;
         }
 
@@ -703,7 +789,11 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             pushEvent("scan_failed", {{"scan_id", scan_id},
                                       {"error_code", error_code},
                                       {"error_message", error_message},
+                                      {"pattern_index", std::to_string(index)},
+                                      {"pattern_kind", pattern_kind},
+                                      {"expected_marker_state", expected_name},
                                       {"captured_count", std::to_string(captured)},
+                                      {"pattern_count", std::to_string(pattern_count)},
                                       {"current_index", std::to_string(current)}});
             return;
         }
@@ -716,6 +806,8 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         }
         pushEvent("scan_frame_captured", {{"scan_id", scan_id},
                                           {"pattern_index", std::to_string(index)},
+                                          {"pattern_kind", pattern_kind},
+                                          {"expected_marker_state", expected_name},
                                           {"captured_count", std::to_string(captured)},
                                           {"pattern_count", std::to_string(pattern_count)},
                                           {"left_path", left_path.string()},

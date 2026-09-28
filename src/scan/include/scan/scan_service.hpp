@@ -103,7 +103,8 @@ class ScanService
     bool isWindowRoleBusy(const std::string& window_role) const;
 
   private:
-    void workerLoop(std::stop_token stop_token, ScanStartConfig config, std::string scan_id, int pattern_count);
+    void workerLoop(std::stop_token stop_token, ScanStartConfig config, std::string scan_id, int pattern_count,
+                    int generated_pattern_count);
     ScanResult snapshotLocked() const;
     void pushEvent(std::string event, std::map<std::string, std::string> values);
     bool writeMetadata(const ScanStartConfig& config, const std::string& scan_id, int pattern_count, int code_width,

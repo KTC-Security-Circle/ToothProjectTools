@@ -303,12 +303,16 @@ void testStructuredLightPatternGeneration()
     const auto& black = structured_light.getPattern(pattern_count - 1);
     require(cv::countNonZero(white != 255) == 0, "StructuredLight penultimate pattern is not white");
     require(cv::countNonZero(black) == 0, "StructuredLight final pattern is not black");
-    require(projector::photodiodeMarkerValue(pattern_count - 2) ==
-                (((pattern_count - 2) % 2 == 0) ? 0 : 255),
-            "FULL WHITE marker does not follow index parity");
-    require(projector::photodiodeMarkerValue(pattern_count - 1) ==
-                (((pattern_count - 1) % 2 == 0) ? 0 : 255),
-            "FULL BLACK marker does not follow index parity");
+    require(projector::patternKind(pattern_count - 3, pattern_count) == "graycode",
+            "last Gray Code pattern kind is incorrect");
+    require(projector::patternKind(pattern_count - 2, pattern_count) == "full_white",
+            "FULL WHITE pattern kind is incorrect");
+    require(projector::patternKind(pattern_count - 1, pattern_count) == "full_black",
+            "FULL BLACK pattern kind is incorrect");
+    require(projector::photodiodeMarkerValue(pattern_count - 2, pattern_count) == 255,
+            "FULL WHITE marker is not white");
+    require(projector::photodiodeMarkerValue(pattern_count - 1, pattern_count) == 0,
+            "FULL BLACK marker is not black");
 
     bool out_of_range_thrown = false;
     try

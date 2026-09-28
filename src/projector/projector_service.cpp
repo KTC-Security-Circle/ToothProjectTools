@@ -60,6 +60,20 @@ int photodiodeMarkerValue(std::size_t pattern_index)
     return (pattern_index % 2) == 0 ? 0 : 255;
 }
 
+int photodiodeMarkerValue(std::size_t pattern_index, std::size_t pattern_count)
+{
+    if (pattern_count >= 2 && pattern_index == pattern_count - 2) return 255;
+    if (pattern_count >= 1 && pattern_index == pattern_count - 1) return 0;
+    return photodiodeMarkerValue(pattern_index);
+}
+
+std::string patternKind(std::size_t pattern_index, std::size_t pattern_count)
+{
+    if (pattern_count >= 2 && pattern_index == pattern_count - 2) return "full_white";
+    if (pattern_count >= 1 && pattern_index == pattern_count - 1) return "full_black";
+    return "graycode";
+}
+
 cv::Rect photodiodeMarkerRect(const ProjectorSurface& surface, PhotodiodeMarkerMode mode)
 {
     static_cast<void>(mode);
@@ -312,7 +326,7 @@ ProjectorResult ProjectorService::showPatternLocked(const std::string& projector
     try
     {
         const auto pattern = session->structured_light->getPattern(static_cast<size_t>(index)).clone();
-        const auto canvas = composePatternCanvas(pattern, session->surface, index, effective_mode);
+        const auto canvas = composePatternCanvas(pattern, session->surface, index, count, effective_mode);
         const auto shown = window_service_.showImage(session->window_role, canvas);
         if (!shown.ok)
         {
@@ -504,7 +518,8 @@ ProjectorSurface ProjectorService::computeSurface(const win::MonitorInfo& monito
 }
 
 cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface,
-                                               int pattern_index, PhotodiodeMarkerMode marker_mode)
+                                               int pattern_index, int pattern_count,
+                                               PhotodiodeMarkerMode marker_mode)
 {
     if (surface.surface_width <= 0 || surface.surface_height <= 0 || surface.pattern_width <= 0 ||
         surface.pattern_height <= 0 || surface.pattern_x < 0 || surface.pattern_y < 0 ||
@@ -540,7 +555,11 @@ cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const Pro
     const cv::Rect canvas_bounds{0, 0, canvas.cols, canvas.rows};
     if (!rectInside(marker, canvas_bounds))
         throw std::runtime_error("photodiode_marker_margin_unavailable");
-    drawPhotodiodeMarker(canvas, surface, static_cast<std::size_t>(pattern_index), marker_mode);
+    if (marker_mode == PhotodiodeMarkerMode::locate)
+        canvas(marker).setTo(cv::Scalar(0, 0, 255));
+    else
+        canvas(marker).setTo(cv::Scalar::all(photodiodeMarkerValue(
+            static_cast<std::size_t>(pattern_index), static_cast<std::size_t>(pattern_count))));
     return canvas;
 }
 

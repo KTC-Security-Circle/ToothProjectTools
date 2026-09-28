@@ -163,7 +163,12 @@ wait_scan_terminal() {
     )"
     if [[ -n "${failed}" ]]; then
       printf '\n' >&2
-      err "scan failed: $(jq -r '.error_code // "unknown_error"' <<<"${failed}") - $(jq -r '.error_message // ""' <<<"${failed}")"
+      err "scan failed:
+pattern=$(jq -r '.pattern_index // .current_index // "?"' <<<"${failed}")
+kind=$(jq -r '.pattern_kind // "?"' <<<"${failed}")
+expected_marker=$(jq -r '.expected_marker_state // "?"' <<<"${failed}")
+captured=$(jq -r '.captured_count // "?"' <<<"${failed}")/$(jq -r '.pattern_count // "?"' <<<"${failed}")
+error=$(jq -r '.error_code // "unknown_error"' <<<"${failed}") - $(jq -r '.error_message // ""' <<<"${failed}")"
       return 1
     fi
 

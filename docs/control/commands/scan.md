@@ -79,10 +79,13 @@ returnは受付結果である。
 
 ```json
 {"event":"scan_started","scan_id":"session_001","projector_role":"projector","left_role":"left","right_role":"right","pattern_count":"44","output_dir":"./data/scan/session_001"}
-{"event":"scan_frame_captured","scan_id":"session_001","pattern_index":"0","captured_count":"1","pattern_count":"44","left_path":"./data/scan/session_001/left/pattern_000.png","right_path":"./data/scan/session_001/right/pattern_000.png"}
+{"event":"scan_pattern_sync","scan_id":"session_001","pattern_index":"0","pattern_kind":"graycode","expected_marker_state":"black","captured_count":"0","pattern_count":"44"}
+{"event":"scan_frame_captured","scan_id":"session_001","pattern_index":"0","pattern_kind":"graycode","expected_marker_state":"black","captured_count":"1","pattern_count":"44","left_path":"./data/scan/session_001/left/pattern_000.png","right_path":"./data/scan/session_001/right/pattern_000.png"}
 {"event":"scan_completed","scan_id":"session_001","captured_count":"44","pattern_count":"44","output_dir":"./data/scan/session_001"}
-{"event":"scan_failed","scan_id":"session_001","error_code":"capture_failed","error_message":"failed to capture frame","captured_count":"12","current_index":"12"}
+{"event":"scan_failed","scan_id":"session_001","error_code":"photodiode_timeout","error_message":"Photodiode eventをtimeout内に受信できませんでした","pattern_index":"42","pattern_kind":"full_white","expected_marker_state":"white","captured_count":"42","pattern_count":"44"}
 ```
+
+`pattern_kind` は `graycode` / `full_white` / `full_black` のいずれかである。reference patternのmarkerは投影面と同じ状態を使い、同じmarker状態が連続する境界では反対状態をpre-armしてから対象patternを表示する。pre-arm patternは保存せず、生成済みpattern 44枚（解像度によっては38枚）のindexと保存順は変更しない。
 
 ### 読むArtifact
 
