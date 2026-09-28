@@ -15,6 +15,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/core/base.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <map>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -47,19 +48,26 @@ StereoCalibrationResult failure(fs::path output_file, std::string code, std::str
 ///   directory <const std::filesystem::path&>: file一覧を取得するdirectory。
 ///
 /// Return:
-///   <std::vector<std::string>>: sort済みの通常file path一覧。
-std::vector<std::string> listRegularFiles(const fs::path& directory)
+///   <std::map<std::string, std::string>>: filenameからpathへのsort済みmap。
+std::map<std::string, std::string> listRegularFilesByName(const fs::path& directory)
 {
-    std::vector<std::string> files;
+    std::map<std::string, std::string> files;
     for (const auto& entry : fs::directory_iterator(directory))
     {
         if (entry.is_regular_file())
         {
-            files.push_back(entry.path().string());
+            files.emplace(entry.path().filename().string(), entry.path().string());
         }
     }
-    std::sort(files.begin(), files.end());
     return files;
+}
+
+bool sameBoardConfig(const file::MonoCalibrationFile& left, const file::MonoCalibrationFile& right)
+{
+    constexpr double kSquareTolerance = 1e-6;
+    return left.board_corners_x == right.board_corners_x && left.board_corners_y == right.board_corners_y &&
+           std::abs(left.square_size_mm - right.square_size_mm) <=
+               kSquareTolerance * std::max({1.0, std::abs(left.square_size_mm), std::abs(right.square_size_mm)});
 }
 
 /// @brief calibration結果fileの親directoryを作成する。
@@ -144,6 +152,27 @@ StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCa
     cv::Mat K2 = right_calibration->K;
     cv::Mat D2 = right_calibration->D;
 
+    if (left_calibration->image_width <= 0 || left_calibration->image_height <= 0 ||
+        right_calibration->image_width <= 0 || right_calibration->image_height <= 0 ||
+        left_calibration->board_corners_x <= 0 || left_calibration->board_corners_y <= 0 ||
+        right_calibration->board_corners_x <= 0 || right_calibration->board_corners_y <= 0 ||
+        left_calibration->square_size_mm <= 0.0 || right_calibration->square_size_mm <= 0.0)
+    {
+        return failure(output_file, "calibration_file_invalid",
+                       "stereo calibration requires image size and board configuration in both mono files");
+    }
+    if (left_calibration->image_width != right_calibration->image_width ||
+        left_calibration->image_height != right_calibration->image_height)
+    {
+        return failure(output_file, "calibration_file_invalid", "left/right mono calibration image sizes differ");
+    }
+    if (!sameBoardConfig(*left_calibration, *right_calibration))
+    {
+        return failure(output_file, "calibration_file_invalid", "left/right mono calibration board configurations differ");
+    }
+    stereo_calibrator->setBoardConfig({{left_calibration->board_corners_x, left_calibration->board_corners_y},
+                                       static_cast<float>(left_calibration->square_size_mm)});
+
     if (command.apply_to_camera)
     {
         auto* cL = cameras.get(command.left_cam_id);
@@ -172,15 +201,30 @@ StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCa
     LOG_INFO("step5: Stereo: 左右画像pairの計算");
 
 
-    const auto fL = listRegularFiles(left_dir);
-    const auto fR = listRegularFiles(right_dir);
-    if (fL.empty())
+    const auto left_files = listRegularFilesByName(left_dir);
+    const auto right_files = listRegularFilesByName(right_dir);
+    if (left_files.empty())
     {
         return failure(output_file, "calibration_image_not_found", "stereo calibration images are empty");
     }
-    if (fL.size() != fR.size())
+    if (left_files.size() != right_files.size())
     {
         return failure(output_file, "stereo_image_pair_mismatch", "left/right calibration image counts do not match");
+    }
+    std::vector<std::string> fL;
+    std::vector<std::string> fR;
+    fL.reserve(left_files.size());
+    fR.reserve(right_files.size());
+    for (const auto& [name, left_path] : left_files)
+    {
+        const auto right = right_files.find(name);
+        if (right == right_files.end())
+        {
+            return failure(output_file, "stereo_image_pair_mismatch",
+                           "left/right calibration image filenames do not match");
+        }
+        fL.push_back(left_path);
+        fR.push_back(right->second);
     }
 
     const auto left_image_size = firstImageSize(fL);
@@ -201,13 +245,6 @@ StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCa
     {
         return failure(output_file, "calibration_image_size_mismatch", "right mono calibration image size does not match stereo images");
     }
-    if (left_calibration->image_width > 0 && right_calibration->image_width > 0 &&
-        (left_calibration->image_width != right_calibration->image_width ||
-         left_calibration->image_height != right_calibration->image_height))
-    {
-        return failure(output_file, "calibration_image_size_mismatch", "left/right mono calibration image sizes differ");
-    }
-
     LOG_INFO("Stereo: 計算開始 {} pairs", fL.size());
     calib::StereoData res;
     double rms = 0.0;
@@ -252,8 +289,12 @@ StereoCalibrationResult calibrate(video::CameraManager& cameras, calib::StereoCa
             }
             return failure(output_file, "file_write_failed", "failed to open stereo calibration output file");
         }
-        fs_out << "version" << "0.1.0" << "image_width" << image_size.width << "image_height" << image_size.height << "RMS" << rms << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R
-               << "T" << res.T << "Q" << res.Q;
+        fs_out << "version" << "0.1.0" << "image_width" << image_size.width << "image_height" << image_size.height
+               << "board_corners_x" << left_calibration->board_corners_x << "board_corners_y"
+               << left_calibration->board_corners_y << "square_size_mm" << left_calibration->square_size_mm
+               << "RMS" << rms << "K1" << K1 << "D1" << D1 << "K2" << K2 << "D2" << D2 << "R" << res.R
+               << "T" << res.T << "R1" << res.R1 << "R2" << res.R2 << "P1" << res.P1 << "P2" << res.P2
+               << "Q" << res.Q;
         fs_out.release();
         fs::rename(*temporary_file, output_file);
     }

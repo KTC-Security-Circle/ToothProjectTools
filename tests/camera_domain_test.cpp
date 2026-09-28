@@ -3,6 +3,7 @@
 #include "calibration/calibrator.hpp"
 #include "calibration/camera_projector_calibration_service.hpp"
 #include "calibration/stereo_calibrator.hpp"
+#include "calibration/stereo_calibration_service.hpp"
 #include "calibration/stereo_data.hpp"
 #include "capture/capture_service.hpp"
 #include "cmd/commands.hpp"
@@ -1641,10 +1642,13 @@ void testScanDatasetResolver()
     assert(result.dataset.pattern_count == 7);
 }
 
-void writeMonoCalibrationFile(const std::filesystem::path& path, const cv::Mat& K, const cv::Mat& D)
+void writeMonoCalibrationFile(const std::filesystem::path& path, const cv::Mat& K, const cv::Mat& D,
+                              int image_width = 640, int image_height = 480, int board_x = 10, int board_y = 7,
+                              double square_mm = 0.5)
 {
     cv::FileStorage fs(path.string(), cv::FileStorage::WRITE);
-    fs << "RMS" << 0.25;
+    fs << "RMS" << 0.25 << "image_width" << image_width << "image_height" << image_height
+       << "board_corners_x" << board_x << "board_corners_y" << board_y << "square_size_mm" << square_mm;
     fs << "K" << K;
     fs << "D" << D;
 }
@@ -1823,6 +1827,129 @@ void testMonoCalibrationArtifactAndCameraProjectorCompatibility()
     const auto loaded = calib::file::loadMonoCalibrationFile(output, load_error);
     requireCameraProjector(loaded && loaded->image_width == 880 && loaded->image_height == 640,
                            "Camera-Projector mono calibration loader rejected the artifact");
+}
+
+cmd::CmdStereoCalibrate stereoCalibrationCommand(const std::filesystem::path& directory)
+{
+    cmd::CmdStereoCalibrate command;
+    command.left_cam_id = video::kInvalidCameraId;
+    command.right_cam_id = video::kInvalidCameraId;
+    command.left_dir = (directory / "left").string();
+    command.right_dir = (directory / "right").string();
+    command.left_calibration_file = (directory / "mono_left.yml").string();
+    command.right_calibration_file = (directory / "mono_right.yml").string();
+    command.output_file = (directory / "stereo.yml").string();
+    return command;
+}
+
+void testStereoCalibrationMonoContract()
+{
+    const auto directory = testTempDir("stereo_mono_contract");
+    const cv::Mat K = (cv::Mat_<double>(3, 3) << 700.0, 0.0, 320.0, 0.0, 700.0, 240.0, 0.0, 0.0, 1.0);
+    const auto D = cv::Mat::zeros(1, 5, CV_64F);
+    writeMonoCalibrationFile(directory / "mono_left.yml", K, D, 640, 480, 10, 7, 0.5);
+    writeMonoCalibrationFile(directory / "mono_right.yml", K, D, 640, 480, 10, 7, 0.5);
+
+    video::CameraManager cameras;
+    calib::StereoCalibrator calibrator;
+    calib::StereoData data;
+    auto result = calib::calibrate(cameras, &calibrator, data, stereoCalibrationCommand(directory));
+    requireCameraProjector(!result.ok && calibrator.boardConfig().pattern_size == cv::Size(10, 7) &&
+                               std::abs(calibrator.boardConfig().square_size_mm - 0.5F) < 1e-6F,
+                           "StereoCalibrator did not receive the Mono BoardConfig");
+
+    writeMonoCalibrationFile(directory / "mono_right.yml", K, D, 640, 480, 10, 7, 1.0);
+    result = calib::calibrate(cameras, &calibrator, data, stereoCalibrationCommand(directory));
+    requireCameraProjector(!result.ok && result.error->code == "calibration_file_invalid",
+                           "different left/right square sizes were accepted");
+
+    writeMonoCalibrationFile(directory / "mono_right.yml", K, D, 800, 600, 10, 7, 0.5);
+    result = calib::calibrate(cameras, &calibrator, data, stereoCalibrationCommand(directory));
+    requireCameraProjector(!result.ok && result.error->code == "calibration_file_invalid",
+                           "different left/right Mono image sizes were accepted");
+}
+
+void testStereoCalibrationPairsByFilename()
+{
+    const auto directory = testTempDir("stereo_pair_names");
+    std::filesystem::create_directories(directory / "left");
+    std::filesystem::create_directories(directory / "right");
+    const cv::Mat K = (cv::Mat_<double>(3, 3) << 700.0, 0.0, 320.0, 0.0, 700.0, 240.0, 0.0, 0.0, 1.0);
+    const auto D = cv::Mat::zeros(1, 5, CV_64F);
+    writeMonoCalibrationFile(directory / "mono_left.yml", K, D);
+    writeMonoCalibrationFile(directory / "mono_right.yml", K, D);
+    const cv::Mat image(480, 640, CV_8UC1, cv::Scalar(127));
+    requireCameraProjector(cv::imwrite((directory / "left" / "pair_001.png").string(), image) &&
+                               cv::imwrite((directory / "right" / "preview.png").string(), image),
+                           "failed to write filename pairing fixtures");
+
+    video::CameraManager cameras;
+    calib::StereoCalibrator calibrator;
+    calib::StereoData data;
+    const auto result = calib::calibrate(cameras, &calibrator, data, stereoCalibrationCommand(directory));
+    requireCameraProjector(!result.ok && result.error->code == "stereo_image_pair_mismatch",
+                           "different left/right filenames were paired by sort order");
+}
+
+void testStereoCalibrationProducesFiniteOutput()
+{
+    const auto directory = testTempDir("stereo_calibration_output");
+    std::filesystem::create_directories(directory / "left");
+    std::filesystem::create_directories(directory / "right");
+    const cv::Mat board = makeSyntheticCheckerboard(10, 7, 50);
+    const cv::Mat K = (cv::Mat_<double>(3, 3) << 760.0, 0.0, 440.0, 0.0, 755.0, 320.0, 0.0, 0.0, 1.0);
+    const cv::Mat D = cv::Mat::zeros(1, 5, CV_64F);
+    const std::array<cv::Vec3d, 7> rotations{{{0.02, -0.04, 0.01},
+                                              {0.12, -0.18, 0.04},
+                                              {-0.15, 0.12, -0.06},
+                                              {0.20, 0.08, 0.10},
+                                              {-0.08, -0.22, -0.12},
+                                              {0.16, -0.10, 0.18},
+                                              {-0.18, -0.06, 0.08}}};
+    const std::array<cv::Vec3d, 7> translations{{{-55.0, -38.0, 235.0},
+                                                 {-62.0, -42.0, 255.0},
+                                                 {-48.0, -35.0, 225.0},
+                                                 {-58.0, -45.0, 270.0},
+                                                 {-45.0, -32.0, 245.0},
+                                                 {-65.0, -40.0, 260.0},
+                                                 {-52.0, -44.0, 240.0}}};
+    const std::vector<cv::Point3f> outer{
+        {-12.5F, -12.5F, 0.0F}, {125.0F, -12.5F, 0.0F}, {125.0F, 87.5F, 0.0F}, {-12.5F, 87.5F, 0.0F}};
+    const std::array<cv::Point2f, 4> source{{{0, 0}, {549, 0}, {549, 399}, {0, 399}}};
+    for (std::size_t index = 0; index < rotations.size(); ++index)
+    {
+        std::vector<cv::Point2f> left_destination;
+        std::vector<cv::Point2f> right_destination;
+        cv::projectPoints(outer, rotations[index], translations[index], K, D, left_destination);
+        const cv::Vec3d right_translation = translations[index] + cv::Vec3d{-25.0, 0.0, 0.0};
+        cv::projectPoints(outer, rotations[index], right_translation, K, D, right_destination);
+        cv::Mat left_image(640, 880, CV_8UC1, cv::Scalar(255));
+        cv::Mat right_image(640, 880, CV_8UC1, cv::Scalar(255));
+        cv::warpPerspective(board, left_image, cv::getPerspectiveTransform(source.data(), left_destination.data()),
+                            left_image.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(255));
+        cv::warpPerspective(board, right_image, cv::getPerspectiveTransform(source.data(), right_destination.data()),
+                            right_image.size(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, cv::Scalar(255));
+        const auto name = "pair_" + std::to_string(index + 1) + ".png";
+        requireCameraProjector(cv::imwrite((directory / "left" / name).string(), left_image) &&
+                                   cv::imwrite((directory / "right" / name).string(), right_image),
+                               "failed to write synthetic stereo pair");
+    }
+    writeMonoCalibrationFile(directory / "mono_left.yml", K, D, 880, 640, 10, 7, 12.5);
+    writeMonoCalibrationFile(directory / "mono_right.yml", K, D, 880, 640, 10, 7, 12.5);
+
+    video::CameraManager cameras;
+    calib::StereoCalibrator calibrator;
+    calib::StereoData data;
+    const auto result = calib::calibrate(cameras, &calibrator, data, stereoCalibrationCommand(directory));
+    requireCameraProjector(result.ok && std::isfinite(result.rms) && cv::checkRange(data.R) &&
+                               cv::checkRange(data.T) && cv::checkRange(data.R1) && cv::checkRange(data.R2) &&
+                               cv::checkRange(data.P1) && cv::checkRange(data.P2) && cv::checkRange(data.Q),
+                           "synthetic stereo calibration did not produce finite matrices");
+    cv::FileStorage output((directory / "stereo.yml").string(), cv::FileStorage::READ);
+    requireCameraProjector(output.isOpened() && !output["R"].empty() && !output["T"].empty() &&
+                               !output["R1"].empty() && !output["R2"].empty() && !output["P1"].empty() &&
+                               !output["P2"].empty() && !output["Q"].empty(),
+                           "stereo calibration output is incomplete");
 }
 
 void testScanDatasetValidator()
@@ -2199,6 +2326,9 @@ int main()
     testMonoCalibrationFileLoader();
     testMonoBoardConfigAndCornerDetection();
     testMonoCalibrationArtifactAndCameraProjectorCompatibility();
+    testStereoCalibrationMonoContract();
+    testStereoCalibrationPairsByFilename();
+    testStereoCalibrationProducesFiniteOutput();
     testScanDatasetHandler();
     testDecodeHandler();
     testCommandExecutorDomainRouting();
