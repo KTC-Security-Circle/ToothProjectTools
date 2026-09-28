@@ -16,6 +16,9 @@ struct MonoCalibrationFile
     double rms{0.0};
     int image_width{0};
     int image_height{0};
+    int board_corners_x{0};
+    int board_corners_y{0};
+    double square_size_mm{0.0};
 };
 
 std::optional<MonoCalibrationFile> loadMonoCalibrationFile(

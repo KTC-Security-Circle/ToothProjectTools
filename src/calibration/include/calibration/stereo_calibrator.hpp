@@ -14,6 +14,7 @@ public:
 
     // ボード設定 (Calibratorと同じ設定を使うこと)
     void setBoardConfig(const BoardConfig& config);
+    const BoardConfig& boardConfig() const;
 
     /**
      * @brief ステレオキャリブレーションを実行

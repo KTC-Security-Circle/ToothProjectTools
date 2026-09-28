@@ -29,11 +29,11 @@ mono calibration file は単眼cameraの内部parameterを保存するfileであ
 | `role` | camera role。 |
 | `created_at` | 生成時刻。 |
 | `source_image_folder` | 入力画像directory。 |
-| `image_width` | 新規mono calibrationの画像幅。単位pixel。生成時は`image_height`とともに保存する。 |
-| `image_height` | 新規mono calibrationの画像高さ。単位pixel。生成時は`image_width`とともに保存する。 |
-| `board_corners_x` | mono calibrationに使用したcheckerboard横方向の内部corner数。 |
-| `board_corners_y` | mono calibrationに使用したcheckerboard縦方向の内部corner数。 |
-| `square_size_mm` | mono calibrationに使用した実測square寸法。単位mm。 |
+| `image_width` | 新規mono calibrationの画像幅。単位pixel。`stereo_calibrate`では必須。 |
+| `image_height` | 新規mono calibrationの画像高さ。単位pixel。`stereo_calibrate`では必須。 |
+| `board_corners_x` | checkerboard横方向の内部corner数。`stereo_calibrate`では必須。 |
+| `board_corners_y` | checkerboard縦方向の内部corner数。`stereo_calibrate`では必須。 |
+| `square_size_mm` | 実測した1 squareの辺長。単位mm。`stereo_calibrate`では必須。 |
 
 ### file format
 
@@ -61,6 +61,10 @@ stereo calibration file はleft/right camera間の外部parameterを保存する
 | `D2` | right camera歪み係数。 |
 | `R` | leftからrightへの回転。 |
 | `T` | leftからrightへの並進。 |
+| `R1` | left cameraのrectification回転。 |
+| `R2` | right cameraのrectification回転。 |
+| `P1` | left cameraのrectification射影行列。 |
+| `P2` | right cameraのrectification射影行列。 |
 | `Q` | 視差-深度変換行列。 |
 | `RMS` | stereo calibration RMS。 |
 

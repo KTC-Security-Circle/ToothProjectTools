@@ -17,6 +17,10 @@ void StereoCalibrator::setBoardConfig(const BoardConfig& config) {
     config_ = config;
 }
 
+const BoardConfig& StereoCalibrator::boardConfig() const {
+    return config_;
+}
+
 double StereoCalibrator::run(
     const std::vector<std::string>& files_L,
     const std::vector<std::string>& files_R,

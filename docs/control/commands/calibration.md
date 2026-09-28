@@ -106,6 +106,7 @@ open済みcameraの現在frameでcheckerboardを検出し、corner描画済みpr
 stereo_calibrate はファイル処理commandである。
 保存済み左右calibration画像とmono calibration fileからstereo calibration fileを生成する。
 open済みcameraのK/Dではなく、`left_calibration_file` / `right_calibration_file` を主入力にする。
+左右Mono fileから画像サイズとboard設定も読み取り、一致を検証してから同じBoardConfigをStereo solverへ設定する。左右画像は同じfilename同士をpairとし、片側だけのfileがあれば失敗する。
 
 ### args(JSONL)
 

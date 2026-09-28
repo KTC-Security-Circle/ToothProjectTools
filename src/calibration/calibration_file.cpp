@@ -94,6 +94,32 @@ std::optional<MonoCalibrationFile> loadMonoCalibrationFile(
             error_message = "mono calibration image size must be positive: " + path.string();
             return std::nullopt;
         }
+        const auto board_x_node = storage["board_corners_x"];
+        const auto board_y_node = storage["board_corners_y"];
+        const auto square_node = storage["square_size_mm"];
+        const bool has_board_x = !board_x_node.empty();
+        const bool has_board_y = !board_y_node.empty();
+        const bool has_square = !square_node.empty();
+        if ((has_board_x || has_board_y || has_square) &&
+            (!has_board_x || !has_board_y || !has_square || !board_x_node.isInt() || !board_y_node.isInt() ||
+             (!square_node.isReal() && !square_node.isInt())))
+        {
+            error_message = "mono calibration board configuration is missing or invalid: " + path.string();
+            return std::nullopt;
+        }
+        if (has_board_x)
+        {
+            file.board_corners_x = static_cast<int>(board_x_node);
+            file.board_corners_y = static_cast<int>(board_y_node);
+            file.square_size_mm = square_node.isReal() ? static_cast<double>(square_node)
+                                                       : static_cast<double>(static_cast<int>(square_node));
+            if (file.board_corners_x <= 0 || file.board_corners_y <= 0 || !std::isfinite(file.square_size_mm) ||
+                file.square_size_mm <= 0.0)
+            {
+                error_message = "mono calibration board configuration must be positive: " + path.string();
+                return std::nullopt;
+            }
+        }
         if (!std::isfinite(file.rms) || file.rms <= 0.0)
         {
             error_message = "mono calibration RMS is missing or invalid: " + path.string();
