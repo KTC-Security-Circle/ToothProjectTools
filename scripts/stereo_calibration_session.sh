@@ -14,7 +14,7 @@ BOARD_Y="${BOARD_Y:-7}"
 SQUARE_MM="${SQUARE_MM:?set SQUARE_MM to the measured checkerboard square size in millimeters}"
 OUT_DIR="${OUT_DIR:-${REPO_ROOT}/data/calib}"
 MJPEG_HOST="${MJPEG_HOST:-127.0.0.1}"
-MJPEG_PORT="${MJPEG_PORT:-39010}"
+MJPEG_PORT="${MJPEG_PORT:-39011}"
 
 STEREO_DIR="${OUT_DIR}/stereo"
 LEFT_DIR="${STEREO_DIR}/left"
@@ -147,20 +147,28 @@ preview_corners() {
 
 capture_pair() {
   local number left_output right_output
+
   verify_pairs || return 1
   number="$(next_pair_number)" || return 1
-  detect_role "${LEFT_ROLE}" "${LEFT_PREVIEW}" CHECK || return 1
-  detect_role "${RIGHT_ROLE}" "${RIGHT_PREVIEW}" CHECK || return 1
-  if [[ "${LEFT_FOUND}" != true || "${RIGHT_FOUND}" != true ]]; then
-    printf '[REJECT] pair_%03d not saved\n' "${number}"
-    printf 'left=%s right=%s\n' "${LEFT_FOUND}" "${RIGHT_FOUND}"
-    return 0
-  fi
+
   left_output="$(printf '%s/pair_%03d.png' "${LEFT_DIR}" "${number}")"
   right_output="$(printf '%s/pair_%03d.png' "${RIGHT_DIR}" "${number}")"
-  request "$(jq -cn --arg left_role "${LEFT_ROLE}" --arg right_role "${RIGHT_ROLE}" \
-    --arg left_output "${left_output}" --arg right_output "${right_output}" \
-    '{cmd:"calib_capture_stereo",left_role:$left_role,right_role:$right_role,left_output:$left_output,right_output:$right_output}')"
+
+  request "$(
+    jq -cn \
+      --arg left_role "${LEFT_ROLE}" \
+      --arg right_role "${RIGHT_ROLE}" \
+      --arg left_output "${left_output}" \
+      --arg right_output "${right_output}" \
+      '{
+        cmd:"calib_capture_stereo",
+        left_role:$left_role,
+        right_role:$right_role,
+        left_output:$left_output,
+        right_output:$right_output
+      }'
+  )" || return 1
+
   printf '[CAPTURE] pair_%03d saved\n' "${number}"
 }
 

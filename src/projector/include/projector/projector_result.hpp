@@ -95,6 +95,12 @@ struct ProjectorResult
     /// clamped <bool>: requested値からclampされた場合true。
     bool clamped{false};
 
+    int marker_x{0};
+    int marker_y{0};
+    int marker_width{0};
+    int marker_height{0};
+    std::string photodiode_marker_mode{"sync"};
+
     /// monitors <std::vector<win::MonitorInfo>>: list_monitors結果。
     std::vector<win::MonitorInfo> monitors;
 

@@ -12,7 +12,7 @@ BOARD_X="${BOARD_X:-10}"
 BOARD_Y="${BOARD_Y:-7}"
 SQUARE_MM="${SQUARE_MM:?set SQUARE_MM to the measured checkerboard square size in millimeters}"
 MJPEG_HOST="${MJPEG_HOST:-127.0.0.1}"
-MJPEG_PORT="${MJPEG_PORT:-39010}"
+MJPEG_PORT="${MJPEG_PORT:-39011}"
 
 IMAGE_DIR="${OUT_DIR}/mono_${CAMERA_ROLE}"
 PREVIEW_FILE="${OUT_DIR}/preview/${CAMERA_ROLE}.png"

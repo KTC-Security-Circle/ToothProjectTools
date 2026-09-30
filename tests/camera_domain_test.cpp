@@ -1100,6 +1100,50 @@ void testWindowPlacementContractAndRollback()
                            "X11 fullscreen placement rectangle differs");
 }
 
+void testGeneratePatternsShowsRedPreScanMarker()
+{
+    FakeWindowBackend backend;
+    auto monitors = fakeMonitorService();
+    win::WindowService window_service{backend, monitors};
+    projector::ProjectorService projector_service{window_service, monitors};
+
+    requireCameraProjector(window_service.openWindow({"locator-window", "Locator", 1920, 1080, 1, true}).ok,
+                           "locator test window did not open");
+    requireCameraProjector(
+        projector_service.openProjector({"projector", "locator-window", 480, 270}).ok,
+        "locator test projector did not open");
+    requireCameraProjector(projector_service
+                               .configureSurface({"projector", 1, 1664, 1080, std::nullopt, std::nullopt,
+                                                  projector::ProjectorPlacement::center})
+                               .ok,
+                           "locator test surface was not configured");
+
+    const auto generated = projector_service.generatePatterns("projector");
+    const auto located = projector_service.showPattern("projector", 0, projector::PhotodiodeMarkerMode::locate);
+    requireCameraProjector(generated.ok && located.ok && backend.show_count == 1 && !backend.last_image.empty(),
+                           "locator mode did not display the pre-scan locator");
+    const auto marker_pixel = backend.last_image.at<cv::Vec3b>(located.marker_y, located.marker_x);
+    requireCameraProjector(marker_pixel == cv::Vec3b(0, 0, 255), "pre-scan locator marker is not red");
+}
+
+void testInternalWindowPlacementAdapter()
+{
+    FakeWindowBackend backend;
+    auto monitors = fakeMonitorService();
+    win::WindowService service{backend, monitors};
+
+    const auto opened = service.openWindow({"projector", "Projector", 640, 480, 1, true});
+    requireCameraProjector(opened.ok && backend.configure_count == 1,
+                           "internal placement adapter did not configure the opened window");
+    requireCameraProjector(backend.last_configured_id == opened.window_id &&
+                               backend.last_configured_monitor_index == 1 && backend.last_configured_x == 1920 &&
+                               backend.last_configured_y == 0,
+                           "internal placement adapter did not preserve internal WindowId or monitor index");
+    requireCameraProjector(backend.last_configured_width == 1920 && backend.last_configured_height == 1080 &&
+                               backend.last_configured_fullscreen,
+                           "internal placement adapter did not apply monitor size or fullscreen");
+}
+
 void testProjectorSurfaceConfiguration()
 {
     FakeWindowBackend backend;
@@ -2106,25 +2150,21 @@ void testDecodeServiceSyntheticDataset()
 void testPhotodiodeMarkerRequiresProjectorMargin()
 {
     projector::ProjectorSurface surface;
-    surface.surface_width = 16;
-    surface.surface_height = 12;
-    surface.pattern_width = 16;
-    surface.pattern_height = 12;
-    assert(!projector::canPlacePhotodiodeMarker(surface));
-    surface.surface_width = 48;
+    surface.surface_width = 1920;
+    surface.surface_height = 1080;
+    surface.pattern_x = 128;
+    surface.pattern_width = 1664;
+    surface.pattern_height = 1080;
+    const auto marker = projector::photodiodeMarkerRect(surface, projector::PhotodiodeMarkerMode::locate);
     assert(projector::canPlacePhotodiodeMarker(surface));
-    surface.surface_width = 80;
-    surface.pattern_x = 32;
-    assert(projector::canPlacePhotodiodeMarker(surface));
+    assert(marker == cv::Rect(0, 492, 96, 96));
+    assert((marker & cv::Rect(surface.pattern_x, 0, surface.pattern_width, surface.pattern_height)).area() == 0);
     assert(projector::photodiodeMarkerValue(0) == 0);
     assert(projector::photodiodeMarkerValue(1) == 255);
-
-    surface.surface_width = 9;
-    surface.surface_height = 10;
-    surface.pattern_x = 8;
-    surface.pattern_y = 9;
-    surface.pattern_width = 1;
-    surface.pattern_height = 1;
+    assert(projector::photodiodeMarkerValue(36, 38) == 255);
+    assert(projector::photodiodeMarkerValue(37, 38) == 0);
+    surface.pattern_x = 32;
+    surface.pattern_width = 1856;
     assert(!projector::canPlacePhotodiodeMarker(surface));
 }
 
@@ -2339,6 +2379,8 @@ int main()
     testWindowServiceValidation();
     testProjectorServiceValidation();
     testWindowPlacementContractAndRollback();
+    testGeneratePatternsShowsRedPreScanMarker();
+    testInternalWindowPlacementAdapter();
     testScanDatasetValidator();
     testDecodeServiceSyntheticDataset();
     testPhotodiodeMarkerRequiresProjectorMargin();

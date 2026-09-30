@@ -6,7 +6,7 @@
 
 Windowを作成し、window roleへbindする。
 
-`monitor_index` は0-basedで、省略時はprimary monitorを使用する。Window生成後、platform固有の `WindowPlacementBackend` が指定monitorへの配置とfullscreenを適用する。配置に失敗したWindowはcloseされ、role bindingも残らない。範囲外はprimary monitorへfallbackし、monitorが存在しない場合は `monitor_not_found` を返す。既存schemaとの互換性のため、open response/eventには `monitor_index` を追加しない。
+`monitor_index` は0-basedで、省略時はprimary monitorを使用する。通常のSidecar runtimeでは、Window生成後に `WindowManager` が保持するinternal Window IDを使い、既存のOpenCV Windowへmonitor配置、resize、fullscreenを適用する。native OSからPIDやtitleでWindowを再検索しない。配置に失敗したWindowはcloseされ、role bindingも残らない。範囲外はprimary monitorへfallbackし、monitorが存在しない場合は `monitor_not_found` を返す。既存schemaとの互換性のため、open response/eventには `monitor_index` を追加しない。
 
 ### args(JSONL)
 
@@ -29,13 +29,15 @@ Windowを作成し、window roleへbindする。
 
 呼び出し側が指定する配置情報は `monitor_index` と `fullscreen` だけである。OS、window manager、native window ID、相対方向やshortcutはpublic contractに含まれない。
 
-配置backendの実装状況:
+通常Sidecar runtimeの配置経路:
 
-| platform/session | 状態 |
-| --- | --- |
-| Linux + X11 | 対応。PIDとtitleでnative Windowを一意解決し、X11座標へ配置する。 |
-| Wayland + niri | 対応。niri IPCでPIDとtitleから対象を一意解決し、window IDとoutput名を指定して配置する。 |
-| その他の環境 | 未対応。`window_placement_unsupported` を返す。 |
+```text
+WindowManager internal WindowId
+→ WindowManagerBackend::configureWindowSurface()
+→ Window::setMonitorIndex() / move() / resize() / setFullscreen()
+```
+
+X11およびniri用のnative `WindowPlacementBackend` は、明示的に `WindowService` へ注入するtestや別用途向けに維持されている。X11 backendはPIDとtitle、niri backendはniri IPCを利用するが、通常Sidecarの `open_window` はこれらを使用しない。
 
 ```json
 {"id":"40","ok":true,"window_role":"projector","window_id":"1","width":"1920","height":"1080"}
@@ -74,9 +76,9 @@ Window backend。
 | `invalid_command` | sizeまたはmonitor_indexが不正である。 |
 | `window_open_failed` | Windowを作成できない。 |
 | `window_placement_failed` | Window生成後の配置に失敗した。生成済みWindowはcloseされる。 |
-| `window_placement_unsupported` | sessionに利用可能な配置backendがない。 |
-| `window_native_identity_not_found` | native Windowを一意に特定できない。 |
-| `window_native_identity_ambiguous` | native Window候補が複数あり安全に特定できない。 |
+| `window_placement_unsupported` | 明示的に使用したnative配置backendが現在sessionへ対応していない。 |
+| `window_native_identity_not_found` | 明示的に使用したnative配置backendがWindowを一意に特定できない。通常Sidecar経路では発生しない。 |
+| `window_native_identity_ambiguous` | 明示的に使用したnative配置backendのWindow候補が複数ある。通常Sidecar経路では発生しない。 |
 | `window_already_open` | roleが既にopen済みである。 |
 | `scan_resource_busy` | scanが対象window roleを使用中である。 |
 
@@ -359,6 +361,7 @@ open済みprojector role。
 generate_patterns はpattern生成commandである。
 カメラや物理プロジェクタには依存しない。
 生成するpatternの幅・高さは `open_projector` で保存した Gray Code論理解像度に依存する。`configure_projector_surface` のdisplay region幅・高さは生成解像度を変更しない。
+Photodiode markerは96x96でactive patternから32pxのgapを確保する。`show_pattern`の`photodiode_marker_mode=locate`では赤、`sync`では黒/白を同じ矩形へ表示する。
 
 ### args(JSONL)
 

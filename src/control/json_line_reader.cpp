@@ -164,6 +164,7 @@ ReadResult JsonLineReader::read()
             !readBool(root, "fullscreen", message.fullscreen, error_message) ||
             !readString(root, "projector_role", message.projector_role, error_message) ||
             !readInteger(root, "index", message.index, error_message) ||
+            !readString(root, "photodiode_marker_mode", message.photodiode_marker_mode, error_message) ||
             !readString(root, "decode_dir", message.decode_dir, error_message) ||
             !readInteger(root, "code_width", message.code_width, error_message) ||
             !readInteger(root, "code_height", message.code_height, error_message) ||

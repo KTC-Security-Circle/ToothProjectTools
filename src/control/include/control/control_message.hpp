@@ -134,6 +134,7 @@ struct ControlMessage
 
     /// index <std::optional<int>>: 表示するpattern index。
     std::optional<int> index;
+    std::optional<std::string> photodiode_marker_mode;
 
     std::optional<std::string> decode_dir;
     std::optional<int> code_width;

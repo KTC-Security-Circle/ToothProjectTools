@@ -3,6 +3,64 @@
 `stereo_scan` は、左右Cameraの準備からGray Code撮影、decode、PLY生成までを1 commandで開始するAPIです。
 sidecarとは標準入出力のJSON Linesで通信します。
 
+## Shell Scriptで一括実行
+
+`scripts/stereo_scan.sh` はbackendの起動からPLY確認、shutdownまでを1 commandで行うPhotodiode実機runnerです。
+高レベル `stereo_scan` Facadeは使用せず、`scripts/check_camera_projector.sh` と同じpublic JSONL commandを、Camera、Window、Projector、scan、decode、reconstructionのdependency順に呼び出します。Windowの作成・配置とProjector表示は、それぞれ既存の `open_window` とProjector commandへ委譲します。
+
+基本実行:
+
+```bash
+LEFT_CAMERA=0 \
+RIGHT_CAMERA=6 \
+MONITOR_INDEX=1 \
+./scripts/stereo_scan.sh
+```
+
+Photodiode設定を明示する場合:
+
+```bash
+LEFT_CAMERA=0 \
+RIGHT_CAMERA=6 \
+MONITOR_INDEX=1 \
+SYNC_MODE=photodiode \
+PHOTODIODE_DEVICE=/dev/ttyUSB0 \
+GUARD_MS=95 \
+./scripts/stereo_scan.sh
+```
+
+出力先を指定する場合:
+
+```bash
+LEFT_CAMERA=0 \
+RIGHT_CAMERA=6 \
+MONITOR_INDEX=1 \
+OUTPUT_DIR=/workspace/data/scans/test \
+PLY_FILE=/workspace/data/scans/test/result.ply \
+./scripts/stereo_scan.sh
+```
+
+`MONITOR_INDEX` は必須で、`SYNC_MODE` は `photodiode` のみを受け付けます。`BIN`、`CALIBRATION_FILE`、`PHOTODIODE_BAUD`、`SYNC_TIMEOUT_MS`、`GUARD_MS`、`SCAN_ID`、`MJPEG_HOST`、`MJPEG_PORT` もenvironment variableで設定できます。`OUTPUT_DIR` のdefaultは `data/scans/<scan_id>`、`PLY_FILE` のdefaultは `<output_dir>/cloud.ply` です。その下に `scan/` と `decode/` を作成します。
+任意の `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` と `CODE_WIDTH` / `CODE_HEIGHT` は、それぞれ必ずペアで指定します。`DECODE_THRESHOLD` と `MAX_EPIPOLAR_ERROR_PX` も必要な場合だけoverrideできます。
+
+Photodiode deviceの存在・read/write permissionを検証しますが、Shell Script自身はserial deviceをopenしません。deviceは `scan_start` / `ScanService`だけが所有します。失敗時のscan artifactとbackend logは残り、stderrのpathが表示されます。正常時にも調査用work directoryを残すには `KEEP_WORK_DIR=1` を指定します。
+
+Camera、stream、Projector、patternの準備が完了すると、active patternから32px離れた位置へ赤い96x96 markerを表示し、`[READY] SPACE: scan Q: quit` と表示して待機します。SPACEごとに固有のscan directoryでscan、decode、reconstructionを実行し、完了・失敗後は赤locatorへ戻ります。scan、decode、reconstructionの失敗はそのrunだけの失敗としてartifactを残し、`[READY] SPACE: retry Q: quit` から新しいscanを開始できます。Camera、stream、Window、Projectorは再作成せず、QまたはCtrl+Cで初めてsession resourceをcleanupします。
+
+`OUTPUT_DIR=/workspace/data/scans/test2` の場合、各runは次のように分離されます。`PLY_FILE` を指定した場合も、そのbasenameを各run directory内で使用します。
+
+```text
+/workspace/data/scans/test2/
+├── scan_20260929_061559_275192864/
+│   ├── scan/
+│   ├── decode/
+│   └── result.ply
+└── scan_20260929_061615_903441270/
+    ├── scan/
+    ├── decode/
+    └── result.ply
+```
+
 ## 1. Backendを起動
 
 build済みbackendをserve modeで起動します。

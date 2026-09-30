@@ -19,6 +19,12 @@ target_link_libraries(photodiode_sync_test PRIVATE scan_service)
 target_compile_features(photodiode_sync_test PRIVATE cxx_std_20)
 add_test(NAME photodiode_sync_test COMMAND photodiode_sync_test)
 
+add_test(
+    NAME scan_progress_event_order_test
+    COMMAND ${CMAKE_COMMAND}
+            -DSCAN_SERVICE_SOURCE=${CMAKE_SOURCE_DIR}/src/scan/scan_service.cpp
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/scan_progress_event_order_test.cmake)
+
 add_executable(stereo_scan_service_test stereo_scan_service_test.cpp)
 target_link_libraries(stereo_scan_service_test PRIVATE stereo_scan_service scan_service window_service cv_lib)
 target_compile_features(stereo_scan_service_test PRIVATE cxx_std_20)
