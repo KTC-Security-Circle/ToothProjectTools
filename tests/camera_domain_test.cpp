@@ -84,6 +84,12 @@ class FakeWindowBackend final : public win::WindowBackend
         return show_result;
     }
 
+    bool showImageOwned(win::WindowId window_id, cv::Mat image) override
+    {
+        ++owned_show_count;
+        return showImage(window_id, image);
+    }
+
     bool configureWindowSurface(win::WindowId window_id, int monitor_index, int x, int y, int width, int height,
                                 bool fullscreen) override
     {
@@ -126,6 +132,7 @@ class FakeWindowBackend final : public win::WindowBackend
     bool last_configured_fullscreen{false};
     int close_count{0};
     int show_count{0};
+    int owned_show_count{0};
     int configure_count{0};
     int last_delay_ms{0};
 };
@@ -1062,6 +1069,8 @@ void testProjectorServiceValidation()
 
     result = projector_service.generatePatterns("projector");
     assert(result.ok && result.pattern_count > 0);
+    const auto generated_snapshot = projector_service.scanSnapshot("projector");
+    assert(generated_snapshot && generated_snapshot->canvas_cache_generation == 1);
 
     result = projector_service.showPattern("projector", result.pattern_count);
     assert(!result.ok && result.error->code == "pattern_index_out_of_range");
@@ -1069,14 +1078,27 @@ void testProjectorServiceValidation()
     result = runWindowRequest(window_service, [&] { return projector_service.showPattern("projector", 0); });
     assert(result.ok && result.pattern_index == 0);
     assert(backend.show_count == 1);
+    assert(backend.owned_show_count == 1);
     assert(backend.last_shown_size.width == result.surface_width);
     assert(backend.last_shown_size.height == result.surface_height);
+    const auto shown_snapshot = projector_service.scanSnapshot("projector");
+    assert(shown_snapshot && shown_snapshot->canvas_cache_generation ==
+                                 generated_snapshot->canvas_cache_generation);
 
     result = runWindowRequest(window_service, [&] { return projector_service.nextPattern("projector"); });
     assert(result.ok && result.pattern_index == 1);
 
     result = runWindowRequest(window_service, [&] { return projector_service.prevPattern("projector"); });
     assert(result.ok && result.pattern_index == 0);
+
+    result = runWindowRequest(window_service, [&] {
+        return projector_service.configureSurface(
+            {"projector", 0, 16, 12, 100, 100, projector::ProjectorPlacement::custom});
+    });
+    assert(result.ok);
+    const auto reconfigured_snapshot = projector_service.scanSnapshot("projector");
+    assert(reconfigured_snapshot && reconfigured_snapshot->canvas_cache_generation ==
+                                      generated_snapshot->canvas_cache_generation + 1);
 
     const auto close_count_before = backend.close_count;
     (void)close_count_before;

@@ -224,6 +224,10 @@ ProjectorResult ProjectorService::configureSurface(const ProjectorSurfaceRequest
     }
 
     session->surface = surface;
+    session->sync_pattern_canvases.clear();
+    session->locator_pattern_canvases.clear();
+    if (session->structured_light && !session->patterns_dirty && canPlacePhotodiodeMarker(session->surface))
+        rebuildCanvasCaches(*session);
     return successFromSession(*session);
 }
 
@@ -268,6 +272,9 @@ ProjectorResult ProjectorService::generatePatterns(const std::string& projector_
         }
         session->current_index = 0;
         session->patterns_dirty = false;
+        session->sync_pattern_canvases.clear();
+        session->locator_pattern_canvases.clear();
+        if (canPlacePhotodiodeMarker(session->surface)) rebuildCanvasCaches(*session);
         return successFromSession(*session);
     }
     catch (const std::exception& error)
@@ -325,9 +332,12 @@ ProjectorResult ProjectorService::showPatternLocked(const std::string& projector
 
     try
     {
-        const auto pattern = session->structured_light->getPattern(static_cast<size_t>(index)).clone();
-        const auto canvas = composePatternCanvas(pattern, session->surface, index, count, effective_mode);
-        const auto shown = window_service_.showImage(session->window_role, canvas);
+        auto& cache = effective_mode == PhotodiodeMarkerMode::locate ? session->locator_pattern_canvases
+                                                                     : session->sync_pattern_canvases;
+        if (cache.size() != static_cast<std::size_t>(count)) rebuildCanvasCaches(*session);
+        // cacheは再利用するため保持し、Window request用の独立bufferを1回だけcloneする。
+        auto display = cache.at(static_cast<std::size_t>(index)).clone();
+        const auto shown = window_service_.showImage(session->window_role, std::move(display));
         if (!shown.ok)
         {
             return ProjectorResult::failure(projector_role, "pattern_show_failed",
@@ -398,6 +408,7 @@ std::optional<ProjectorScanSnapshot> ProjectorService::scanSnapshot(const std::s
         session->code_height,
         session->patterns_dirty,
         session->surface,
+        session->canvas_cache_generation,
     };
 }
 
@@ -561,6 +572,24 @@ cv::Mat ProjectorService::composePatternCanvas(const cv::Mat& pattern, const Pro
         canvas(marker).setTo(cv::Scalar::all(photodiodeMarkerValue(
             static_cast<std::size_t>(pattern_index), static_cast<std::size_t>(pattern_count))));
     return canvas;
+}
+
+void ProjectorService::rebuildCanvasCaches(ProjectorSession& session)
+{
+    const auto count = static_cast<int>(session.structured_light->getPatternCount());
+    std::vector<cv::Mat> sync;
+    std::vector<cv::Mat> locator;
+    sync.reserve(static_cast<std::size_t>(count));
+    locator.reserve(static_cast<std::size_t>(count));
+    for (int index = 0; index < count; ++index)
+    {
+        const auto& pattern = session.structured_light->getPattern(static_cast<std::size_t>(index));
+        sync.push_back(composePatternCanvas(pattern, session.surface, index, count, PhotodiodeMarkerMode::sync));
+        locator.push_back(composePatternCanvas(pattern, session.surface, index, count, PhotodiodeMarkerMode::locate));
+    }
+    session.sync_pattern_canvases = std::move(sync);
+    session.locator_pattern_canvases = std::move(locator);
+    ++session.canvas_cache_generation;
 }
 
 } // namespace projector

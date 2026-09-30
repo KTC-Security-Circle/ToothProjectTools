@@ -271,6 +271,15 @@ class WindowService::WindowManagerBackend final : public WindowBackend
         return true;
     }
 
+    bool showImageOwned(win::WindowId window_id, cv::Mat image) override
+    {
+        auto* window = windows_.get(window_id);
+        if (!window) return false;
+        window->setImage(std::move(image));
+        window->present();
+        return true;
+    }
+
     bool configureWindowSurface(win::WindowId window_id, int monitor_index, int x, int y, int width, int height,
                                 bool fullscreen) override
     {
@@ -447,13 +456,18 @@ WindowResult WindowService::closeWindow(const std::string& role)
 
 WindowResult WindowService::showImage(const std::string& role, const cv::Mat& image)
 {
+    return showImage(role, image.clone());
+}
+
+WindowResult WindowService::showImage(const std::string& role, cv::Mat&& image)
+{
     if (isGuiThread())
     {
-        ShowImageRequest request{role, image.clone()};
+        ShowImageRequest request{role, std::move(image)};
         return executeShowImage(request);
     }
 
-    auto request = std::make_shared<ShowImageRequest>(role, image.clone());
+    auto request = std::make_shared<ShowImageRequest>(role, std::move(image));
     auto future = request->promise.get_future();
     enqueue(request);
     return future.get();
@@ -748,11 +762,13 @@ WindowResult WindowService::executeShowImage(ShowImageRequest& request)
     {
         return WindowResult::failure(request.role, "invalid_window_image", "image is empty");
     }
-    if (!backend_.showImage(it->second, request.image))
+    const auto width = request.image.cols;
+    const auto height = request.image.rows;
+    if (!backend_.showImageOwned(it->second, std::move(request.image)))
     {
         return WindowResult::failure(request.role, "window_show_failed", "failed to show image: " + request.role);
     }
-    return WindowResult::success(request.role, it->second, request.image.cols, request.image.rows);
+    return WindowResult::success(request.role, it->second, width, height);
 }
 
 WindowResult WindowService::executeConfigureWindowSurface(ConfigureWindowSurfaceRequest& request)

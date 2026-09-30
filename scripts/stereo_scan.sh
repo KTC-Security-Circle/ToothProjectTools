@@ -30,6 +30,7 @@ MAX_EPIPOLAR_ERROR_PX="${MAX_EPIPOLAR_ERROR_PX:-}"
 KEEP_WORK_DIR="${KEEP_WORK_DIR:-0}"
 READY_TIMEOUT_SECONDS="${READY_TIMEOUT_SECONDS:-10}"
 DEBUG_PROGRESS="${DEBUG_PROGRESS:-0}"
+DEBUG_TIMING="${DEBUG_TIMING:-0}"
 
 WORK_DIR=""
 BACKEND_LOG=""
@@ -196,6 +197,35 @@ wait_for_scan_terminal_event() {
             "$(jq -r '.pattern_count' <<<"${line}")" \
             "$(jq -r '.pattern_index' <<<"${line}")"
         fi
+        ;;
+      scan_pattern_timing)
+        if [[ "${DEBUG_TIMING}" == 1 ]]; then
+          printf '\n[計測] %s/%s\n' \
+            "$(jq -r '(.pattern_index | tonumber) + 1' <<<"${line}")" \
+            "$(jq -r '.pattern_count' <<<"${line}")"
+          printf '  投影       : %.1f ms\n' "$(jq -r '.show_ms | tonumber' <<<"${line}")"
+          printf '  Photodiode : %.1f ms\n' "$(jq -r '.photodiode_wait_ms | tonumber' <<<"${line}")"
+          printf '  Guard      : %.1f ms\n' "$(jq -r '.guard_ms | tonumber' <<<"${line}")"
+          printf '  Camera待機 : %.1f ms\n' "$(jq -r '.camera_wait_ms | tonumber' <<<"${line}")"
+          printf '  Queue待機  : %.1f ms\n' "$(jq -r '.enqueue_wait_ms | tonumber' <<<"${line}")"
+          printf '  合計       : %.1f ms\n' "$(jq -r '.loop_ms | tonumber' <<<"${line}")"
+        fi
+        ;;
+      scan_performance_summary)
+        printf '\n[Scan性能]\n'
+        printf 'Pattern数          : %s\n' "$(jq -r '.pattern_count' <<<"${line}")"
+        printf 'Scan取得時間       : %.2f s\n' "$(jq -r '(.scan_acquisition_ms | tonumber) / 1000' <<<"${line}")"
+        printf '画像保存完了時間   : %.2f s\n\n' "$(jq -r '(.save_completion_ms | tonumber) / 1000' <<<"${line}")"
+        printf '平均 / 最大\n'
+        printf '  投影             : %.1f / %.1f ms\n' "$(jq -r '.show_avg_ms|tonumber' <<<"${line}")" "$(jq -r '.show_max_ms|tonumber' <<<"${line}")"
+        printf '  Photodiode待機   : %.1f / %.1f ms\n' "$(jq -r '.photodiode_avg_ms|tonumber' <<<"${line}")" "$(jq -r '.photodiode_max_ms|tonumber' <<<"${line}")"
+        printf '  Guard            : %.1f ms\n' "$(jq -r '.guard_ms|tonumber' <<<"${line}")"
+        printf '  Camera待機       : %.1f / %.1f ms\n' "$(jq -r '.camera_avg_ms|tonumber' <<<"${line}")" "$(jq -r '.camera_max_ms|tonumber' <<<"${line}")"
+        printf '  Queue待機        : %.1f / %.1f ms\n' "$(jq -r '.enqueue_avg_ms|tonumber' <<<"${line}")" "$(jq -r '.enqueue_max_ms|tonumber' <<<"${line}")"
+        printf '  PNG保存          : %.1f / %.1f ms\n\n' "$(jq -r '.save_avg_ms|tonumber' <<<"${line}")" "$(jq -r '.save_max_ms|tonumber' <<<"${line}")"
+        printf '最大Queueサイズ    : %s / %s\n' "$(jq -r '.max_queue_size' <<<"${line}")" "$(jq -r '.queue_capacity' <<<"${line}")"
+        printf 'Pre-arm black/white: %.1f / %.1f ms\n' "$(jq -r '.prearm_black_ms|tonumber' <<<"${line}")" "$(jq -r '.prearm_white_ms|tonumber' <<<"${line}")"
+        printf 'Reference pre-arm  : %s 回 (平均 %.1f ms)\n' "$(jq -r '.reference_prearm_count' <<<"${line}")" "$(jq -r '.reference_prearm_avg_ms|tonumber' <<<"${line}")"
         ;;
       scan_completed)
         SCAN_RUNNING=0
@@ -427,6 +457,7 @@ is_non_negative_integer "${MONITOR_INDEX}" || die "MONITOR_INDEXは0以上の整
 is_positive_integer "${PHOTODIODE_BAUD}" || die "PHOTODIODE_BAUDは正の整数にしてください"
 is_positive_integer "${SYNC_TIMEOUT_MS}" || die "SYNC_TIMEOUT_MSは正の整数にしてください"
 is_non_negative_integer "${GUARD_MS}" || die "GUARD_MSは0以上の整数にしてください"
+[[ "${DEBUG_TIMING}" == 0 || "${DEBUG_TIMING}" == 1 ]] || die "DEBUG_TIMINGは0または1にしてください"
 is_positive_integer "${MJPEG_PORT}" || die "MJPEG_PORTは正の整数にしてください"
 is_positive_integer "${CODE_WIDTH}" || die "CODE_WIDTHは正の整数にしてください"
 is_positive_integer "${CODE_HEIGHT}" || die "CODE_HEIGHTは正の整数にしてください"
