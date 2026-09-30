@@ -49,6 +49,7 @@ RIGHT_STREAM_OPEN=0
 WINDOW_OPEN=0
 PROJECTOR_OPEN=0
 RUN_RESULT=""
+LOCATOR_PATTERN_INDEX=""
 
 die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 is_non_negative_integer() { [[ "$1" =~ ^[0-9]+$ ]]; }
@@ -229,11 +230,15 @@ wait_for_ready() {
 }
 
 show_locator() {
-  if ! request '{"id":"locator","cmd":"show_pattern","projector_role":"projector","index":0,"photodiode_marker_mode":"locate"}'; then
+  [[ -n "${LOCATOR_PATTERN_INDEX}" ]] || { printf '[ERROR] locator pattern index is not initialized\n' >&2; return 1; }
+  local locator_request
+  locator_request="$(jq -cn --argjson index "${LOCATOR_PATTERN_INDEX}" \
+    '{id:"locator",cmd:"show_pattern",projector_role:"projector",index:$index,photodiode_marker_mode:"locate"}')"
+  if ! request "${locator_request}"; then
     printf '[ERROR] failed to restore the RED locator; the session cannot continue\n' >&2
     return 1
   fi
-  printf '[LOCATOR] RED\n'
+  printf '[LOCATOR] RED / FULL WHITE\n'
 }
 
 print_run_retained() {
@@ -477,22 +482,28 @@ PROJECTOR_OPEN=1
 printf '[OK] projector opened\n'
 
 if [[ -z "${DISPLAY_WIDTH}" ]]; then
-  DISPLAY_WIDTH=$((WINDOW_WIDTH - 2 * (96 + 32)))
+  DISPLAY_WIDTH=1668
   DISPLAY_HEIGHT="${WINDOW_HEIGHT}"
 fi
-(( DISPLAY_WIDTH > 0 && DISPLAY_WIDTH <= WINDOW_WIDTH && DISPLAY_HEIGHT > 0 && DISPLAY_HEIGHT <= WINDOW_HEIGHT )) || \
+DISPLAY_X=128
+DISPLAY_Y=0
+(( DISPLAY_WIDTH > 0 && DISPLAY_X + DISPLAY_WIDTH <= WINDOW_WIDTH && DISPLAY_HEIGHT > 0 && DISPLAY_HEIGHT <= WINDOW_HEIGHT )) || \
   die "photodiode_marker_margin_unavailable"
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${DISPLAY_WIDTH}" --argjson height "${DISPLAY_HEIGHT}" \
-  '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,placement:"center"}')"
+  --argjson x "${DISPLAY_X}" --argjson y "${DISPLAY_Y}" \
+  '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,x:$x,y:$y,placement:"custom"}')"
 printf '[OK] surface configured\n'
 
 request '{"id":"patterns","cmd":"generate_patterns","projector_role":"projector"}'
 printf '[OK] patterns generated\n'
 printf '[PROJECTOR] code=%sx%s\n' "$(jq -r '.code_width' <<<"${RESPONSE}")" "$(jq -r '.code_height' <<<"${RESPONSE}")"
 printf '[PROJECTOR] display=%sx%s\n' "$(jq -r '.display_width' <<<"${RESPONSE}")" "$(jq -r '.display_height' <<<"${RESPONSE}")"
-printf '[PATTERN] count=%s\n' "$(jq -r '.pattern_count' <<<"${RESPONSE}")"
-request '{"id":"locator","cmd":"show_pattern","projector_role":"projector","index":0,"photodiode_marker_mode":"locate"}'
-printf '[LOCATOR] RED\n[LOCATOR] marker=(%s,%s) %sx%s\n[LOCATOR] pattern=(%s,%s) %sx%s\n' \
+PATTERN_COUNT="$(jq -r '.pattern_count' <<<"${RESPONSE}")"
+(( PATTERN_COUNT >= 2 )) || die "full-white reference pattern is unavailable"
+LOCATOR_PATTERN_INDEX=$((PATTERN_COUNT - 2))
+printf '[PATTERN] count=%s\n' "${PATTERN_COUNT}"
+show_locator || die "failed to show initial locator"
+printf '[LOCATOR] marker=(%s,%s) %sx%s\n[LOCATOR] pattern=(%s,%s) %sx%s\n' \
   "$(jq -r '.marker_x' <<<"${RESPONSE}")" "$(jq -r '.marker_y' <<<"${RESPONSE}")" \
   "$(jq -r '.marker_width' <<<"${RESPONSE}")" "$(jq -r '.marker_height' <<<"${RESPONSE}")" \
   "$(jq -r '.pattern_x' <<<"${RESPONSE}")" "$(jq -r '.pattern_y' <<<"${RESPONSE}")" \
