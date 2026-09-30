@@ -43,6 +43,8 @@ PLY_FILE=/workspace/data/scans/test/result.ply \
 ```
 
 `MONITOR_INDEX` は必須で、`SYNC_MODE` は `photodiode` のみを受け付けます。`BIN`、`CALIBRATION_FILE`、`PHOTODIODE_BAUD`、`SYNC_TIMEOUT_MS`、`GUARD_MS`、`SCAN_ID`、`MJPEG_HOST`、`MJPEG_PORT` もenvironment variableで設定できます。`OUTPUT_DIR` のdefaultは `data/scans/<scan_id>`、`PLY_FILE` のdefaultは `<output_dir>/cloud.ply` です。その下に `scan/` と `decode/` を作成します。
+
+`DEBUG_TIMING=1` でpatternごとの投影・Photodiode・Camera・Queue待機時間を表示します。`GUARD_MS=0` は性能診断専用で、本番Scanには推奨しません。
 任意の `DISPLAY_WIDTH` / `DISPLAY_HEIGHT` と `CODE_WIDTH` / `CODE_HEIGHT` は、それぞれ必ずペアで指定します。`DECODE_THRESHOLD` と `MAX_EPIPOLAR_ERROR_PX` も必要な場合だけoverrideできます。
 
 Photodiode deviceの存在・read/write permissionを検証しますが、Shell Script自身はserial deviceをopenしません。deviceは `scan_start` / `ScanService`だけが所有します。失敗時のscan artifactとbackend logは残り、stderrのpathが表示されます。正常時にも調査用work directoryを残すには `KEEP_WORK_DIR=1` を指定します。

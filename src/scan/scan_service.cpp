@@ -96,6 +96,19 @@ std::int64_t timestampNs(std::chrono::steady_clock::time_point value)
     return std::chrono::duration_cast<std::chrono::nanoseconds>(value.time_since_epoch()).count();
 }
 
+double durationMs(std::chrono::steady_clock::time_point begin,
+                  std::chrono::steady_clock::time_point end)
+{
+    return std::chrono::duration<double, std::milli>(end - begin).count();
+}
+
+std::string decimal(double value)
+{
+    std::ostringstream stream;
+    stream << std::fixed << std::setprecision(3) << value;
+    return stream.str();
+}
+
 } // namespace
 
 ScanService::ScanService(projector::ProjectorService& projector_service,
@@ -526,6 +539,9 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         }
     }
 
+    const auto scan_acquisition_begin = std::chrono::steady_clock::now();
+    double prearm_black_ms = 0.0;
+    double prearm_white_ms = 0.0;
     // MCUは状態変化時だけeventを送る。scan開始前にmarkerをwhiteへ確立し、
     // pattern 0 (black)が必ずtransitionになるようpre-armする。
     try
@@ -534,6 +550,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         const auto mode_result = projector_service_.setPhotodiodeMarkerMode(
             config.projector_role, projector::PhotodiodeMarkerMode::sync);
         if (!mode_result.ok) throw PhotodiodeTransportError("pattern_show_failed", "failed to select sync marker mode");
+        const auto black_begin = std::chrono::steady_clock::now();
         const auto black_result = projector_service_.showPattern(config.projector_role, 0);
         if (!black_result.ok)
         {
@@ -545,7 +562,9 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         (void)photodiode_source->waitForTransition(
             structured_light::sync::MarkerState::black, black_shown_at,
             std::chrono::milliseconds(std::min(config.sync_timeout_ms, 200)));
+        prearm_black_ms = durationMs(black_begin, std::chrono::steady_clock::now());
 
+        const auto white_begin = std::chrono::steady_clock::now();
         const auto white_result = projector_service_.showPattern(config.projector_role, 1);
         if (!white_result.ok)
         {
@@ -559,6 +578,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         {
             throw PhotodiodeTransportError("photodiode_timeout", "Photodiode pre-arm white eventを受信できませんでした");
         }
+        prearm_white_ms = durationMs(white_begin, std::chrono::steady_clock::now());
     }
     catch (const PhotodiodeTransportError& error)
     {
@@ -586,6 +606,18 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
     std::mutex save_progress_mutex;
     std::vector<PatternSaveProgress> save_progress(static_cast<std::size_t>(pattern_count));
     const int images_per_pattern = right_id ? 2 : 1;
+    struct PatternTiming
+    {
+        double show_ms{0.0};
+        double photodiode_ms{0.0};
+        double camera_ms{0.0};
+        double enqueue_ms{0.0};
+        double loop_ms{0.0};
+        double reference_prearm_ms{0.0};
+    };
+    std::vector<PatternTiming> pattern_timings(static_cast<std::size_t>(pattern_count));
+    std::mutex timing_mutex;
+    std::vector<double> save_timings;
     constexpr std::size_t save_worker_count = 2;
     constexpr std::size_t save_queue_capacity = 8;
     ScanSaveQueue save_queue(
@@ -620,6 +652,19 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                                                 {"right_path", progress.right_path.string()},
                                                 {"save_completed_timestamp_ns", std::to_string(timestampNs(
                                                      std::chrono::steady_clock::now()))}});
+        },
+        [this, &timing_mutex, &save_timings](const ScanSaveJob& job, const ScanSaveTiming& timing) {
+            {
+                std::lock_guard lock(timing_mutex);
+                save_timings.push_back(timing.save_ms);
+            }
+            pushEvent("scan_save_timing", {{"scan_id", job.scan_id},
+                                             {"pattern_index", std::to_string(job.pattern_index)},
+                                             {"side", job.side},
+                                             {"save_begin_ns", std::to_string(timestampNs(timing.save_begin))},
+                                             {"save_end_ns", std::to_string(timestampNs(timing.save_end))},
+                                             {"save_ms", decimal(timing.save_ms)},
+                                             {"queue_size", std::to_string(timing.queue_size)}});
         });
 
     auto publishSaveFailure = [&]() -> bool {
@@ -649,6 +694,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
     bool stopped = false;
     for (int index = 0; index < pattern_count; ++index)
     {
+        const auto pattern_loop_begin = std::chrono::steady_clock::now();
         if (stop_token.stop_requested() || save_queue.failure())
         {
             stopped = stop_token.stop_requested();
@@ -664,8 +710,12 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                                                 : structured_light::sync::MarkerState::white;
         const auto expected_name = expected == structured_light::sync::MarkerState::black ? "black" : "white";
         const auto pattern_kind = projector::patternKind(index, pattern_count);
+        bool reference_prearm_used = false;
+        double reference_prearm_ms = 0.0;
         if (photodiode_source && expected == previous_marker_state)
         {
+            reference_prearm_used = true;
+            const auto reference_prearm_begin = std::chrono::steady_clock::now();
             const int prearm_index = expected == structured_light::sync::MarkerState::white ? 0 : 1;
             const auto opposite = expected == structured_light::sync::MarkerState::white
                                       ? structured_light::sync::MarkerState::black
@@ -687,7 +737,9 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                 return;
             }
             previous_marker_state = opposite;
+            reference_prearm_ms = durationMs(reference_prearm_begin, std::chrono::steady_clock::now());
         }
+        const auto show_begin = std::chrono::steady_clock::now();
         const auto show_result = projector_service_.showPattern(config.projector_role, index);
         if (!show_result.ok)
         {
@@ -723,6 +775,8 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                                          {"shown_timestamp_ns", std::to_string(timestampNs(show_timestamp))}});
 
         auto selected_at = show_timestamp + std::chrono::milliseconds(config.delay_ms);
+        const auto photodiode_wait_begin = std::chrono::steady_clock::now();
+        auto photodiode_event_received = photodiode_wait_begin;
         if (config.sync_mode == ScanSyncMode::photodiode)
         {
             std::optional<structured_light::sync::SyncEvent> event;
@@ -753,21 +807,33 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             }
             selected_at = structured_light::sync::selectionTime(
                 *event, std::chrono::milliseconds(config.sync_guard_ms));
+            photodiode_event_received = std::chrono::steady_clock::now();
             previous_marker_state = expected;
         }
         std::optional<video::FrameSample> selected_left;
         std::optional<video::FrameSample> selected_right;
+        const auto camera_wait_begin = std::chrono::steady_clock::now();
+        auto left_frame_selected = camera_wait_begin;
+        auto right_frame_selected = camera_wait_begin;
         const auto selection_deadline = std::chrono::steady_clock::now() +
                                         std::chrono::milliseconds(config.sync_timeout_ms);
         while (!stop_token.stop_requested() && std::chrono::steady_clock::now() < selection_deadline &&
                (!selected_left || (right_id && !selected_right)))
         {
-            if (!selected_left) selected_left = camera_service_.firstFrameAtOrAfter(*left_id, selected_at);
+            if (!selected_left)
+            {
+                selected_left = camera_service_.firstFrameAtOrAfter(*left_id, selected_at);
+                if (selected_left) left_frame_selected = std::chrono::steady_clock::now();
+            }
             if (right_id && !selected_right)
+            {
                 selected_right = camera_service_.firstFrameAtOrAfter(*right_id, selected_at);
+                if (selected_right) right_frame_selected = std::chrono::steady_clock::now();
+            }
             if (!selected_left || (right_id && !selected_right))
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
+        const auto camera_wait_end = std::chrono::steady_clock::now();
         if (!selected_left || (right_id && !selected_right))
         {
             std::lock_guard lock(mutex_);
@@ -800,22 +866,62 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                                                                         : std::string{}},
                                            {"selected_timestamp_ns", std::to_string(timestampNs(selected_timestamp))}});
 
-        // Camera ring bufferから完全に独立した所有権をworkerへ渡す。
-        selected_left->image = selected_left->image.clone();
-        if (!save_queue.enqueue(ScanSaveJob{scan_id, index, pattern_kind, expected_name, "left",
-                                            std::move(*selected_left), left_path}))
+        // firstFrameAtOrAfter()がring bufferから独立する1回のcloneを行う。その所有権をworkerへ移す。
+        const auto enqueue_begin = std::chrono::steady_clock::now();
+        const auto left_enqueue = save_queue.enqueueWithTiming(
+            ScanSaveJob{scan_id, index, pattern_kind, expected_name, "left", std::move(*selected_left), left_path});
+        double enqueue_wait_ms = left_enqueue.wait_ms;
+        auto queue_size_before = left_enqueue.queue_size_before;
+        auto queue_size_after = left_enqueue.queue_size_after;
+        if (!left_enqueue.accepted)
             break;
         if (right_id)
         {
-            selected_right->image = selected_right->image.clone();
-            if (!save_queue.enqueue(ScanSaveJob{scan_id, index, pattern_kind, expected_name, "right",
-                                                std::move(*selected_right), right_path}))
+            const auto right_enqueue = save_queue.enqueueWithTiming(
+                ScanSaveJob{scan_id, index, pattern_kind, expected_name, "right", std::move(*selected_right), right_path});
+            enqueue_wait_ms += right_enqueue.wait_ms;
+            queue_size_after = right_enqueue.queue_size_after;
+            if (!right_enqueue.accepted)
                 break;
         }
+        const auto enqueue_end = std::chrono::steady_clock::now();
+        const auto pattern_loop_end = enqueue_end;
+        auto& timing = pattern_timings.at(static_cast<std::size_t>(index));
+        timing.show_ms = durationMs(show_begin, show_timestamp);
+        timing.photodiode_ms = durationMs(photodiode_wait_begin, photodiode_event_received);
+        timing.camera_ms = durationMs(camera_wait_begin, camera_wait_end);
+        timing.enqueue_ms = enqueue_wait_ms;
+        timing.loop_ms = durationMs(pattern_loop_begin, pattern_loop_end);
+        timing.reference_prearm_ms = reference_prearm_ms;
+        pushEvent("scan_pattern_timing", {{"scan_id", scan_id},
+                   {"pattern_index", std::to_string(index)},
+                   {"pattern_count", std::to_string(pattern_count)},
+                   {"pattern_loop_begin_ns", std::to_string(timestampNs(pattern_loop_begin))},
+                   {"show_begin_ns", std::to_string(timestampNs(show_begin))},
+                   {"show_end_ns", std::to_string(timestampNs(show_timestamp))},
+                   {"photodiode_wait_begin_ns", std::to_string(timestampNs(photodiode_wait_begin))},
+                   {"photodiode_event_received_ns", std::to_string(timestampNs(photodiode_event_received))},
+                   {"selection_target_ns", std::to_string(timestampNs(selected_at))},
+                   {"camera_wait_begin_ns", std::to_string(timestampNs(camera_wait_begin))},
+                   {"left_frame_selected_ns", std::to_string(timestampNs(left_frame_selected))},
+                   {"right_frame_selected_ns", right_id ? std::to_string(timestampNs(right_frame_selected)) : ""},
+                   {"camera_wait_end_ns", std::to_string(timestampNs(camera_wait_end))},
+                   {"enqueue_begin_ns", std::to_string(timestampNs(enqueue_begin))},
+                   {"enqueue_end_ns", std::to_string(timestampNs(enqueue_end))},
+                   {"pattern_loop_end_ns", std::to_string(timestampNs(pattern_loop_end))},
+                   {"show_ms", decimal(timing.show_ms)}, {"photodiode_wait_ms", decimal(timing.photodiode_ms)},
+                   {"guard_ms", std::to_string(config.sync_guard_ms)}, {"camera_wait_ms", decimal(timing.camera_ms)},
+                   {"enqueue_wait_ms", decimal(timing.enqueue_ms)}, {"loop_ms", decimal(timing.loop_ms)},
+                   {"queue_size_before", std::to_string(queue_size_before)},
+                   {"queue_size_after", std::to_string(queue_size_after)},
+                   {"reference_prearm_used", reference_prearm_used ? "true" : "false"},
+                   {"reference_prearm_ms", decimal(reference_prearm_ms)}});
     }
 
+    const auto scan_acquisition_end = std::chrono::steady_clock::now();
     // stop時もenqueue済み画像を保存し終えてからworkerをjoinする。
     save_queue.closeAndWait();
+    const auto save_completion_end = std::chrono::steady_clock::now();
     if (publishSaveFailure()) return;
     if (stopped || stop_token.stop_requested())
     {
@@ -840,6 +946,48 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         current_index_ = pattern_count > 0 ? pattern_count - 1 : -1;
         captured = captured_count_;
     }
+    auto average = [](const std::vector<double>& values) {
+        if (values.empty()) return 0.0;
+        double total = 0.0;
+        for (const auto value : values) total += value;
+        return total / static_cast<double>(values.size());
+    };
+    auto maximum = [](const std::vector<double>& values) {
+        return values.empty() ? 0.0 : *std::max_element(values.begin(), values.end());
+    };
+    std::vector<double> shows, photodiodes, cameras, enqueues, loops, reference_prearms;
+    shows.reserve(pattern_timings.size());
+    photodiodes.reserve(pattern_timings.size());
+    cameras.reserve(pattern_timings.size());
+    enqueues.reserve(pattern_timings.size());
+    loops.reserve(pattern_timings.size());
+    for (const auto& timing : pattern_timings)
+    {
+        shows.push_back(timing.show_ms);
+        photodiodes.push_back(timing.photodiode_ms);
+        cameras.push_back(timing.camera_ms);
+        enqueues.push_back(timing.enqueue_ms);
+        loops.push_back(timing.loop_ms);
+        if (timing.reference_prearm_ms > 0.0) reference_prearms.push_back(timing.reference_prearm_ms);
+    }
+    pushEvent("scan_performance_summary", {{"scan_id", scan_id},
+              {"pattern_count", std::to_string(pattern_count)},
+              {"scan_acquisition_ms", decimal(durationMs(scan_acquisition_begin, scan_acquisition_end))},
+              {"save_completion_ms", decimal(durationMs(scan_acquisition_begin, save_completion_end))},
+              {"post_capture_save_ms", decimal(durationMs(scan_acquisition_end, save_completion_end))},
+              {"prearm_black_ms", decimal(prearm_black_ms)}, {"prearm_white_ms", decimal(prearm_white_ms)},
+              {"show_avg_ms", decimal(average(shows))}, {"show_max_ms", decimal(maximum(shows))},
+              {"photodiode_avg_ms", decimal(average(photodiodes))},
+              {"photodiode_max_ms", decimal(maximum(photodiodes))},
+              {"guard_ms", std::to_string(config.sync_guard_ms)},
+              {"camera_avg_ms", decimal(average(cameras))}, {"camera_max_ms", decimal(maximum(cameras))},
+              {"enqueue_avg_ms", decimal(average(enqueues))}, {"enqueue_max_ms", decimal(maximum(enqueues))},
+              {"pattern_avg_ms", decimal(average(loops))}, {"pattern_max_ms", decimal(maximum(loops))},
+              {"save_avg_ms", decimal(average(save_timings))}, {"save_max_ms", decimal(maximum(save_timings))},
+              {"reference_prearm_count", std::to_string(reference_prearms.size())},
+              {"reference_prearm_avg_ms", decimal(average(reference_prearms))},
+              {"max_queue_size", std::to_string(save_queue.maximumQueuedCount())},
+              {"queue_capacity", std::to_string(save_queue.capacity())}});
     pushEvent("scan_completed", {{"scan_id", scan_id},
                                  {"captured_count", std::to_string(captured)},
                                  {"pattern_count", std::to_string(pattern_count)},

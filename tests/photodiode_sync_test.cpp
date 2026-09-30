@@ -54,6 +54,8 @@ video::FrameSample frame(std::uint64_t sequence, Clock::time_point timestamp)
     return {cv::Mat(2, 2, CV_8UC1, cv::Scalar(1)), sequence, timestamp};
 }
 
+capture::CaptureResult savedResult();
+
 void testProtocol()
 {
     const auto t = Clock::time_point{1s};
@@ -100,6 +102,29 @@ void testGuardAndFrameSelection()
                                   frame(3, t + 35ms), frame(4, t + 50ms)};
     const auto selected = video::firstFrameAtOrAfter(frames, selected_at);
     require(selected && selected->sequence == 3, "first frame at or after guard was not selected");
+
+    // Selection API owns exactly one deep copy; later ring-buffer writes cannot mutate it.
+    frames[2].image.setTo(cv::Scalar(99));
+    require(selected->image.at<unsigned char>(0, 0) == 1,
+            "selected frame still aliases the camera ring buffer");
+}
+
+void testMovedSaveJobRetainsIndependentFrame()
+{
+    const auto timestamp = Clock::now();
+    video::FrameRingBuffer ring{frame(1, timestamp)};
+    auto selected = video::firstFrameAtOrAfter(ring, timestamp);
+    require(selected.has_value(), "frame selection failed");
+    std::atomic<int> saved_pixel{-1};
+    scan::ScanSaveQueue queue(1, 2, [&](const video::FrameSample& sample, const std::filesystem::path&) {
+        saved_pixel = sample.image.at<unsigned char>(0, 0);
+        return savedResult();
+    });
+    require(queue.enqueue({"scan_test", 0, "graycode", "black", "left",
+                           std::move(*selected), "unused.png"}), "save enqueue failed");
+    ring.front().image.setTo(cv::Scalar(77));
+    queue.closeAndWait();
+    require(saved_pixel.load() == 1, "queued save frame changed when camera ring advanced");
 }
 
 void testPreArmAndPatternParitySequence()
@@ -237,6 +262,28 @@ void testSaveQueuePreSaveEventAndParallelism()
             "selected event was not emitted before save completion");
 }
 
+void testSaveQueueDoesNotSerializeProducerBehindSave()
+{
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool release = false;
+    scan::ScanSaveQueue queue(1, 8, [&](const video::FrameSample&, const std::filesystem::path&) {
+        std::unique_lock lock(mutex);
+        condition.wait_for(lock, 100ms, [&] { return release; });
+        return savedResult();
+    });
+    const auto begin = Clock::now();
+    require(queue.enqueue(saveJob(0, "left")), "first asynchronous enqueue failed");
+    require(queue.enqueue(saveJob(1, "left")), "next-pattern enqueue failed");
+    require(Clock::now() - begin < 50ms, "next pattern was serialized behind the 100ms save worker");
+    {
+        std::lock_guard lock(mutex);
+        release = true;
+    }
+    condition.notify_all();
+    queue.closeAndWait();
+}
+
 void testSaveQueueIsBoundedAndWaitsForDrain()
 {
     std::mutex mutex;
@@ -254,7 +301,7 @@ void testSaveQueueIsBoundedAndWaitsForDrain()
     for (int attempt = 0; attempt < 100 && active.load() < 2; ++attempt) std::this_thread::sleep_for(1ms);
     require(active.load() == 2, "workers did not start before bounded queue test");
     for (int index = 2; index < 4; ++index) require(queue.enqueue(saveJob(index, "left")), "enqueue failed");
-    auto blocked_enqueue = std::async(std::launch::async, [&] { return queue.enqueue(saveJob(4, "left")); });
+    auto blocked_enqueue = std::async(std::launch::async, [&] { return queue.enqueueWithTiming(saveJob(4, "left")); });
     require(blocked_enqueue.wait_for(30ms) == std::future_status::timeout,
             "producer did not apply backpressure at queue capacity");
     {
@@ -262,7 +309,9 @@ void testSaveQueueIsBoundedAndWaitsForDrain()
         release = true;
     }
     condition.notify_all();
-    require(blocked_enqueue.get(), "blocked enqueue did not resume");
+    const auto enqueue_timing = blocked_enqueue.get();
+    require(enqueue_timing.accepted && enqueue_timing.wait_ms >= 20.0,
+            "blocked enqueue did not report its backpressure wait");
     queue.closeAndWait();
 
     bool drain_release = false;
@@ -305,6 +354,7 @@ int main()
     testExpectedStateAndOldEvent();
     testTimeout();
     testGuardAndFrameSelection();
+    testMovedSaveJobRetainsIndependentFrame();
     testStereoUsesSameSelectionTimestamp();
     testPreArmAndPatternParitySequence();
     testAdaptiveMeasurementModelAndClassification();
@@ -312,6 +362,7 @@ int main()
     testDelayStatisticsAndAlternation();
     testPhotodiodeToCameraTransitionDelay();
     testSaveQueuePreSaveEventAndParallelism();
+    testSaveQueueDoesNotSerializeProducerBehindSave();
     testSaveQueueIsBoundedAndWaitsForDrain();
     testSaveQueueReportsFailure();
     return 0;

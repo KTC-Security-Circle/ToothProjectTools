@@ -79,6 +79,9 @@ SQUARE_MM=0.5 \
 | `PHOTODIODE_DEVICE` | `/dev/ttyUSB0` | Photodiode serial device |
 | `PHOTODIODE_BAUD` | `115200` | baud rate |
 | `GUARD_MS` | `95` | scan guard |
+| `DEBUG_TIMING` | `0` | `1`でpattern別の性能計測を表示 |
+
+`GUARD_MS=0` は性能診断用であり、Photodiode同期後のCamera安定待ちを無効にするため、本番Scanには推奨しません。
 | `OUT_DIR` | `data/calib` | calibration出力先 |
 
 Projector操作を選ぶまで `MONITOR_INDEX` が未指定なら、その時点で入力できます。Delay Measurement後に取得した `recommended_guard_ms` は、確認後、そのQuick Start sessionのStereo Scanへ引き継げます。

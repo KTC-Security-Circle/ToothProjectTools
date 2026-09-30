@@ -111,6 +111,11 @@ class WindowBackend
     /// Return:
     ///   <bool>: 表示対象が存在し表示できた場合はtrue。
     virtual bool showImage(win::WindowId window_id, const cv::Mat& image) = 0;
+    /// Ownership-aware path. Backends may override it to avoid a second clone.
+    virtual bool showImageOwned(win::WindowId window_id, cv::Mat image)
+    {
+        return showImage(window_id, image);
+    }
 
     /// @brief window surfaceを再設定する。
     virtual bool configureWindowSurface(win::WindowId window_id, int monitor_index, int x, int y, int width, int height,
@@ -189,6 +194,8 @@ class WindowService
     /// Return:
     ///   <WindowResult>: 表示結果。
     WindowResult showImage(const std::string& role, const cv::Mat& image);
+    /// imageの所有権をrequest/GUI threadへ移す。呼出し後imageは再利用しない。
+    WindowResult showImage(const std::string& role, cv::Mat&& image);
 
     /// @brief open済みwindowのsurfaceを再設定する。
     WindowResult configureWindowSurface(const WindowSurfaceConfig& config);

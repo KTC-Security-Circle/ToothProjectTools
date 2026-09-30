@@ -10,6 +10,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace sl
 {
@@ -94,6 +95,9 @@ struct ProjectorScanSnapshot
 
     /// surface <ProjectorSurface>: 現在のprojector surface。
     ProjectorSurface surface;
+
+    /// cache再生成回数。performance regression test/diagn断用。
+    std::size_t canvas_cache_generation{0};
 };
 
 struct ProjectorOpenConfig
@@ -239,6 +243,11 @@ class ProjectorService
 
         /// photodiode_marker_mode <PhotodiodeMarkerMode>: 人間向けlocatorまたは同期表示。
         PhotodiodeMarkerMode photodiode_marker_mode{PhotodiodeMarkerMode::sync};
+
+        /// surface/mode確定後に生成する最終表示canvas。cache本体はWindowへmoveしない。
+        std::vector<cv::Mat> sync_pattern_canvases;
+        std::vector<cv::Mat> locator_pattern_canvases;
+        std::size_t canvas_cache_generation{0};
     };
 
     /// @brief projector role文字列を検証する。
@@ -277,6 +286,7 @@ class ProjectorService
                                       std::optional<PhotodiodeMarkerMode> marker_mode = std::nullopt);
     static cv::Mat composePatternCanvas(const cv::Mat& pattern, const ProjectorSurface& surface, int pattern_index,
                                         int pattern_count, PhotodiodeMarkerMode marker_mode);
+    static void rebuildCanvasCaches(ProjectorSession& session);
 
     /// window_service_ <win::WindowService&>: pattern表示先window service。
     win::WindowService& window_service_;

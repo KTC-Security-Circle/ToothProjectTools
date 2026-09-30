@@ -4,6 +4,7 @@
 #include "video/video_types.hpp"
 
 #include <condition_variable>
+#include <chrono>
 #include <cstddef>
 #include <deque>
 #include <filesystem>
@@ -35,15 +36,32 @@ struct ScanSaveFailure
     std::string error;
 };
 
+struct ScanSaveEnqueueTiming
+{
+    bool accepted{false};
+    double wait_ms{0.0};
+    std::size_t queue_size_before{0};
+    std::size_t queue_size_after{0};
+};
+
+struct ScanSaveTiming
+{
+    std::chrono::steady_clock::time_point save_begin{};
+    std::chrono::steady_clock::time_point save_end{};
+    double save_ms{0.0};
+    std::size_t queue_size{0};
+};
+
 class ScanSaveQueue
 {
   public:
     using SaveFunction = std::function<capture::CaptureResult(const video::FrameSample&,
                                                                const std::filesystem::path&)>;
     using CompletionFunction = std::function<void(const ScanSaveJob&)>;
+    using TimingFunction = std::function<void(const ScanSaveJob&, const ScanSaveTiming&)>;
 
     ScanSaveQueue(std::size_t worker_count, std::size_t capacity, SaveFunction save,
-                  CompletionFunction completed = {});
+                  CompletionFunction completed = {}, TimingFunction timing = {});
     ~ScanSaveQueue();
 
     ScanSaveQueue(const ScanSaveQueue&) = delete;
@@ -51,11 +69,13 @@ class ScanSaveQueue
 
     /// Queueが満杯の間だけ待つ。close済みまたは保存失敗後はfalseを返す。
     bool enqueue(ScanSaveJob job);
+    ScanSaveEnqueueTiming enqueueWithTiming(ScanSaveJob job);
     /// 新規jobを閉じ、queue済み・実行中の保存が完了するまで待つ。
     void closeAndWait();
     std::optional<ScanSaveFailure> failure() const;
     std::size_t queuedCount() const;
     std::size_t capacity() const { return capacity_; }
+    std::size_t maximumQueuedCount() const;
 
   private:
     void workerLoop();
@@ -63,12 +83,14 @@ class ScanSaveQueue
     const std::size_t capacity_;
     SaveFunction save_;
     CompletionFunction completed_;
+    TimingFunction timing_;
     mutable std::mutex mutex_;
     std::condition_variable not_empty_;
     std::condition_variable not_full_;
     std::deque<ScanSaveJob> jobs_;
     std::vector<std::thread> workers_;
     std::optional<ScanSaveFailure> failure_;
+    std::size_t maximum_queued_count_{0};
     bool closed_{false};
 };
 
