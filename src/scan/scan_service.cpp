@@ -342,6 +342,9 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
     try
     {
         if (!photodiode_source) throw std::logic_error("delay mode does not require photodiode pre-arm");
+        const auto mode_result = projector_service_.setPhotodiodeMarkerMode(
+            config.projector_role, projector::PhotodiodeMarkerMode::sync);
+        if (!mode_result.ok) throw PhotodiodeTransportError("pattern_show_failed", "failed to select sync marker mode");
         const auto black_result = projector_service_.showPattern(config.projector_role, 0);
         if (!black_result.ok)
         {
@@ -383,6 +386,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         // Delay synchronization deliberately has no serial transport or pre-arm phase.
     }
 
+    auto previous_marker_state = structured_light::sync::MarkerState::white;
     for (int index = 0; index < pattern_count; ++index)
     {
         if (stop_token.stop_requested())
@@ -405,6 +409,35 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             current_index_ = index;
         }
 
+        const auto marker_value = projector::photodiodeMarkerValue(index, pattern_count);
+        const auto expected = marker_value == 0 ? structured_light::sync::MarkerState::black
+                                                : structured_light::sync::MarkerState::white;
+        const auto expected_name = expected == structured_light::sync::MarkerState::black ? "black" : "white";
+        const auto pattern_kind = projector::patternKind(index, pattern_count);
+        if (photodiode_source && expected == previous_marker_state)
+        {
+            const int prearm_index = expected == structured_light::sync::MarkerState::white ? 0 : 1;
+            const auto opposite = expected == structured_light::sync::MarkerState::white
+                                      ? structured_light::sync::MarkerState::black
+                                      : structured_light::sync::MarkerState::white;
+            const auto prearm = projector_service_.showPattern(config.projector_role, prearm_index);
+            const auto shown_at = std::chrono::steady_clock::now();
+            const auto transition = prearm.ok ? photodiode_source->waitForTransition(
+                opposite, shown_at, std::chrono::milliseconds(config.sync_timeout_ms)) : std::nullopt;
+            if (!prearm.ok || !transition)
+            {
+                std::lock_guard lock(mutex_);
+                state_ = ScanState::failed;
+                last_error_code_ = prearm.ok ? "photodiode_timeout" : "pattern_show_failed";
+                last_error_message_ = "Photodiode reference pre-arm transitionを確立できませんでした";
+                pushEvent("scan_failed", {{"scan_id", scan_id}, {"error_code", last_error_code_},
+                          {"error_message", last_error_message_}, {"pattern_index", std::to_string(index)},
+                          {"pattern_kind", pattern_kind}, {"expected_marker_state", expected_name},
+                          {"captured_count", std::to_string(captured_count_)}});
+                return;
+            }
+            previous_marker_state = opposite;
+        }
         const auto show_result = projector_service_.showPattern(config.projector_role, index);
         if (!show_result.ok)
         {
@@ -432,11 +465,15 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         }
 
         const auto show_timestamp = std::chrono::steady_clock::now();
+        pushEvent("scan_pattern_shown", {{"scan_id", scan_id},
+                                         {"pattern_index", std::to_string(index)},
+                                         {"pattern_count", std::to_string(pattern_count)},
+                                         {"pattern_kind", pattern_kind},
+                                         {"expected_marker_state", expected_name}});
+
         auto selected_at = show_timestamp + std::chrono::milliseconds(config.delay_ms);
         if (config.sync_mode == ScanSyncMode::photodiode)
         {
-            const auto expected = (index % 2 == 0) ? structured_light::sync::MarkerState::black
-                                                   : structured_light::sync::MarkerState::white;
             std::optional<structured_light::sync::SyncEvent> event;
             try
             {
@@ -465,6 +502,7 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
             }
             selected_at = structured_light::sync::selectionTime(
                 *event, std::chrono::milliseconds(config.sync_guard_ms));
+            previous_marker_state = expected;
         }
         std::optional<video::FrameSample> selected_left;
         std::optional<video::FrameSample> selected_right;
@@ -532,6 +570,8 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         }
         pushEvent("scan_frame_captured", {{"scan_id", scan_id},
                                           {"pattern_index", std::to_string(index)},
+                                          {"pattern_kind", pattern_kind},
+                                          {"expected_marker_state", expected_name},
                                           {"captured_count", std::to_string(captured)},
                                           {"pattern_count", std::to_string(pattern_count)},
                                           {"left_path", left_path.string()},
