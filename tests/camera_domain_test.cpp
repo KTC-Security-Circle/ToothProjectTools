@@ -1127,17 +1127,36 @@ void testGeneratePatternsShowsRedPreScanMarker()
         projector_service.openProjector({"projector", "locator-window", 480, 270}).ok,
         "locator test projector did not open");
     requireCameraProjector(projector_service
-                               .configureSurface({"projector", 1, 1664, 1080, std::nullopt, std::nullopt,
-                                                  projector::ProjectorPlacement::center})
+                               .configureSurface({"projector", 1, 1668, 1080, 128, 0,
+                                                  projector::ProjectorPlacement::custom})
                                .ok,
                            "locator test surface was not configured");
 
     const auto generated = projector_service.generatePatterns("projector");
-    const auto located = projector_service.showPattern("projector", 0, projector::PhotodiodeMarkerMode::locate);
+    const int locator_index = generated.pattern_count - 2;
+    const auto located = projector_service.showPattern(
+        "projector", locator_index, projector::PhotodiodeMarkerMode::locate);
     requireCameraProjector(generated.ok && located.ok && backend.show_count == 1 && !backend.last_image.empty(),
                            "locator mode did not display the pre-scan locator");
+    requireCameraProjector(locator_index >= 0 &&
+                               projector::patternKind(locator_index, generated.pattern_count) == "full_white",
+                           "locator did not use the full-white reference pattern");
+    requireCameraProjector(located.pattern_x == 128 && located.pattern_y == 0 &&
+                               located.pattern_width == 1668 && located.pattern_height == 1080,
+                           "locator active pattern geometry differs");
+    requireCameraProjector(located.marker_x == 0 && located.marker_y == 492 &&
+                               located.marker_width == 96 && located.marker_height == 96 &&
+                               located.pattern_x - (located.marker_x + located.marker_width) == 32,
+                           "locator marker geometry or gap differs");
     const auto marker_pixel = backend.last_image.at<cv::Vec3b>(located.marker_y, located.marker_x);
     requireCameraProjector(marker_pixel == cv::Vec3b(0, 0, 255), "pre-scan locator marker is not red");
+    const cv::Rect active_roi{located.pattern_x, located.pattern_y,
+                              located.pattern_width, located.pattern_height};
+    const cv::Mat expected_white(active_roi.size(), CV_8UC3, cv::Scalar(255, 255, 255));
+    requireCameraProjector(cv::norm(backend.last_image(active_roi), expected_white, cv::NORM_INF) == 0.0,
+                           "locator active pattern is not fully white");
+    const auto remaining_pixel = backend.last_image.at<cv::Vec3b>(0, 1796);
+    requireCameraProjector(remaining_pixel == cv::Vec3b(0, 0, 0), "locator remaining margin is not black");
 }
 
 void testInternalWindowPlacementAdapter()
