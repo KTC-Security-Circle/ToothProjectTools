@@ -240,6 +240,8 @@ SyncDelayResult ScanService::measureSyncDelay(const SyncDelayConfig& config)
     if (!initial_frame) return {false, "camera_frame_timeout", "camera has not produced a frame"};
 
     const auto timeout = std::chrono::milliseconds(config.sync_timeout_ms);
+    const int white_pattern_index = snapshot->pattern_count - 2;
+    const int black_pattern_index = snapshot->pattern_count - 1;
     auto show = [&](int index) -> std::optional<SyncDelayResult> {
         const auto result = projector_service_.showPattern(config.projector_role, index,
                                                             projector::PhotodiodeMarkerMode::sync);
@@ -267,9 +269,9 @@ SyncDelayResult ScanService::measureSyncDelay(const SyncDelayConfig& config)
     };
 
     pushEvent("sync_delay_baseline_started", {});
-    const auto black = stableBaseline(0, "black");
+    const auto black = stableBaseline(black_pattern_index, "black");
     if (!black) return {false, "camera_frame_timeout", "BLACK baseline frames did not arrive"};
-    const auto white = stableBaseline(1, "white");
+    const auto white = stableBaseline(white_pattern_index, "white");
     if (!white) return {false, "camera_frame_timeout", "WHITE baseline frames did not arrive"};
     const auto model = buildMeasurementModel(*black, *white, config.minimum_contrast);
     if (!model)
@@ -287,11 +289,11 @@ SyncDelayResult ScanService::measureSyncDelay(const SyncDelayConfig& config)
 
     pushEvent("sync_delay_prearm_started", {});
     const auto white_after = std::chrono::steady_clock::now();
-    if (const auto failure = show(1)) return *failure;
+    if (const auto failure = show(white_pattern_index)) return *failure;
     (void)source.waitForTransition(structured_light::sync::MarkerState::white, white_after,
                                    std::chrono::milliseconds(std::min(200, config.sync_timeout_ms)));
     const auto black_after = std::chrono::steady_clock::now();
-    if (const auto failure = show(0)) return *failure;
+    if (const auto failure = show(black_pattern_index)) return *failure;
     const auto ready = source.waitForTransition(structured_light::sync::MarkerState::black, black_after, timeout);
     if (!ready) return {false, "photodiode_timeout", "Photodiode BLACK pre-arm event was not received"};
     pushEvent("sync_delay_prearm_ready", {{"state", "black"}});
@@ -302,7 +304,9 @@ SyncDelayResult ScanService::measureSyncDelay(const SyncDelayConfig& config)
     for (std::size_t index = 0; index < states.size(); ++index)
     {
         const auto expected = states[index];
-        const int pattern_index = expected == structured_light::sync::MarkerState::white ? 1 : 0;
+        const int pattern_index = expected == structured_light::sync::MarkerState::white
+                                      ? white_pattern_index
+                                      : black_pattern_index;
         const auto shown_after = std::chrono::steady_clock::now();
         if (const auto failure = show(pattern_index)) return *failure;
         std::optional<structured_light::sync::SyncEvent> event;

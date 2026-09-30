@@ -15,6 +15,10 @@ MINIMUM_CONTRAST="${MINIMUM_CONTRAST:-30}"
 REQUIRED_RATIO="${REQUIRED_RATIO:-0.90}"
 OUTPUT_CSV="${OUTPUT_CSV:-${REPO_ROOT}/data/photodiode_delay.csv}"
 MJPEG_PORT="${MJPEG_PORT:-39012}"
+DISPLAY_WIDTH="${DISPLAY_WIDTH:-1668}"
+DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-1080}"
+DISPLAY_X="${DISPLAY_X:-128}"
+DISPLAY_Y="${DISPLAY_Y:-0}"
 
 command -v jq >/dev/null || { echo 'jq is required' >&2; exit 2; }
 [[ -x "${BACKEND}" ]] || { echo "backend not executable: ${BACKEND}" >&2; exit 2; }
@@ -88,20 +92,26 @@ request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${window
   --argjson height "${window_height}" \
   '{id:"window",cmd:"open_window",window_role:"projector",title:"Photodiode delay measurement",width:$width,height:$height,monitor_index:$monitor,fullscreen:true}')"
 request '{"id":"projector","cmd":"open_projector","projector_role":"projector","window_role":"projector","width":480,"height":270}'
-if (( window_width > 192 )); then marker_reserve=192
-elif (( window_width > 128 )); then marker_reserve=128
-elif (( window_width > 64 )); then marker_reserve=64
-else echo 'photodiode_marker_margin_unavailable' >&2; exit 2
-fi
-display_width=$((window_width - marker_reserve))
-request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${display_width}" \
-  --argjson height "${window_height}" \
-  '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,placement:"center"}')"
+(( DISPLAY_WIDTH > 0 && DISPLAY_X >= 0 && DISPLAY_X + DISPLAY_WIDTH <= window_width &&
+   DISPLAY_HEIGHT > 0 && DISPLAY_Y >= 0 && DISPLAY_Y + DISPLAY_HEIGHT <= window_height )) || {
+  echo 'photodiode_marker_margin_unavailable' >&2; exit 2;
+}
+request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${DISPLAY_WIDTH}" \
+  --argjson height "${DISPLAY_HEIGHT}" --argjson x "${DISPLAY_X}" --argjson y "${DISPLAY_Y}" \
+  '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,x:$x,y:$y,placement:"custom"}')"
 request '{"id":"patterns","cmd":"generate_patterns","projector_role":"projector"}'
-request '{"id":"locator","cmd":"show_pattern","projector_role":"projector","index":0,"photodiode_marker_mode":"locate"}'
+pattern_count="$(jq -r '.pattern_count' <<<"${RESPONSE}")"
+(( pattern_count >= 2 )) || { echo 'full-white reference pattern is unavailable' >&2; exit 2; }
+locator_pattern_index=$((pattern_count - 2))
+request "$(jq -cn --argjson index "${locator_pattern_index}" \
+  '{id:"locator",cmd:"show_pattern",projector_role:"projector",index:$index,photodiode_marker_mode:"locate"}')"
 
 echo
 echo 'Photodiode locator marker: RED'
+printf 'pattern: x=%s y=%s width=%s height=%s (FULL WHITE index=%s)\n' \
+  "$(jq -r '.pattern_x' <<<"${RESPONSE}")" "$(jq -r '.pattern_y' <<<"${RESPONSE}")" \
+  "$(jq -r '.pattern_width' <<<"${RESPONSE}")" "$(jq -r '.pattern_height' <<<"${RESPONSE}")" \
+  "${locator_pattern_index}"
 printf 'marker: x=%s y=%s width=%s height=%s\n' \
   "$(jq -r '.marker_x' <<<"${RESPONSE}")" "$(jq -r '.marker_y' <<<"${RESPONSE}")" \
   "$(jq -r '.marker_width' <<<"${RESPONSE}")" "$(jq -r '.marker_height' <<<"${RESPONSE}")"
