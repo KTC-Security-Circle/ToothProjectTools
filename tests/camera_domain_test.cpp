@@ -679,6 +679,20 @@ void testScanMapper()
     assert(!result.ok && result.error->code == "invalid_command");
 
     message = messageWithId();
+    message.projector_role = "projector";
+    result = mapper.mapMeasureSyncDelay(message);
+    assert(!result.ok && result.error->code == "missing_field");
+    message.camera_role = "left";
+    result = mapper.mapMeasureSyncDelay(message);
+    assert(result.ok && std::holds_alternative<cmd::CmdMeasureSyncDelay>(*result.command));
+    const auto measurement = std::get<cmd::CmdMeasureSyncDelay>(*result.command);
+    assert(measurement.transitions == 60 && measurement.minimum_contrast == 30.0 &&
+           measurement.required_ratio == 0.90 && measurement.safety_margin_ms == 5.0);
+    message.required_ratio = 1.1;
+    result = mapper.mapMeasureSyncDelay(message);
+    assert(!result.ok && result.error->code == "invalid_command");
+
+    message = messageWithId();
     result = mapper.mapScanStatus(message);
     assert(result.ok && std::holds_alternative<cmd::CmdScanStatus>(*result.command));
 
