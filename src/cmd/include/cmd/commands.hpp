@@ -198,6 +198,20 @@ struct CmdScanStatus
     std::optional<std::string> scan_id;
 };
 
+struct CmdMeasureSyncDelay
+{
+    std::string projector_role;
+    std::string camera_role;
+    std::string photodiode_device{"/dev/ttyUSB0"};
+    int photodiode_baud{115200};
+    int transitions{60};
+    int sync_timeout_ms{1000};
+    double safety_margin_ms{5.0};
+    double minimum_contrast{30.0};
+    double required_ratio{0.90};
+    std::filesystem::path output_csv{"data/photodiode_delay.csv"};
+};
+
 struct CmdStopScan
 {
     /// scan_id <std::optional<std::string>>: 停止対象scan id。
@@ -396,7 +410,7 @@ using Command =
     std::variant<CmdOpenCamera, CmdCloseCamera, CmdOpenWindow, CmdCloseWindow, CmdListMonitors,
                  CmdConfigureProjectorSurface, CmdOpenProjector, CmdCloseProjector, CmdGeneratePatterns,
                  CmdProjectorShowPattern, CmdProjectorNextPattern, CmdProjectorPrevPattern, CmdCaptureFrame,
-                 CmdCaptureStereo, CmdStartScan, CmdScanStatus, CmdStopScan, CmdValidateScanDataset, CmdDecodePatterns,
+                 CmdCaptureStereo, CmdStartScan, CmdMeasureSyncDelay, CmdScanStatus, CmdStopScan, CmdValidateScanDataset, CmdDecodePatterns,
                  CmdCalibrate, CmdCalibCapture, CmdDetectCalibrationCorners, CmdStereoCalibrate,
                  CmdValidateReconstruction, CmdReconstructPointCloud, CmdStereoScan, CmdCameraProjectorCalibrate>;
 
