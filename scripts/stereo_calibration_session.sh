@@ -14,7 +14,7 @@ BOARD_Y="${BOARD_Y:-7}"
 SQUARE_MM="${SQUARE_MM:?set SQUARE_MM to the measured checkerboard square size in millimeters}"
 OUT_DIR="${OUT_DIR:-${REPO_ROOT}/data/calib}"
 MJPEG_HOST="${MJPEG_HOST:-127.0.0.1}"
-MJPEG_PORT="${MJPEG_PORT:-39011}"
+MJPEG_PORT="${MJPEG_PORT:-39012}"
 
 STEREO_DIR="${OUT_DIR}/stereo"
 LEFT_DIR="${STEREO_DIR}/left"
@@ -38,8 +38,8 @@ SHUTDOWN_SENT=0
 LEFT_FOUND=false
 RIGHT_FOUND=false
 
-die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
-info() { printf '[INFO] %s\n' "$*"; }
+die() { printf '[エラー] %s\n' "$*" >&2; exit 1; }
+info() { printf '[情報] %s\n' "$*"; }
 send_json() { printf '%s\n' "$1" >&3; }
 
 wait_response() {
@@ -50,15 +50,15 @@ wait_response() {
     if [[ -n "${line}" ]]; then
       LAST_RESPONSE="${line}"
       if ! jq -e '.ok == true' >/dev/null <<<"${line}"; then
-        printf '[ERROR] %s: %s: %s\n' "${id}" \
+        printf '[エラー] %s: %s: %s\n' "${id}" \
           "$(jq -r '.error.code // "unknown_error"' <<<"${line}")" \
           "$(jq -r '.error.message // "command failed"' <<<"${line}")" >&2
         return 1
       fi
       return 0
     fi
-    kill -0 "${BACKEND_PID}" 2>/dev/null || die "backend exited while waiting for ${id}"
-    (( $(date +%s) - start < timeout )) || die "timeout waiting for ${id}"
+    kill -0 "${BACKEND_PID}" 2>/dev/null || die "${id}の応答待ち中にbackendが終了しました"
+    (( $(date +%s) - start < timeout )) || die "${id}の応答待ちがtimeoutしました"
     sleep 0.05
   done
 }
@@ -90,7 +90,7 @@ cleanup() {
   if [[ "${status}" -eq 0 ]]; then
     rm -rf -- "${WORK_DIR}"
   else
-    printf '[INFO] backend logs: %s\n' "${WORK_DIR}" >&2
+    printf '[情報] backend log: %s\n' "${WORK_DIR}" >&2
   fi
   return "${status}"
 }
@@ -113,7 +113,7 @@ verify_pairs() {
   left_numbers="$(pair_numbers "${LEFT_DIR}" | sort -n)"
   right_numbers="$(pair_numbers "${RIGHT_DIR}" | sort -n)"
   [[ "${left_numbers}" == "${right_numbers}" ]] || {
-    printf '[ERROR] stereo pair mismatch between %s and %s\n' "${LEFT_DIR}" "${RIGHT_DIR}" >&2
+    printf '[エラー] 左右のStereo pairが一致しません: %s / %s\n' "${LEFT_DIR}" "${RIGHT_DIR}" >&2
     return 1
   }
 }
@@ -136,7 +136,7 @@ detect_role() {
     '{cmd:"calib_detect_corners",role:$role,output:$output,board_corners_x:$bx,board_corners_y:$by,square_size_mm:$square}')" || return 1
   found="$(jq -r '.found' <<<"${LAST_RESPONSE}")"
   corners="$(jq -r '.corner_count' <<<"${LAST_RESPONSE}")"
-  printf '[%s] %s: found=%s  corners=%s/%s\n' "${label}" "${role}" "${found}" "${corners}" "${EXPECTED_CORNERS}"
+  printf '[%s] %s: 検出=%s  内部角=%s/%s\n' "${label}" "${role}" "${found}" "${corners}" "${EXPECTED_CORNERS}"
   [[ "${role}" == "${LEFT_ROLE}" ]] && LEFT_FOUND="${found}" || RIGHT_FOUND="${found}"
 }
 
@@ -169,14 +169,14 @@ capture_pair() {
       }'
   )" || return 1
 
-  printf '[CAPTURE] pair_%03d saved\n' "${number}"
+  printf '[撮影] pair_%03dを保存しました\n' "${number}"
 }
 
 show_pair_count() {
   local left_count right_count
   left_count="$(pair_numbers "${LEFT_DIR}" | wc -l)"
   right_count="$(pair_numbers "${RIGHT_DIR}" | wc -l)"
-  printf 'captured pairs: %s\nleft images: %s\nright images: %s\nrecommended minimum: 10+\n' \
+  printf '撮影pair数: %s\n左画像: %s\n右画像: %s\n推奨最低数: 10以上\n' \
     "$([[ "${left_count}" == "${right_count}" ]] && printf '%s' "${left_count}" || printf 'mismatch')" \
     "${left_count}" "${right_count}"
 }
@@ -186,11 +186,11 @@ run_mono_calibration() {
   request "$(jq -cn --arg folder "${LEFT_DIR}" --arg output "${MONO_LEFT}" \
     --argjson bx "${BOARD_X}" --argjson by "${BOARD_Y}" --argjson square "${SQUARE_MM}" \
     '{cmd:"mono_calibrate",image_folder:$folder,output_file:$output,board_corners_x:$bx,board_corners_y:$by,square_size_mm:$square}')" 120 || return 1
-  printf '[CALIB] left mono RMS=%s\n' "$(jq -r '.rms' <<<"${LAST_RESPONSE}")"
+  printf '[CALIB] 左Mono RMS=%s\n' "$(jq -r '.rms' <<<"${LAST_RESPONSE}")"
   request "$(jq -cn --arg folder "${RIGHT_DIR}" --arg output "${MONO_RIGHT}" \
     --argjson bx "${BOARD_X}" --argjson by "${BOARD_Y}" --argjson square "${SQUARE_MM}" \
     '{cmd:"mono_calibrate",image_folder:$folder,output_file:$output,board_corners_x:$bx,board_corners_y:$by,square_size_mm:$square}')" 120 || return 1
-  printf '[CALIB] right mono RMS=%s\n' "$(jq -r '.rms' <<<"${LAST_RESPONSE}")"
+  printf '[CALIB] 右Mono RMS=%s\n' "$(jq -r '.rms' <<<"${LAST_RESPONSE}")"
 }
 
 validate_stereo_output() {
@@ -207,7 +207,7 @@ validate_stereo_output() {
 run_stereo_calibration() {
   verify_pairs || return 1
   if [[ ! -s "${MONO_LEFT}" || ! -s "${MONO_RIGHT}" ]]; then
-    printf '[ERROR] run mono calibration first\n' >&2
+    printf '[エラー] 先にMonoキャリブレーションを実行してください\n' >&2
     return 1
   fi
   request "$(jq -cn --arg left_dir "${LEFT_DIR}" --arg right_dir "${RIGHT_DIR}" \
@@ -219,18 +219,18 @@ run_stereo_calibration() {
   printf '[CALIB] output=%s\n' "${STEREO_OUTPUT}"
 }
 
-command -v jq >/dev/null || die "jq is required"
-[[ -x "${BIN}" ]] || die "backend is not executable: ${BIN}"
-[[ "${LEFT_CAMERA}" =~ ^[0-9]+$ ]] || die "LEFT_CAMERA must be a non-negative integer"
-[[ "${RIGHT_CAMERA}" =~ ^[0-9]+$ ]] || die "RIGHT_CAMERA must be a non-negative integer"
-[[ "${LEFT_CAMERA}" != "${RIGHT_CAMERA}" ]] || die "LEFT_CAMERA and RIGHT_CAMERA must be different"
-[[ "${LEFT_ROLE}" != "${RIGHT_ROLE}" ]] || die "LEFT_ROLE and RIGHT_ROLE must be different"
-[[ "${BOARD_X}" =~ ^[1-9][0-9]*$ ]] || die "BOARD_X must be positive"
-[[ "${BOARD_Y}" =~ ^[1-9][0-9]*$ ]] || die "BOARD_Y must be positive"
-awk -v value="${SQUARE_MM}" 'BEGIN { exit !(value > 0) }' || die "SQUARE_MM must be positive"
+command -v jq >/dev/null || die "jqが必要です"
+[[ -x "${BIN}" ]] || die "backendを実行できません: ${BIN}"
+[[ "${LEFT_CAMERA}" =~ ^[0-9]+$ ]] || die "LEFT_CAMERAは0以上の整数にしてください"
+[[ "${RIGHT_CAMERA}" =~ ^[0-9]+$ ]] || die "RIGHT_CAMERAは0以上の整数にしてください"
+[[ "${LEFT_CAMERA}" != "${RIGHT_CAMERA}" ]] || die "LEFT_CAMERAとRIGHT_CAMERAは異なる値にしてください"
+[[ "${LEFT_ROLE}" != "${RIGHT_ROLE}" ]] || die "LEFT_ROLEとRIGHT_ROLEは異なる値にしてください"
+[[ "${BOARD_X}" =~ ^[1-9][0-9]*$ ]] || die "BOARD_Xは正の整数にしてください"
+[[ "${BOARD_Y}" =~ ^[1-9][0-9]*$ ]] || die "BOARD_Yは正の整数にしてください"
+awk -v value="${SQUARE_MM}" 'BEGIN { exit !(value > 0) }' || die "SQUARE_MMは正の数にしてください"
 
 mkdir -p -- "${LEFT_DIR}" "${RIGHT_DIR}" "${PREVIEW_DIR}"
-verify_pairs || die "repair the stereo pair dataset before starting"
+verify_pairs || die "開始前にStereo pair datasetを修復してください"
 mkfifo "${FIFO_IN}"
 : >"${BACKEND_LOG}"
 
@@ -241,10 +241,10 @@ exec 3>"${FIFO_IN}"
 
 for _ in {1..200}; do
   grep -Fq '"event":"ready"' "${BACKEND_LOG}" && break
-  kill -0 "${BACKEND_PID}" 2>/dev/null || die "backend exited before ready"
+  kill -0 "${BACKEND_PID}" 2>/dev/null || die "準備完了前にbackendが終了しました"
   sleep 0.05
 done
-grep -Fq '"event":"ready"' "${BACKEND_LOG}" || die "timeout waiting for ready"
+grep -Fq '"event":"ready"' "${BACKEND_LOG}" || die "backendの準備待ちがtimeoutしました"
 
 request "$(jq -cn --argjson camera_id "${LEFT_CAMERA}" --arg role "${LEFT_ROLE}" \
   '{cmd:"open_camera",camera_id:$camera_id,role:$role}')"
@@ -255,13 +255,13 @@ request "$(jq -cn --arg role "${RIGHT_ROLE}" '{cmd:"start_stream",role:$role}')"
 
 printf '[STREAM] left : http://%s:%s/%s.mjpg\n' "${MJPEG_HOST}" "${MJPEG_PORT}" "${LEFT_ROLE}"
 printf '[STREAM] right: http://%s:%s/%s.mjpg\n\n' "${MJPEG_HOST}" "${MJPEG_PORT}" "${RIGHT_ROLE}"
-printf '%s\n' 'Stereo calibration:' \
-  '- Keep both cameras fixed.' \
-  '- Move only the checkerboard.' \
-  '- Capture different positions, angles and distances.' \
-  "- The full ${BOARD_X}x${BOARD_Y} inner corners must be visible in both cameras." ''
-printf '%s\n' '[p] preview corners' '[SPACE] capture stereo pair' '[i] captured pair count' \
-  '[m] run mono calibration' '[s] run stereo calibration' '[a] run mono + stereo calibration' '[q] quit'
+printf '%s\n' 'Stereoキャリブレーション:' \
+  '- 両方のカメラを固定してください。' \
+  '- Checkerboardだけを動かしてください。' \
+  '- 位置・角度・距離を変えて撮影してください。' \
+  "- ${BOARD_X}x${BOARD_Y}の内部角全体を両方のカメラに映してください。" ''
+printf '%s\n' '[p] 内部角preview' '[SPACE] Stereo pair撮影' '[i] 撮影pair数' \
+  '[m] Monoキャリブレーション' '[s] Stereoキャリブレーション' '[a] Mono + Stereoキャリブレーション' '[q] 終了'
 
 while IFS= read -rsn1 key; do
   case "${key}" in

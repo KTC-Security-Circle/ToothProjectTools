@@ -20,11 +20,11 @@ DISPLAY_HEIGHT="${DISPLAY_HEIGHT:-1080}"
 DISPLAY_X="${DISPLAY_X:-128}"
 DISPLAY_Y="${DISPLAY_Y:-0}"
 
-command -v jq >/dev/null || { echo 'jq is required' >&2; exit 2; }
-[[ -x "${BACKEND}" ]] || { echo "backend not executable: ${BACKEND}" >&2; exit 2; }
-[[ -e "${PHOTODIODE_DEVICE}" ]] || { echo "device not found: ${PHOTODIODE_DEVICE}" >&2; exit 2; }
+command -v jq >/dev/null || { echo 'jqが必要です' >&2; exit 2; }
+[[ -x "${BACKEND}" ]] || { echo "backendを実行できません: ${BACKEND}" >&2; exit 2; }
+[[ -e "${PHOTODIODE_DEVICE}" ]] || { echo "デバイスが見つかりません: ${PHOTODIODE_DEVICE}" >&2; exit 2; }
 [[ -r "${PHOTODIODE_DEVICE}" && -w "${PHOTODIODE_DEVICE}" ]] || {
-  echo "permission denied: ${PHOTODIODE_DEVICE}" >&2; exit 3;
+  echo "デバイスへのアクセス権がありません: ${PHOTODIODE_DEVICE}" >&2; exit 3;
 }
 
 coproc BACKEND_PROC { "${BACKEND}" serve --control stdio --mjpeg-port "${MJPEG_PORT}"; }
@@ -53,18 +53,18 @@ measure() {
   while IFS= read -r line <&"${BACKEND_PROC[0]}"; do
     event="$(jq -r '.event // empty' <<<"${line}" 2>/dev/null)"
     case "${event}" in
-      sync_delay_baseline_started) echo 'Building Camera BLACK/WHITE baseline...' ;;
+      sync_delay_baseline_started) echo 'カメラのBLACK/WHITE基準画像を作成中...' ;;
       sync_delay_mask_ready)
         pixels="$(jq -r '.measurement_pixel_count' <<<"${line}")"
-        echo "measurement pixels: ${pixels}" ;;
-      sync_delay_prearm_started) echo; echo 'Photodiode pre-arm...' ;;
-      sync_delay_prearm_ready) echo 'Photodiode ready: black'; echo ;;
+        echo "測定pixel数: ${pixels}" ;;
+      sync_delay_prearm_started) echo; echo 'Photodiodeをpre-arm中...' ;;
+      sync_delay_prearm_ready) echo 'Photodiode準備完了: black'; echo ;;
       sync_delay_transition)
         sequence="$(jq -r '.sequence' <<<"${line}")"
         total="$(jq -r '.total' <<<"${line}")"
         state="$(jq -r '.state' <<<"${line}")"
         delay="$(jq -r '.delay_ms' <<<"${line}")"
-        printf '[%03d/%03d] %s delay=%s ms\n' "${sequence}" "${total}" "${state}" "${delay}" ;;
+        printf '[%03d/%03d] %s 遅延=%s ms\n' "${sequence}" "${total}" "${state}" "${delay}" ;;
     esac
     if [[ "$(jq -r '.id // empty' <<<"${line}" 2>/dev/null)" == sync-delay ]]; then
       jq -e '.ok == true' >/dev/null <<<"${line}" || { echo "${line}" >&2; return 1; }
@@ -80,7 +80,7 @@ done
 request '{"id":"monitors","cmd":"list_monitors"}'
 monitor_count="$(jq -r '(.monitor_count // "0") | tonumber' <<<"${RESPONSE}")"
 (( MONITOR_INDEX >= 0 && MONITOR_INDEX < monitor_count )) || {
-  echo "MONITOR_INDEX=${MONITOR_INDEX} is out of range" >&2; exit 2;
+  echo "MONITOR_INDEX=${MONITOR_INDEX}は範囲外です" >&2; exit 2;
 }
 monitors_json="$(jq -r '.monitors_json // "[]"' <<<"${RESPONSE}")"
 window_width="$(jq -r --argjson i "${MONITOR_INDEX}" '.[$i].width' <<<"${monitors_json}")"
@@ -101,26 +101,26 @@ request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${DISPLA
   '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,x:$x,y:$y,placement:"custom"}')"
 request '{"id":"patterns","cmd":"generate_patterns","projector_role":"projector"}'
 pattern_count="$(jq -r '.pattern_count' <<<"${RESPONSE}")"
-(( pattern_count >= 2 )) || { echo 'full-white reference pattern is unavailable' >&2; exit 2; }
+(( pattern_count >= 2 )) || { echo '全面白の基準Patternを利用できません' >&2; exit 2; }
 locator_pattern_index=$((pattern_count - 2))
 request "$(jq -cn --argjson index "${locator_pattern_index}" \
   '{id:"locator",cmd:"show_pattern",projector_role:"projector",index:$index,photodiode_marker_mode:"locate"}')"
 
 echo
-echo 'Photodiode locator marker: RED'
-printf 'pattern: x=%s y=%s width=%s height=%s (FULL WHITE index=%s)\n' \
+echo 'Photodiode locator: 赤marker'
+printf 'pattern: x=%s y=%s 幅=%s 高さ=%s (全面白 index=%s)\n' \
   "$(jq -r '.pattern_x' <<<"${RESPONSE}")" "$(jq -r '.pattern_y' <<<"${RESPONSE}")" \
   "$(jq -r '.pattern_width' <<<"${RESPONSE}")" "$(jq -r '.pattern_height' <<<"${RESPONSE}")" \
   "${locator_pattern_index}"
-printf 'marker: x=%s y=%s width=%s height=%s\n' \
+printf 'marker: x=%s y=%s 幅=%s 高さ=%s\n' \
   "$(jq -r '.marker_x' <<<"${RESPONSE}")" "$(jq -r '.marker_y' <<<"${RESPONSE}")" \
   "$(jq -r '.marker_width' <<<"${RESPONSE}")" "$(jq -r '.marker_height' <<<"${RESPONSE}")"
 echo
-echo 'Place the photodiode on the red square.'
-echo 'Press ENTER to start delay measurement.'
+echo 'Photodiodeを赤い四角の上に配置してください。'
+echo 'ENTERで同期遅延測定を開始します。'
 IFS= read -r </dev/tty
 echo
-echo 'Switching marker: RED -> sync'
+echo 'markerを赤locatorから同期表示へ切り替えます'
 
 measure "$(jq -cn --arg dev "${PHOTODIODE_DEVICE}" --arg csv "${OUTPUT_CSV}" \
   --argjson baud "${PHOTODIODE_BAUD}" --argjson transitions "${TRANSITIONS}" \
@@ -136,7 +136,7 @@ guard="$(jq -r '.recommended_guard_ms' <<<"${RESPONSE}")"
 echo
 echo "recommended_guard_ms: ${guard}"
 echo
-echo 'Use:'
+echo '設定値:'
 echo "SYNC_GUARD_MS=${guard}"
 csv_warning="$(jq -r '.csv_warning // empty' <<<"${RESPONSE}")"
-[[ -z "${csv_warning}" ]] || echo "CSV warning: ${csv_warning}" >&2
+[[ -z "${csv_warning}" ]] || echo "CSV警告: ${csv_warning}" >&2

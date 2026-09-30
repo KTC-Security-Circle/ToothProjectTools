@@ -15,25 +15,26 @@ run_ui() {
 }
 
 run_ui success '1\n\nqy' 0
-grep -Fq 'Left Mono Calibration finished.' "${TEST_DIR}/success.out"
-[[ "$(grep -Fc 'ToothProjectTools - Hardware Quick Start' "${TEST_DIR}/success.out")" -ge 2 ]]
+grep -Fq '処理が完了しました。' "${TEST_DIR}/success.out"
+[[ "$(grep -Fc 'ToothProjectTools - 実機クイックスタート' "${TEST_DIR}/success.out")" -ge 2 ]]
 
 run_ui failure '1\n\nqy' 1
-grep -Fq '[ERROR] operation failed: exit=1' "${TEST_DIR}/failure.out"
-[[ "$(grep -Fc 'ToothProjectTools - Hardware Quick Start' "${TEST_DIR}/failure.out")" -ge 2 ]]
+grep -Fq '[エラー] 処理に失敗しました。' "${TEST_DIR}/failure.out"
+grep -Fq '終了コード: 1' "${TEST_DIR}/failure.out"
+[[ "$(grep -Fc 'ToothProjectTools - 実機クイックスタート' "${TEST_DIR}/failure.out")" -ge 2 ]]
 
 run_ui interrupted '1\n\nqy' 130
-grep -Fq 'Operation interrupted.' "${TEST_DIR}/interrupted.out"
-[[ "$(grep -Fc 'ToothProjectTools - Hardware Quick Start' "${TEST_DIR}/interrupted.out")" -ge 2 ]]
+grep -Fq '操作を中断しました。' "${TEST_DIR}/interrupted.out"
+[[ "$(grep -Fc 'ToothProjectTools - 実機クイックスタート' "${TEST_DIR}/interrupted.out")" -ge 2 ]]
 
 run_ui quit_no 'qNqy' 0
-[[ "$(grep -Fc 'Exit Hardware Quick Start?' "${TEST_DIR}/quit_no.out")" -eq 2 ]]
-[[ "$(grep -Fc 'ToothProjectTools - Hardware Quick Start' "${TEST_DIR}/quit_no.out")" -ge 2 ]]
+[[ "$(grep -Fc '実機クイックスタートを終了しますか？' "${TEST_DIR}/quit_no.out")" -eq 2 ]]
+[[ "$(grep -Fc 'ToothProjectTools - 実機クイックスタート' "${TEST_DIR}/quit_no.out")" -ge 2 ]]
 
 run_ui invalid 'xqy' 0
-[[ "$(grep -Fc 'ToothProjectTools - Hardware Quick Start' "${TEST_DIR}/invalid.out")" -ge 2 ]]
+[[ "$(grep -Fc 'ToothProjectTools - 実機クイックスタート' "${TEST_DIR}/invalid.out")" -ge 2 ]]
 
 run_ui quit_yes 'qy' 0
-grep -Fq 'Exit Hardware Quick Start?' "${TEST_DIR}/quit_yes.out"
+grep -Fq '実機クイックスタートを終了しますか？' "${TEST_DIR}/quit_yes.out"
 
 printf 'hardware_quickstart_test: PASS\n'

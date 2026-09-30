@@ -3,6 +3,7 @@ add_library(scan_service STATIC
   scan_event.cpp
   serial_photodiode_transport.cpp
   sync_delay.cpp
+  scan_save_queue.cpp
   scan_service.cpp
 )
 

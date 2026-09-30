@@ -123,7 +123,6 @@ class ScanService
     PhotodiodeTransportFactory photodiode_factory_;
 
     mutable std::mutex mutex_;
-    std::mutex scan_capture_mutex_;
     std::mutex sync_delay_mutex_;
     std::jthread worker_;
 

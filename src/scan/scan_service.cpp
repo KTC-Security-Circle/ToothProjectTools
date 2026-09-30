@@ -1,4 +1,5 @@
 #include "scan/scan_service.hpp"
+#include "scan/scan_save_queue.hpp"
 #include "scan/serial_photodiode_transport.hpp"
 
 #include "capture/capture_result.hpp"
@@ -16,6 +17,7 @@
 #include <sstream>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace scan
 {
@@ -573,23 +575,84 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
         // Delay synchronization deliberately has no serial transport or pre-arm phase.
     }
 
-    auto previous_marker_state = structured_light::sync::MarkerState::white;
-    for (int index = 0; index < pattern_count; ++index)
+    struct PatternSaveProgress
     {
-        if (stop_token.stop_requested())
-        {
+        int saved_images{0};
+        std::string pattern_kind;
+        std::string expected_marker_state;
+        std::filesystem::path left_path;
+        std::filesystem::path right_path;
+    };
+    std::mutex save_progress_mutex;
+    std::vector<PatternSaveProgress> save_progress(static_cast<std::size_t>(pattern_count));
+    const int images_per_pattern = right_id ? 2 : 1;
+    constexpr std::size_t save_worker_count = 2;
+    constexpr std::size_t save_queue_capacity = 8;
+    ScanSaveQueue save_queue(
+        save_worker_count, save_queue_capacity,
+        [this](const video::FrameSample& sample, const std::filesystem::path& path) {
+            return capture_service_.saveFrameSample(sample, path);
+        },
+        [this, &save_progress, &save_progress_mutex, images_per_pattern, pattern_count](const ScanSaveJob& job) {
+            bool pattern_saved = false;
+            PatternSaveProgress progress;
+            {
+                std::lock_guard lock(save_progress_mutex);
+                auto& item = save_progress.at(static_cast<std::size_t>(job.pattern_index));
+                item.saved_images += 1;
+                pattern_saved = item.saved_images == images_per_pattern;
+                progress = item;
+            }
+            if (!pattern_saved) return;
             int captured = 0;
-            int current = -1;
             {
                 std::lock_guard lock(mutex_);
-                state_ = ScanState::stopped;
+                captured_count_ += 1;
                 captured = captured_count_;
-                current = current_index_;
             }
-            pushEvent("scan_stopped", {{"scan_id", scan_id},
-                                       {"captured_count", std::to_string(captured)},
-                                       {"current_index", std::to_string(current)}});
-            return;
+            pushEvent("scan_frame_captured", {{"scan_id", job.scan_id},
+                                                {"pattern_index", std::to_string(job.pattern_index)},
+                                                {"pattern_kind", progress.pattern_kind},
+                                                {"expected_marker_state", progress.expected_marker_state},
+                                                {"captured_count", std::to_string(captured)},
+                                                {"pattern_count", std::to_string(pattern_count)},
+                                                {"left_path", progress.left_path.string()},
+                                                {"right_path", progress.right_path.string()},
+                                                {"save_completed_timestamp_ns", std::to_string(timestampNs(
+                                                     std::chrono::steady_clock::now()))}});
+        });
+
+    auto publishSaveFailure = [&]() -> bool {
+        const auto failure = save_queue.failure();
+        if (!failure) return false;
+        int captured = 0;
+        int current = -1;
+        {
+            std::lock_guard lock(mutex_);
+            state_ = ScanState::failed;
+            last_error_code_ = "capture_failed";
+            last_error_message_ = failure->error;
+            captured = captured_count_;
+            current = current_index_;
+        }
+        pushEvent("scan_failed", {{"scan_id", scan_id},
+                                  {"error_code", "capture_failed"},
+                                  {"error_message", failure->error},
+                                  {"pattern_index", std::to_string(failure->pattern_index)},
+                                  {"side", failure->side},
+                                  {"captured_count", std::to_string(captured)},
+                                  {"current_index", std::to_string(current)}});
+        return true;
+    };
+
+    auto previous_marker_state = structured_light::sync::MarkerState::white;
+    bool stopped = false;
+    for (int index = 0; index < pattern_count; ++index)
+    {
+        if (stop_token.stop_requested() || save_queue.failure())
+        {
+            stopped = stop_token.stop_requested();
+            break;
         }
         {
             std::lock_guard lock(mutex_);
@@ -656,7 +719,8 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
                                          {"pattern_index", std::to_string(index)},
                                          {"pattern_count", std::to_string(pattern_count)},
                                          {"pattern_kind", pattern_kind},
-                                         {"expected_marker_state", expected_name}});
+                                         {"expected_marker_state", expected_name},
+                                         {"shown_timestamp_ns", std::to_string(timestampNs(show_timestamp))}});
 
         auto selected_at = show_timestamp + std::chrono::milliseconds(config.delay_ms);
         if (config.sync_mode == ScanSyncMode::photodiode)
@@ -717,52 +781,56 @@ void ScanService::workerLoop(std::stop_token stop_token, ScanStartConfig config,
 
         const auto left_path = config.output_dir / "left" / patternFileName(index);
         const auto right_path = config.output_dir / "right" / patternFileName(index);
-        capture::CaptureResult left_capture_result;
-        capture::CaptureResult right_capture_result;
         {
-            std::lock_guard capture_lock(scan_capture_mutex_);
-            left_capture_result = capture_service_.saveFrameSample(*selected_left, left_path);
-            if (right_id) right_capture_result = capture_service_.saveFrameSample(*selected_right, right_path);
+            std::lock_guard lock(save_progress_mutex);
+            auto& progress = save_progress.at(static_cast<std::size_t>(index));
+            progress.pattern_kind = pattern_kind;
+            progress.expected_marker_state = expected_name;
+            progress.left_path = left_path;
+            if (right_id) progress.right_path = right_path;
         }
-        if (!left_capture_result.ok || (right_id && !right_capture_result.ok))
-        {
-            int captured = 0;
-            int current = -1;
-            std::string error_code;
-            std::string error_message;
-            {
-                std::lock_guard lock(mutex_);
-                state_ = ScanState::failed;
-                last_error_code_ = "capture_failed";
-                const auto& failed = !left_capture_result.ok ? left_capture_result : right_capture_result;
-                last_error_message_ = failed.error ? failed.error->message : "frame sample save failed";
-                captured = captured_count_;
-                current = current_index_;
-                error_code = last_error_code_;
-                error_message = last_error_message_;
-            }
-            pushEvent("scan_failed", {{"scan_id", scan_id},
-                                      {"error_code", error_code},
-                                      {"error_message", error_message},
-                                      {"captured_count", std::to_string(captured)},
-                                      {"current_index", std::to_string(current)}});
-            return;
-        }
+        const auto selected_timestamp = std::chrono::steady_clock::now();
+        pushEvent("scan_frame_selected", {{"scan_id", scan_id},
+                                           {"pattern_index", std::to_string(index)},
+                                           {"pattern_count", std::to_string(pattern_count)},
+                                           {"pattern_kind", pattern_kind},
+                                           {"expected_marker_state", expected_name},
+                                           {"left_sequence", std::to_string(selected_left->sequence)},
+                                           {"right_sequence", right_id ? std::to_string(selected_right->sequence)
+                                                                        : std::string{}},
+                                           {"selected_timestamp_ns", std::to_string(timestampNs(selected_timestamp))}});
 
+        // Camera ring bufferから完全に独立した所有権をworkerへ渡す。
+        selected_left->image = selected_left->image.clone();
+        if (!save_queue.enqueue(ScanSaveJob{scan_id, index, pattern_kind, expected_name, "left",
+                                            std::move(*selected_left), left_path}))
+            break;
+        if (right_id)
+        {
+            selected_right->image = selected_right->image.clone();
+            if (!save_queue.enqueue(ScanSaveJob{scan_id, index, pattern_kind, expected_name, "right",
+                                                std::move(*selected_right), right_path}))
+                break;
+        }
+    }
+
+    // stop時もenqueue済み画像を保存し終えてからworkerをjoinする。
+    save_queue.closeAndWait();
+    if (publishSaveFailure()) return;
+    if (stopped || stop_token.stop_requested())
+    {
         int captured = 0;
+        int current = -1;
         {
             std::lock_guard lock(mutex_);
-            captured_count_ += 1;
+            state_ = ScanState::stopped;
             captured = captured_count_;
+            current = current_index_;
         }
-        pushEvent("scan_frame_captured", {{"scan_id", scan_id},
-                                          {"pattern_index", std::to_string(index)},
-                                          {"pattern_kind", pattern_kind},
-                                          {"expected_marker_state", expected_name},
-                                          {"captured_count", std::to_string(captured)},
-                                          {"pattern_count", std::to_string(pattern_count)},
-                                          {"left_path", left_path.string()},
-                                          {"right_path", right_id ? right_path.string() : std::string{}}});
+        pushEvent("scan_stopped", {{"scan_id", scan_id},
+                                   {"captured_count", std::to_string(captured)},
+                                   {"current_index", std::to_string(current)}});
+        return;
     }
 
     int captured = 0;

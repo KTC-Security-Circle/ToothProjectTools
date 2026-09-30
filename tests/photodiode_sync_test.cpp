@@ -1,4 +1,5 @@
 #include "scan/serial_photodiode_transport.hpp"
+#include "scan/scan_save_queue.hpp"
 #include "scan/sync_delay.hpp"
 #include "structured_light/pattern_sync.hpp"
 #include "video/video_types.hpp"
@@ -10,6 +11,11 @@
 #include <stdexcept>
 #include <string>
 #include <cmath>
+#include <atomic>
+#include <condition_variable>
+#include <future>
+#include <mutex>
+#include <vector>
 
 namespace
 {
@@ -180,6 +186,117 @@ void testPhotodiodeToCameraTransitionDelay()
             "Photodiode-to-Camera delay is incorrect");
 }
 
+capture::CaptureResult savedResult()
+{
+    capture::CaptureResult result;
+    result.ok = true;
+    return result;
+}
+
+scan::ScanSaveJob saveJob(int pattern, std::string side)
+{
+    return {"scan_test", pattern, "graycode", "white", std::move(side),
+            frame(static_cast<std::uint64_t>(pattern + 1), Clock::now()),
+            std::filesystem::path("unused.png")};
+}
+
+void testSaveQueuePreSaveEventAndParallelism()
+{
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool release = false;
+    std::atomic<int> active{0};
+    std::atomic<int> maximum{0};
+    std::vector<std::string> events{"scan_pattern_shown", "scan_frame_selected"};
+    scan::ScanSaveQueue queue(2, 8,
+        [&](const video::FrameSample&, const std::filesystem::path&) {
+            const int current = ++active;
+            maximum.store(std::max(maximum.load(), current));
+            std::unique_lock lock(mutex);
+            condition.wait(lock, [&] { return release; });
+            --active;
+            return savedResult();
+        },
+        [&](const scan::ScanSaveJob&) {
+            std::lock_guard lock(mutex);
+            events.push_back("scan_frame_captured");
+        });
+    require(queue.enqueue(saveJob(0, "left")), "left save enqueue failed");
+    require(queue.enqueue(saveJob(0, "right")), "right save enqueue failed");
+    for (int attempt = 0; attempt < 100 && active.load() < 2; ++attempt) std::this_thread::sleep_for(1ms);
+    require(active.load() == 2 && maximum.load() == 2, "two save workers did not run concurrently");
+    require(events.size() == 2, "save completion was emitted before blocked saves completed");
+    {
+        std::lock_guard lock(mutex);
+        release = true;
+    }
+    condition.notify_all();
+    queue.closeAndWait();
+    require(events.size() == 4, "save completion callbacks were not emitted");
+    require(events[0] == "scan_pattern_shown" && events[1] == "scan_frame_selected",
+            "selected event was not emitted before save completion");
+}
+
+void testSaveQueueIsBoundedAndWaitsForDrain()
+{
+    std::mutex mutex;
+    std::condition_variable condition;
+    bool release = false;
+    std::atomic<int> active{0};
+    scan::ScanSaveQueue queue(2, 2, [&](const video::FrameSample&, const std::filesystem::path&) {
+        ++active;
+        std::unique_lock lock(mutex);
+        condition.wait(lock, [&] { return release; });
+        --active;
+        return savedResult();
+    });
+    for (int index = 0; index < 2; ++index) require(queue.enqueue(saveJob(index, "left")), "enqueue failed");
+    for (int attempt = 0; attempt < 100 && active.load() < 2; ++attempt) std::this_thread::sleep_for(1ms);
+    require(active.load() == 2, "workers did not start before bounded queue test");
+    for (int index = 2; index < 4; ++index) require(queue.enqueue(saveJob(index, "left")), "enqueue failed");
+    auto blocked_enqueue = std::async(std::launch::async, [&] { return queue.enqueue(saveJob(4, "left")); });
+    require(blocked_enqueue.wait_for(30ms) == std::future_status::timeout,
+            "producer did not apply backpressure at queue capacity");
+    {
+        std::lock_guard lock(mutex);
+        release = true;
+    }
+    condition.notify_all();
+    require(blocked_enqueue.get(), "blocked enqueue did not resume");
+    queue.closeAndWait();
+
+    bool drain_release = false;
+    scan::ScanSaveQueue drain_queue(1, 1, [&](const video::FrameSample&, const std::filesystem::path&) {
+        std::unique_lock lock(mutex);
+        condition.wait(lock, [&] { return drain_release; });
+        return savedResult();
+    });
+    require(drain_queue.enqueue(saveJob(9, "left")), "drain job enqueue failed");
+    auto drain = std::async(std::launch::async, [&] { drain_queue.closeAndWait(); });
+    require(drain.wait_for(30ms) == std::future_status::timeout,
+            "queue reported completion while a save was still running");
+    {
+        std::lock_guard lock(mutex);
+        drain_release = true;
+    }
+    condition.notify_all();
+    drain.get();
+}
+
+void testSaveQueueReportsFailure()
+{
+    scan::ScanSaveQueue queue(2, 8, [](const video::FrameSample&, const std::filesystem::path&) {
+        capture::CaptureResult result;
+        result.error = capture::CaptureError{capture::CaptureErrorCode::FileWriteFailed, "intentional failure"};
+        return result;
+    });
+    require(queue.enqueue(saveJob(7, "right")), "failure job enqueue failed");
+    queue.closeAndWait();
+    const auto failure = queue.failure();
+    require(failure && failure->pattern_index == 7 && failure->side == "right" &&
+            failure->error == "intentional failure", "save failure details were lost");
+}
+
 } // namespace
 
 int main()
@@ -194,5 +311,8 @@ int main()
     testInsufficientContrast();
     testDelayStatisticsAndAlternation();
     testPhotodiodeToCameraTransitionDelay();
+    testSaveQueuePreSaveEventAndParallelism();
+    testSaveQueueIsBoundedAndWaitsForDrain();
+    testSaveQueueReportsFailure();
     return 0;
 }
