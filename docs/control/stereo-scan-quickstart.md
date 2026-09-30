@@ -1,5 +1,7 @@
 # Stereo Scan Quickstart
 
+Camera CalibrationからPoint Cloud生成までをmenuで進める場合は、初心者向けの [Hardware Quick Start](../development/hardware-quickstart.md) から開始してください。
+
 `stereo_scan` は、左右Cameraの準備からGray Code撮影、decode、PLY生成までを1 commandで開始するAPIです。
 sidecarとは標準入出力のJSON Linesで通信します。
 

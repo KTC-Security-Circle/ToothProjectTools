@@ -1,5 +1,7 @@
 # Stereo calibration hardware session
 
+CalibrationからPhotodiode確認、Structured Light Scanまでをmenuで進める場合は、初心者向けの [Hardware Quick Start](./hardware-quickstart.md) から開始する。
+
 `scripts/stereo_calibration_session.sh` は、小型checkerboardを左右cameraで同時撮影し、左右のMono calibrationからStereo calibrationまでを既存backend commandで実行するdriverである。
 
 ## Checkerboard
