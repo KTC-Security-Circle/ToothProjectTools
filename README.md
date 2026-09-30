@@ -57,6 +57,12 @@
 
 ## クイックスタート
 
+実機でCamera calibrationから3D scanまで行う場合:
+
+- [Hardware Quick Start](./docs/development/hardware-quickstart.md)
+
+環境構築やbuild環境の詳細:
+
 初回セットアップ、Dev Containerのrebuild後、または別環境へ移行した場合は、次のドキュメントから開始してください。
 
 - [Development Guide](./docs/development/README.md)

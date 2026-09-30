@@ -25,6 +25,10 @@ add_test(
             -DSCAN_SERVICE_SOURCE=${CMAKE_SOURCE_DIR}/src/scan/scan_service.cpp
             -P ${CMAKE_CURRENT_SOURCE_DIR}/scan_progress_event_order_test.cmake)
 
+add_test(
+    NAME hardware_quickstart_test
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/hardware_quickstart_test.sh)
+
 add_executable(stereo_scan_service_test stereo_scan_service_test.cpp)
 target_link_libraries(stereo_scan_service_test PRIVATE stereo_scan_service scan_service window_service cv_lib)
 target_compile_features(stereo_scan_service_test PRIVATE cxx_std_20)
