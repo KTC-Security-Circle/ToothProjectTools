@@ -7,6 +7,7 @@ services:
     user: "vscode"
     group_add: 
       - "${VIDEO_GID-983}"
+      - "984"
 
     # GUI（X11）
     environment:
@@ -30,7 +31,7 @@ services:
       - /dev/video2:/dev/video2
       - /dev/video4:/dev/video4
       - /dev/video6:/dev/video6
-      # - /dev/ttyUSB0:/dev/ttyUSB0
+      - /dev/ttyUSB0:/dev/ttyUSB0
       - /dev/dri:/dev/dri
 
     cap_add:

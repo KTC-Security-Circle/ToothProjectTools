@@ -178,3 +178,29 @@ data/scans/<session>/
 - Quick Start自体を終了する場合はmain menuで `Q`、続けて `Y` を押します。
 
 詳細仕様は [Stereo Calibration Hardware Session](./stereo-calibration-session.md) と [Stereo Scan Quickstart](../control/stereo-scan-quickstart.md) を参照してください。
+
+
+Webカメラの設定
+```
+# 露光を手動化して抑える
+v4l2-ctl -d /dev/video4 --set-ctrl=auto_exposure=1
+v4l2-ctl -d /dev/video4 --set-ctrl=exposure_time_absolute=1
+
+# オートフォーカスを切ってピントを固定
+v4l2-ctl -d /dev/video4 --set-ctrl=focus_automatic_continuous=0
+v4l2-ctl -d /dev/video4 --set-ctrl=focus_absolute=50
+
+# ズーム
+v4l2-ctl -d /dev/video4 --set-ctrl=zoom_absolute=200
+
+# 露光を手動化して抑える
+v4l2-ctl -d /dev/video6 --set-ctrl=auto_exposure=1
+v4l2-ctl -d /dev/video6 --set-ctrl=exposure_time_absolute=1
+
+# オートフォーカスを切ってピントを固定
+v4l2-ctl -d /dev/video6 --set-ctrl=focus_automatic_continuous=0
+v4l2-ctl -d /dev/video6 --set-ctrl=focus_absolute=50
+
+# ズーム
+v4l2-ctl -d /dev/video6 --set-ctrl=zoom_absolute=200
+```

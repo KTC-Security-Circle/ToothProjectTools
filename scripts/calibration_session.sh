@@ -26,8 +26,8 @@ REQUEST_NUMBER=0
 LAST_RESPONSE=""
 SHUTDOWN_SENT=0
 
-die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
-log() { printf '[INFO] %s\n' "$*"; }
+die() { printf '[エラー] %s\n' "$*" >&2; exit 1; }
+log() { printf '[情報] %s\n' "$*"; }
 
 send_json() { printf '%s\n' "$1" >&3; }
 
@@ -39,15 +39,15 @@ wait_response() {
     if [[ -n "${line}" ]]; then
       LAST_RESPONSE="${line}"
       jq -e '.ok == true' >/dev/null <<<"${line}" || {
-        printf '[ERROR] %s: %s: %s\n' "${id}" \
+        printf '[エラー] %s: %s: %s\n' "${id}" \
           "$(jq -r '.error.code // "unknown_error"' <<<"${line}")" \
           "$(jq -r '.error.message // "command failed"' <<<"${line}")" >&2
         return 1
       }
       return 0
     fi
-    kill -0 "${BACKEND_PID}" 2>/dev/null || die "backend exited while waiting for ${id}"
-    (( $(date +%s) - start < timeout )) || die "timeout waiting for ${id}"
+    kill -0 "${BACKEND_PID}" 2>/dev/null || die "${id}の応答待ち中にbackendが終了しました"
+    (( $(date +%s) - start < timeout )) || die "${id}の応答待ちがtimeoutしました"
     sleep 0.05
   done
 }
@@ -79,7 +79,7 @@ cleanup() {
   if [[ "${status}" -eq 0 ]]; then
     rm -rf -- "${WORK_DIR}"
   else
-    printf '[INFO] backend logs: %s\n' "${WORK_DIR}" >&2
+    printf '[情報] backend log: %s\n' "${WORK_DIR}" >&2
   fi
   return "${status}"
 }
@@ -102,11 +102,11 @@ count_frames() {
   find "${IMAGE_DIR}" -maxdepth 1 -type f -name 'frame_[0-9][0-9][0-9].png' -printf . | wc -c
 }
 
-command -v jq >/dev/null || die "jq is required"
-[[ -x "${BIN}" ]] || die "backend is not executable: ${BIN}"
-[[ "${BOARD_X}" =~ ^[1-9][0-9]*$ ]] || die "BOARD_X must be positive"
-[[ "${BOARD_Y}" =~ ^[1-9][0-9]*$ ]] || die "BOARD_Y must be positive"
-awk -v value="${SQUARE_MM}" 'BEGIN { exit !(value > 0) }' || die "SQUARE_MM must be positive"
+command -v jq >/dev/null || die "jqが必要です"
+[[ -x "${BIN}" ]] || die "backendを実行できません: ${BIN}"
+[[ "${BOARD_X}" =~ ^[1-9][0-9]*$ ]] || die "BOARD_Xは正の整数にしてください"
+[[ "${BOARD_Y}" =~ ^[1-9][0-9]*$ ]] || die "BOARD_Yは正の整数にしてください"
+awk -v value="${SQUARE_MM}" 'BEGIN { exit !(value > 0) }' || die "SQUARE_MMは正の数にしてください"
 mkdir -p -- "${IMAGE_DIR}" "$(dirname -- "${PREVIEW_FILE}")"
 mkfifo "${FIFO_IN}"
 : >"${BACKEND_LOG}"
@@ -118,16 +118,16 @@ exec 3>"${FIFO_IN}"
 
 for _ in {1..200}; do
   grep -Fq '"event":"ready"' "${BACKEND_LOG}" && break
-  kill -0 "${BACKEND_PID}" 2>/dev/null || die "backend exited before ready"
+  kill -0 "${BACKEND_PID}" 2>/dev/null || die "準備完了前にbackendが終了しました"
   sleep 0.05
 done
-grep -Fq '"event":"ready"' "${BACKEND_LOG}" || die "timeout waiting for ready"
+grep -Fq '"event":"ready"' "${BACKEND_LOG}" || die "backendの準備待ちがtimeoutしました"
 
 request "$(jq -cn --argjson camera_id "${CAMERA_ID}" --arg role "${CAMERA_ROLE}" \
   '{cmd:"open_camera",camera_id:$camera_id,role:$role}')"
 request "$(jq -cn --arg role "${CAMERA_ROLE}" '{cmd:"start_stream",role:$role}')"
-log "MJPEG stream: http://${MJPEG_HOST}:${MJPEG_PORT}/${CAMERA_ROLE}.mjpg"
-log "keys: [p] preview  [SPACE] capture  [m] mono calibrate  [i] count  [q] quit"
+log "MJPEG映像: http://${MJPEG_HOST}:${MJPEG_PORT}/${CAMERA_ROLE}.mjpg"
+log "操作: [p] preview  [SPACE] 撮影  [m] Monoキャリブレーション  [i] 枚数  [q] 終了"
 
 while IFS= read -rsn1 key; do
   case "${key}" in
@@ -135,21 +135,21 @@ while IFS= read -rsn1 key; do
       request "$(jq -cn --arg role "${CAMERA_ROLE}" --arg output "${PREVIEW_FILE}" \
         --argjson bx "${BOARD_X}" --argjson by "${BOARD_Y}" --argjson square "${SQUARE_MM}" \
         '{cmd:"calib_detect_corners",role:$role,output:$output,board_corners_x:$bx,board_corners_y:$by,square_size_mm:$square}')"
-      log "preview: found=$(jq -r '.found' <<<"${LAST_RESPONSE}") corners=$(jq -r '.corner_count' <<<"${LAST_RESPONSE}")/${BOARD_X}x${BOARD_Y} path=${PREVIEW_FILE}"
+      log "preview: 検出=$(jq -r '.found' <<<"${LAST_RESPONSE}") 内部角=$(jq -r '.corner_count' <<<"${LAST_RESPONSE}")/${BOARD_X}x${BOARD_Y} path=${PREVIEW_FILE}"
       ;;
     ' ')
       frame_path="$(next_frame_path)"
       request "$(jq -cn --arg role "${CAMERA_ROLE}" --arg output "${frame_path}" \
         '{cmd:"calib_capture_frame",role:$role,output:$output}')"
-      log "captured: ${frame_path}"
+      log "撮影しました: ${frame_path}"
       ;;
     m)
       request "$(jq -cn --arg folder "${IMAGE_DIR}" --arg output "${OUTPUT_FILE}" \
         --argjson bx "${BOARD_X}" --argjson by "${BOARD_Y}" --argjson square "${SQUARE_MM}" \
         '{cmd:"mono_calibrate",image_folder:$folder,output_file:$output,board_corners_x:$bx,board_corners_y:$by,square_size_mm:$square}')" 120
-      log "mono calibration: ${OUTPUT_FILE} RMS=$(jq -r '.rms' <<<"${LAST_RESPONSE}")"
+      log "Monoキャリブレーション: ${OUTPUT_FILE} RMS=$(jq -r '.rms' <<<"${LAST_RESPONSE}")"
       ;;
-    i) log "captured image count: $(count_frames)" ;;
+    i) log "撮影画像数: $(count_frames)" ;;
     q) break ;;
   esac
 done

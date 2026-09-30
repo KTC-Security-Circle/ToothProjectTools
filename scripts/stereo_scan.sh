@@ -20,7 +20,7 @@ PLY_FILE="${PLY_FILE:-${OUTPUT_DIR}/cloud.ply}"
 SCAN_DIR="${OUTPUT_DIR}/scan"
 DECODE_DIR="${OUTPUT_DIR}/decode"
 MJPEG_HOST="${MJPEG_HOST:-127.0.0.1}"
-MJPEG_PORT="${MJPEG_PORT:-39011}"
+MJPEG_PORT="${MJPEG_PORT:-39012}"
 CODE_WIDTH="${CODE_WIDTH:-480}"
 CODE_HEIGHT="${CODE_HEIGHT:-270}"
 DISPLAY_WIDTH="${DISPLAY_WIDTH:-1668}"
@@ -51,7 +51,7 @@ PROJECTOR_OPEN=0
 RUN_RESULT=""
 LOCATOR_PATTERN_INDEX=""
 
-die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
+die() { printf '[エラー] %s\n' "$*" >&2; exit 1; }
 is_non_negative_integer() { [[ "$1" =~ ^[0-9]+$ ]]; }
 is_positive_integer() { [[ "$1" =~ ^[1-9][0-9]*$ ]]; }
 is_positive_number() {
@@ -88,7 +88,7 @@ request() {
   start="$(date +%s)"
   while (( $(date +%s) - start < timeout )); do
     if ! read_backend_line 1; then
-      backend_is_running || { printf '[ERROR] backend exited while waiting for %s\n' "${id}" >&2; return 1; }
+      backend_is_running || { printf '[エラー] backendが終了しました（応答待ち: %s）\n' "${id}" >&2; return 1; }
       continue
     fi
     line="${REPLY}"
@@ -98,7 +98,7 @@ request() {
     fi
     RESPONSE="${line}"
     if ! jq -e '.ok == true' >/dev/null <<<"${line}"; then
-      printf '[ERROR] %s failed\n' "${id}" >&2
+      printf '[エラー] %s に失敗しました\n' "${id}" >&2
       printf 'code=%s\nmessage=%s\n' \
         "$(jq -r '.error.code // "unknown_error"' <<<"${line}")" \
         "$(jq -r '.error.message // "command failed"' <<<"${line}")" >&2
@@ -106,7 +106,7 @@ request() {
     fi
     return 0
   done
-  printf '[ERROR] timeout waiting for %s\n' "${id}" >&2
+  printf '[エラー] %s の応答待ちがtimeoutしました\n' "${id}" >&2
   return 1
 }
 
@@ -160,7 +160,7 @@ wait_for_scan_terminal_event() {
       line="${REPLY}"
     else
       if ! read_backend_line 1; then
-        backend_is_running || die "backend exited while scan was running"
+        backend_is_running || die "Scan中にbackendが終了しました"
         continue
       fi
       line="${REPLY}"
@@ -169,17 +169,29 @@ wait_for_scan_terminal_event() {
     event="$(jq -r '.event // empty' <<<"${line}" 2>/dev/null)"
     case "${event}" in
       scan_started)
-        printf '[SCAN] started\n'
+        printf '[SCAN] スキャンを開始します\n'
         ;;
       scan_pattern_shown)
-        printf '[PATTERN] %s/%s (pattern_index=%s)\n' \
+        if [[ "${DEBUG_PROGRESS}" == 1 ]]; then
+          printf '[投影] %s/%s  pattern_index=%s\n' \
+            "$(jq -r '(.pattern_index | tonumber) + 1' <<<"${line}")" \
+            "$(jq -r '.pattern_count' <<<"${line}")" \
+            "$(jq -r '.pattern_index' <<<"${line}")"
+        fi
+        ;;
+      scan_frame_selected)
+        printf '[撮影] %s/%s' \
           "$(jq -r '(.pattern_index | tonumber) + 1' <<<"${line}")" \
-          "$(jq -r '.pattern_count' <<<"${line}")" \
-          "$(jq -r '.pattern_index' <<<"${line}")"
+          "$(jq -r '.pattern_count' <<<"${line}")"
+        [[ "${DEBUG_PROGRESS}" != 1 ]] || printf '  pattern_index=%s' "$(jq -r '.pattern_index' <<<"${line}")"
+        printf '\n'
+        if [[ "$(jq -r '(.pattern_index | tonumber) + 1 == (.pattern_count | tonumber)' <<<"${line}")" == true ]]; then
+          printf '[SCAN] 画像保存の完了を待っています...\n'
+        fi
         ;;
       scan_frame_captured)
         if [[ "${DEBUG_PROGRESS}" == 1 ]]; then
-          printf '[CAPTURE] %s/%s saved (pattern_index=%s)\n' \
+          printf '[保存] %s/%s  pattern_index=%s\n' \
             "$(jq -r '(.pattern_index | tonumber) + 1' <<<"${line}")" \
             "$(jq -r '.pattern_count' <<<"${line}")" \
             "$(jq -r '.pattern_index' <<<"${line}")"
@@ -187,12 +199,12 @@ wait_for_scan_terminal_event() {
         ;;
       scan_completed)
         SCAN_RUNNING=0
-        printf '[SCAN] completed\n'
+        printf '[SCAN] 画像保存が完了しました\n'
         return 0
         ;;
       scan_failed)
         SCAN_RUNNING=0
-        printf '[ERROR] scan failed\n' >&2
+        printf '[エラー] Scanに失敗しました\n' >&2
         printf 'code=%s\nmessage=%s\npattern_index=%s\npattern_kind=%s\nexpected_marker_state=%s\ncaptured_count=%s\ncurrent_index=%s\n' \
           "$(jq -r '.error_code // empty' <<<"${line}")" \
           "$(jq -r '.error_message // empty' <<<"${line}")" \
@@ -205,7 +217,7 @@ wait_for_scan_terminal_event() {
         ;;
       scan_stopped)
         SCAN_RUNNING=0
-        printf '[ERROR] scan stopped\n' >&2
+        printf '[エラー] Scanを停止しました\n' >&2
         return 1
         ;;
     esac
@@ -217,32 +229,32 @@ wait_for_ready() {
   start="$(date +%s)"
   while (( $(date +%s) - start < READY_TIMEOUT_SECONDS )); do
     if ! read_backend_line 1; then
-      backend_is_running || die "backend exited before ready"
+      backend_is_running || die "準備完了前にbackendが終了しました"
       continue
     fi
     line="${REPLY}"
     if [[ "$(jq -r '.event // empty' <<<"${line}" 2>/dev/null)" == ready ]]; then
-      printf '[OK] backend ready\n'
+      printf '[OK] backendの準備ができました\n'
       return 0
     fi
   done
-  die "timeout waiting for backend ready"
+  die "backendの起動待ちがtimeoutしました"
 }
 
 show_locator() {
-  [[ -n "${LOCATOR_PATTERN_INDEX}" ]] || { printf '[ERROR] locator pattern index is not initialized\n' >&2; return 1; }
+  [[ -n "${LOCATOR_PATTERN_INDEX}" ]] || { printf '[エラー] locator pattern indexが未初期化です\n' >&2; return 1; }
   local locator_request
   locator_request="$(jq -cn --argjson index "${LOCATOR_PATTERN_INDEX}" \
     '{id:"locator",cmd:"show_pattern",projector_role:"projector",index:$index,photodiode_marker_mode:"locate"}')"
   if ! request "${locator_request}"; then
-    printf '[ERROR] failed to restore the RED locator; the session cannot continue\n' >&2
+    printf '[エラー] 赤locatorを復元できないためsessionを継続できません\n' >&2
     return 1
   fi
-  printf '[LOCATOR] RED / FULL WHITE\n'
+  printf '[LOCATOR] 赤 / 全面白\n'
 }
 
 print_run_retained() {
-  printf '\n[RUN] scan result retained:\n  %s/\n' "${RUN_DIR}"
+  printf '\n[実行] Scan結果を保持しました:\n  %s/\n' "${RUN_DIR}"
 }
 
 run_scan_once() {
@@ -254,7 +266,7 @@ run_scan_once() {
   SCAN_DIR="${RUN_DIR}/scan"
   DECODE_DIR="${RUN_DIR}/decode"
   PLY_FILE="${RUN_DIR}/${PLY_BASENAME}"
-  printf '[SCAN] starting...\n[SYNC] locator RED -> sync BLACK/WHITE\n[SYNC] pre-arm...\n'
+  printf '[SCAN] スキャンを開始します\n[同期] 赤locatorから白黒同期へ切り替えます\n[同期] pre-arm中...\n'
 
   scan_request="$(jq -cn \
     --arg scan_id "${SCAN_ID}" --arg output_dir "${SCAN_DIR}" --arg device "${PHOTODIODE_DEVICE}" \
@@ -290,7 +302,7 @@ run_scan_once() {
     show_locator || return 1
     return 0
   fi
-  printf '[DECODE] completed: valid left=%s right=%s\n' \
+  printf '[DECODE] デコードが完了しました: 有効 left=%s right=%s\n' \
     "$(jq -r '.left_valid_count' <<<"${RESPONSE}")" "$(jq -r '.right_valid_count' <<<"${RESPONSE}")"
 
   reconstruct_request="$(jq -cn --arg decode "${DECODE_DIR}" --arg calibration "${CALIBRATION_FILE}" \
@@ -304,17 +316,17 @@ run_scan_once() {
     return 0
   fi
   point_count="$(jq -r '.point_count // empty' <<<"${RESPONSE}")"
-  printf '[RECONSTRUCT] completed\n'
+  printf '[復元] 点群を生成しました\n'
 
   if [[ ! -f "${PLY_FILE}" ]]; then
-    printf '[ERROR] reconstruct failed\ncode=ply_not_created\nmessage=PLY file was not created: %s\n' "${PLY_FILE}" >&2
+    printf '[エラー] 復元に失敗しました\ncode=ply_not_created\nmessage=PLY fileが作成されませんでした: %s\n' "${PLY_FILE}" >&2
     RUN_RESULT="reconstruct_failed"
     print_run_retained
     show_locator || return 1
     return 0
   fi
   if [[ ! -s "${PLY_FILE}" ]]; then
-    printf '[ERROR] reconstruct failed\ncode=ply_empty\nmessage=PLY file is empty: %s\n' "${PLY_FILE}" >&2
+    printf '[エラー] 復元に失敗しました\ncode=ply_empty\nmessage=PLY fileが空です: %s\n' "${PLY_FILE}" >&2
     RUN_RESULT="reconstruct_failed"
     print_run_retained
     show_locator || return 1
@@ -323,7 +335,7 @@ run_scan_once() {
 
   RUN_RESULT="success"
   printf '[OK] PLY: %s\n' "${PLY_FILE}"
-  printf '\n[OK] scan completed\n\nscan:\n  %s\n\ndecode:\n  %s\n\nply:\n  %s\n' \
+  printf '\n[OK] Scanが完了しました\n\nscan:\n  %s\n\ndecode:\n  %s\n\nply:\n  %s\n' \
     "${SCAN_DIR}" "${DECODE_DIR}" "${PLY_FILE}"
   [[ -z "${point_count}" ]] || printf '\npoints:\n  %s\n' "${point_count}"
   return 0
@@ -333,9 +345,9 @@ interactive_loop() {
   local scan_key
   while true; do
     if [[ "${RUN_RESULT}" == "" || "${RUN_RESULT}" == success ]]; then
-      printf '\n[READY] SPACE: scan   Q: quit\n'
+      printf '\n[準備完了] SPACE: Scan開始   Q: 終了\n'
     else
-      printf '\n[READY] SPACE: retry   Q: quit\n'
+      printf '\n[準備完了] SPACE: 再試行   Q: 終了\n'
     fi
     IFS= read -rsn1 scan_key </dev/tty
     [[ "${scan_key}" == q || "${scan_key}" == Q ]] && break
@@ -389,8 +401,8 @@ cleanup_session() {
     if (( status == 0 && SUCCESS == 1 )) && [[ "${KEEP_WORK_DIR}" != 1 ]]; then
       rm -rf -- "${WORK_DIR}"
     else
-      printf '[INFO] backend stderr: %s\n' "${BACKEND_ERR}" >&2
-      printf '[INFO] backend work directory: %s\n' "${WORK_DIR}" >&2
+      printf '[情報] backend stderr: %s\n' "${BACKEND_ERR}" >&2
+      printf '[情報] backend作業directory: %s\n' "${WORK_DIR}" >&2
     fi
   fi
   exit "${status}"
@@ -398,34 +410,34 @@ cleanup_session() {
 trap cleanup_session EXIT
 trap 'exit 130' INT TERM
 
-command -v jq >/dev/null || die "jq is required"
-[[ -x "${BIN}" ]] || die "backend is not executable: ${BIN}"
-[[ -n "${MONITOR_INDEX}" ]] || die "MONITOR_INDEX is required"
-is_non_negative_integer "${LEFT_CAMERA}" || die "LEFT_CAMERA must be a non-negative integer"
-is_non_negative_integer "${RIGHT_CAMERA}" || die "RIGHT_CAMERA must be a non-negative integer"
-[[ "${LEFT_CAMERA}" != "${RIGHT_CAMERA}" ]] || die "LEFT_CAMERA and RIGHT_CAMERA must be different"
-is_non_negative_integer "${MONITOR_INDEX}" || die "MONITOR_INDEX must be a non-negative integer"
-[[ -e "${CALIBRATION_FILE}" ]] || die $'stereo calibration file not found:\n'"${CALIBRATION_FILE}"
-[[ -f "${CALIBRATION_FILE}" ]] || die "stereo calibration path is not a regular file: ${CALIBRATION_FILE}"
-[[ -s "${CALIBRATION_FILE}" ]] || die "stereo calibration file is empty: ${CALIBRATION_FILE}"
-[[ "${SYNC_MODE}" == photodiode ]] || die "SYNC_MODE must be photodiode"
-[[ -e "${PHOTODIODE_DEVICE}" ]] || die "photodiode device not found: ${PHOTODIODE_DEVICE}"
-[[ -r "${PHOTODIODE_DEVICE}" ]] || die "photodiode device is not readable: ${PHOTODIODE_DEVICE}"
-[[ -w "${PHOTODIODE_DEVICE}" ]] || die "photodiode device is not writable: ${PHOTODIODE_DEVICE}"
-is_positive_integer "${PHOTODIODE_BAUD}" || die "PHOTODIODE_BAUD must be a positive integer"
-is_positive_integer "${SYNC_TIMEOUT_MS}" || die "SYNC_TIMEOUT_MS must be a positive integer"
-is_non_negative_integer "${GUARD_MS}" || die "GUARD_MS must be a non-negative integer"
-is_positive_integer "${MJPEG_PORT}" || die "MJPEG_PORT must be a positive integer"
-is_positive_integer "${CODE_WIDTH}" || die "CODE_WIDTH must be a positive integer"
-is_positive_integer "${CODE_HEIGHT}" || die "CODE_HEIGHT must be a positive integer"
-is_positive_integer "${READY_TIMEOUT_SECONDS}" || die "READY_TIMEOUT_SECONDS must be a positive integer"
+command -v jq >/dev/null || die "jqが必要です"
+[[ -x "${BIN}" ]] || die "backendを実行できません: ${BIN}"
+[[ -n "${MONITOR_INDEX}" ]] || die "MONITOR_INDEXが必要です"
+is_non_negative_integer "${LEFT_CAMERA}" || die "LEFT_CAMERAは0以上の整数にしてください"
+is_non_negative_integer "${RIGHT_CAMERA}" || die "RIGHT_CAMERAは0以上の整数にしてください"
+[[ "${LEFT_CAMERA}" != "${RIGHT_CAMERA}" ]] || die "LEFT_CAMERAとRIGHT_CAMERAは異なる値にしてください"
+is_non_negative_integer "${MONITOR_INDEX}" || die "MONITOR_INDEXは0以上の整数にしてください"
+[[ -e "${CALIBRATION_FILE}" ]] || die $'Stereo calibration fileが見つかりません:\n'"${CALIBRATION_FILE}"
+[[ -f "${CALIBRATION_FILE}" ]] || die "Stereo calibration pathが通常fileではありません: ${CALIBRATION_FILE}"
+[[ -s "${CALIBRATION_FILE}" ]] || die "Stereo calibration fileが空です: ${CALIBRATION_FILE}"
+[[ "${SYNC_MODE}" == photodiode ]] || die "SYNC_MODEはphotodiodeにしてください"
+[[ -e "${PHOTODIODE_DEVICE}" ]] || die "Photodiodeデバイスが見つかりません: ${PHOTODIODE_DEVICE}"
+[[ -r "${PHOTODIODE_DEVICE}" ]] || die "Photodiodeデバイスを読み取れません: ${PHOTODIODE_DEVICE}"
+[[ -w "${PHOTODIODE_DEVICE}" ]] || die "Photodiodeデバイスへ書き込めません: ${PHOTODIODE_DEVICE}"
+is_positive_integer "${PHOTODIODE_BAUD}" || die "PHOTODIODE_BAUDは正の整数にしてください"
+is_positive_integer "${SYNC_TIMEOUT_MS}" || die "SYNC_TIMEOUT_MSは正の整数にしてください"
+is_non_negative_integer "${GUARD_MS}" || die "GUARD_MSは0以上の整数にしてください"
+is_positive_integer "${MJPEG_PORT}" || die "MJPEG_PORTは正の整数にしてください"
+is_positive_integer "${CODE_WIDTH}" || die "CODE_WIDTHは正の整数にしてください"
+is_positive_integer "${CODE_HEIGHT}" || die "CODE_HEIGHTは正の整数にしてください"
+is_positive_integer "${READY_TIMEOUT_SECONDS}" || die "READY_TIMEOUT_SECONDSは正の整数にしてください"
 if [[ -n "${DISPLAY_WIDTH}" || -n "${DISPLAY_HEIGHT}" ]]; then
-  [[ -n "${DISPLAY_WIDTH}" && -n "${DISPLAY_HEIGHT}" ]] || die "DISPLAY_WIDTH and DISPLAY_HEIGHT must be specified together"
-  is_positive_integer "${DISPLAY_WIDTH}" || die "DISPLAY_WIDTH must be a positive integer"
-  is_positive_integer "${DISPLAY_HEIGHT}" || die "DISPLAY_HEIGHT must be a positive integer"
+  [[ -n "${DISPLAY_WIDTH}" && -n "${DISPLAY_HEIGHT}" ]] || die "DISPLAY_WIDTHとDISPLAY_HEIGHTは両方指定してください"
+  is_positive_integer "${DISPLAY_WIDTH}" || die "DISPLAY_WIDTHは正の整数にしてください"
+  is_positive_integer "${DISPLAY_HEIGHT}" || die "DISPLAY_HEIGHTは正の整数にしてください"
 fi
-[[ -z "${DECODE_THRESHOLD}" ]] || is_non_negative_integer "${DECODE_THRESHOLD}" || die "DECODE_THRESHOLD must be a non-negative integer"
-[[ -z "${MAX_EPIPOLAR_ERROR_PX}" ]] || is_positive_number "${MAX_EPIPOLAR_ERROR_PX}" || die "MAX_EPIPOLAR_ERROR_PX must be a positive number"
+[[ -z "${DECODE_THRESHOLD}" ]] || is_non_negative_integer "${DECODE_THRESHOLD}" || die "DECODE_THRESHOLDは0以上の整数にしてください"
+[[ -z "${MAX_EPIPOLAR_ERROR_PX}" ]] || is_positive_number "${MAX_EPIPOLAR_ERROR_PX}" || die "MAX_EPIPOLAR_ERROR_PXは正の数にしてください"
 
 setup_session() {
 printf '[CONFIG]\nleft_camera=%s\nright_camera=%s\nmonitor=%s\ncalibration=%s\nsync=photodiode\n' \
@@ -450,20 +462,20 @@ wait_for_ready
 request '{"id":"ping","cmd":"ping"}'
 request '{"id":"monitors","cmd":"list_monitors"}'
 MONITOR_COUNT="$(jq -r '(.monitor_count // "0") | tonumber' <<<"${RESPONSE}")"
-(( MONITOR_INDEX < MONITOR_COUNT )) || die "MONITOR_INDEX=${MONITOR_INDEX} is out of range (monitor_count=${MONITOR_COUNT})"
+(( MONITOR_INDEX < MONITOR_COUNT )) || die "MONITOR_INDEX=${MONITOR_INDEX}は範囲外です (monitor_count=${MONITOR_COUNT})"
 MONITORS_JSON="$(jq -r '.monitors_json // "[]"' <<<"${RESPONSE}")"
 WINDOW_WIDTH="$(jq -r --argjson index "${MONITOR_INDEX}" '.[$index].width' <<<"${MONITORS_JSON}")"
 WINDOW_HEIGHT="$(jq -r --argjson index "${MONITOR_INDEX}" '.[$index].height' <<<"${MONITORS_JSON}")"
-is_positive_integer "${WINDOW_WIDTH}" || die "monitor width is invalid"
-is_positive_integer "${WINDOW_HEIGHT}" || die "monitor height is invalid"
-printf '[OK] monitor resolved: %sx%s\n' "${WINDOW_WIDTH}" "${WINDOW_HEIGHT}"
+is_positive_integer "${WINDOW_WIDTH}" || die "モニター幅が不正です"
+is_positive_integer "${WINDOW_HEIGHT}" || die "モニター高さが不正です"
+printf '[OK] モニターを確認しました: %sx%s\n' "${WINDOW_WIDTH}" "${WINDOW_HEIGHT}"
 
 request "$(jq -cn --argjson camera "${LEFT_CAMERA}" '{id:"camera-left",cmd:"open_camera",camera_id:$camera,role:"left"}')"
 LEFT_CAMERA_OPEN=1
-printf '[OK] left camera opened\n'
+printf '[OK] 左カメラを開きました\n'
 request "$(jq -cn --argjson camera "${RIGHT_CAMERA}" '{id:"camera-right",cmd:"open_camera",camera_id:$camera,role:"right"}')"
 RIGHT_CAMERA_OPEN=1
-printf '[OK] right camera opened\n'
+printf '[OK] 右カメラを開きました\n'
 
 request '{"id":"stream-left","cmd":"start_stream","role":"left"}'
 LEFT_STREAM_OPEN=1
@@ -475,11 +487,11 @@ printf '[STREAM] right: %s\n' "$(jq -r '.url' <<<"${RESPONSE}")"
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${WINDOW_WIDTH}" --argjson height "${WINDOW_HEIGHT}" \
   '{id:"window",cmd:"open_window",window_role:"projector",title:"Projector",width:$width,height:$height,monitor_index:$monitor,fullscreen:true}')"
 WINDOW_OPEN=1
-printf '[OK] projector window opened\n'
+printf '[OK] Projector windowを開きました\n'
 request "$(jq -cn --argjson width "${CODE_WIDTH}" --argjson height "${CODE_HEIGHT}" \
   '{id:"projector",cmd:"open_projector",projector_role:"projector",window_role:"projector",width:$width,height:$height}')"
 PROJECTOR_OPEN=1
-printf '[OK] projector opened\n'
+printf '[OK] Projectorを開きました\n'
 
 DISPLAY_X=128
 DISPLAY_Y=0
@@ -488,17 +500,17 @@ DISPLAY_Y=0
 request "$(jq -cn --argjson monitor "${MONITOR_INDEX}" --argjson width "${DISPLAY_WIDTH}" --argjson height "${DISPLAY_HEIGHT}" \
   --argjson x "${DISPLAY_X}" --argjson y "${DISPLAY_Y}" \
   '{id:"surface",cmd:"configure_projector_surface",projector_role:"projector",monitor_index:$monitor,width:$width,height:$height,x:$x,y:$y,placement:"custom"}')"
-printf '[OK] surface configured\n'
+printf '[OK] 投影surfaceを設定しました\n'
 
 request '{"id":"patterns","cmd":"generate_patterns","projector_role":"projector"}'
-printf '[OK] patterns generated\n'
+printf '[OK] Patternを生成しました\n'
 printf '[PROJECTOR] code=%sx%s\n' "$(jq -r '.code_width' <<<"${RESPONSE}")" "$(jq -r '.code_height' <<<"${RESPONSE}")"
 printf '[PROJECTOR] display=%sx%s\n' "$(jq -r '.display_width' <<<"${RESPONSE}")" "$(jq -r '.display_height' <<<"${RESPONSE}")"
 PATTERN_COUNT="$(jq -r '.pattern_count' <<<"${RESPONSE}")"
-(( PATTERN_COUNT >= 2 )) || die "full-white reference pattern is unavailable"
+(( PATTERN_COUNT >= 2 )) || die "全面白の基準Patternを利用できません"
 LOCATOR_PATTERN_INDEX=$((PATTERN_COUNT - 2))
 printf '[PATTERN] count=%s\n' "${PATTERN_COUNT}"
-show_locator || die "failed to show initial locator"
+show_locator || die "初期locatorを表示できませんでした"
 printf '[LOCATOR] marker=(%s,%s) %sx%s\n[LOCATOR] pattern=(%s,%s) %sx%s\n' \
   "$(jq -r '.marker_x' <<<"${RESPONSE}")" "$(jq -r '.marker_y' <<<"${RESPONSE}")" \
   "$(jq -r '.marker_width' <<<"${RESPONSE}")" "$(jq -r '.marker_height' <<<"${RESPONSE}")" \
@@ -509,7 +521,7 @@ printf '[LOCATOR] marker=(%s,%s) %sx%s\n[LOCATOR] pattern=(%s,%s) %sx%s\n' \
 SESSION_OUTPUT_DIR="${OUTPUT_DIR}"
 PLY_BASENAME="$(basename -- "${PLY_FILE}")"
 setup_session
-interactive_loop || die "interactive session cannot continue"
+interactive_loop || die "対話sessionを継続できません"
 
 request '{"id":"stop-stream-left","cmd":"stop_stream","role":"left"}'
 LEFT_STREAM_OPEN=0
